@@ -1,0 +1,269 @@
+/*============================================================================================*/
+/* ACCOUNT PAGE */
+/*============================================================================================*/
+.box_account {
+  margin-bottom: 25px;
+}
+.box_account h3 {
+  font-size: 18px;
+  font-size: 1.125rem;
+  padding-left: 30px;
+  height: 30px;
+  padding-top: 5px;
+  display: inline-block;
+  color: #444;
+}
+.box_account h3.client {
+  background: url(../img/user.svg) center left no-repeat;
+}
+.box_account h3.new_client {
+  background: url(../img/new_user.svg) center left no-repeat;
+}
+.box_account .form_container {
+  background-color: #fff;
+  box-shadow: 0px 0px 10px 0px rgba(0, 0, 0, 0.1);
+  padding: 25px;
+  position: relative;
+}
+.box_account .form_container hr {
+  margin: 0 0 10px 0;
+  border-color: #ededed;
+}
+.box_account .form_container a.social_bt {
+  margin-bottom: 0;
+  min-width: inherit;
+}
+@media (max-width: 991px) {
+  .box_account .form_container a.social_bt {
+    margin-bottom: 5px;
+  }
+}
+.box_account .form_container .form-group {
+  margin-bottom: 10px;
+}
+.box_account .form_container #forgot_pw {
+  height: 100% !important;
+  min-height: inherit;
+  background-color: #f4f4f4;
+  padding: 15px;
+}
+
+/*============================================================================================*/
+/* MY ORDERS PAGE + WISHLIST*/
+/*============================================================================================*/
+.table.product-list {
+  margin: 0;
+}
+
+.table.product-list th {
+  background-color: transparent;
+  text-transform: uppercase;
+  font-weight: normal;
+  color: #111;
+  border: 0;
+  padding-top: 0;
+}
+
+.table.product-list td {
+  vertical-align: middle;
+  border: 0;
+}
+.table.product-list td .badge {
+  font-size: 13px;
+  font-size: 0.8125rem;
+}
+.table.product-list td strong {
+  font-weight: 500;
+}
+.table.product-list td.options a {
+  display: inline-block;
+  margin-right: 10px;
+}
+.table.product-list td.options a i {
+  font-size: 18px;
+  font-size: 1.125rem;
+}
+
+.table.product-list.table-striped tbody tr:nth-of-type(odd) {
+  background-color: rgba(0, 0, 0, 0.045);
+}
+
+.table-striped > tbody > tr:nth-of-type(odd) {
+  --bs-table-accent-bg: none;
+}
+
+@media (max-width: 767px) {
+  .table.product-list,
+  .table.product-list thead,
+  .table.product-list tbody,
+  .table.product-list th,
+  .table.product-list td,
+  .table.product-list tr {
+    display: block;
+    border: 0;
+  }
+  .table.product-list thead tr {
+    position: absolute;
+    top: -9999px;
+    left: -9999px;
+  }
+  .table.product-list tr {
+    border: 1px solid #ddd;
+  }
+}
+@media (max-width: 767px) and (max-width: 991px) {
+  .table.product-list tr {
+    margin-bottom: 20px;
+  }
+}
+@media (max-width: 767px) {
+  .table.product-list td {
+    border: none;
+    border-bottom: 1px solid #ddd;
+    position: relative;
+    padding-left: 35%;
+  }
+  .table.product-list td:before {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    width: 45%;
+    padding-right: 10px;
+    white-space: nowrap;
+  }
+  .table.product-list td:nth-of-type(1):before, .table.product-list td:nth-of-type(2):before, .table.product-list td:nth-of-type(3):before, .table.product-list td:nth-of-type(4):before, .table.product-list td:nth-of-type(5):before {
+    font-weight: 700;
+    color: #111;
+  }
+  .table.product-list td:nth-of-type(1):before {
+    content: "Product";
+  }
+  .table.product-list td:nth-of-type(2):before {
+    content: "Price";
+  }
+  .table.product-list td:nth-of-type(3):before {
+    content: "Order ID";
+  }
+  .table.product-list td:nth-of-type(4):before {
+    content: "Status";
+  }
+  .table.product-list.whislist td:nth-of-type(1):before {
+    content: "Product";
+  }
+  .table.product-list.whislist td:nth-of-type(2):before {
+    content: "Price";
+  }
+  .table.product-list.whislist td:nth-of-type(3):before {
+    content: "Order ID";
+  }
+  .table.product-list.whislist td:nth-of-type(4):before {
+    content: "Action";
+  }
+  .table.product-list.whislist td:nth-of-type(5):before {
+    content: "Remove";
+  }
+}
+.thumb_product {
+  width: 60px;
+  height: 60px;
+  overflow: hidden;
+  margin-right: 10px;
+  float: left;
+  position: relative;
+  background-color: #fff;
+  padding: 5px;
+  box-sizing: content-box;
+}
+.thumb_product img {
+  width: 60px;
+  height: auto;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(1.1);
+}
+@media (max-width: 991px) {
+  .thumb_product {
+    display: none;
+  }
+}
+
+.item_product {
+  float: left;
+  width: 65%;
+  margin: 25px 0 0 10px;
+  line-height: 1.3;
+  font-weight: 500;
+}
+@media (max-width: 991px) {
+  .item_product {
+    margin: 5px 0 0 0;
+    width: 100%;
+    float: none;
+  }
+}
+
+/*============================================================================================*/
+/* PROFILE PAGE */
+/*============================================================================================*/
+.box_profile_details {
+  background-color: #fff;
+  min-height: 180px;
+  box-shadow: 0px 0px 10px 0px rgba(0, 0, 0, 0.1);
+  padding: 25px 25px 1px 25px;
+  margin-bottom: 25px;
+}
+@media (max-width: 767px) {
+  .box_profile_details {
+    min-height: inherit;
+  }
+}
+.box_profile_details h3 {
+  font-size: 21px;
+  font-size: 1.3125rem;
+}
+
+.data_profile {
+  margin-bottom: 15px;
+}
+.data_profile p {
+  margin-bottom: 0;
+}
+
+a.box_topic {
+  text-align: center;
+  background: #fff;
+  padding: 40px 30px 15px 30px;
+  display: block;
+  transition: all 0.3s ease-in-out;
+  box-shadow: 0px 0px 15px 0px rgba(0, 0, 0, 0.05);
+  color: #444;
+  margin-bottom: 30px;
+  overflow: hidden;
+  border-radius: 3px;
+}
+@media (max-width: 767px) {
+  a.box_topic {
+    padding: 20px 20px 0 20px;
+  }
+}
+a.box_topic:hover {
+  transform: translateY(-10px);
+}
+a.box_topic i {
+  display: inline-block;
+  font-size: 51px;
+  font-size: 3.1875rem;
+  color: #004dda;
+  border-radius: 50%;
+  background-color: #0044c2;
+  background-color: rgba(0, 77, 218, 0.05);
+  width: 100px;
+  height: 100px;
+  line-height: 100px;
+  margin-bottom: 15px;
+}
+a.box_topic h3 {
+  font-size: 18px;
+  font-size: 1.125rem;
+}

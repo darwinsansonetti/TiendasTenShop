@@ -1,0 +1,57 @@
+/* landingpage.css */
+
+/* Top line gradient */
+/* Mantener el alto original de la top bar */
+.top_line.version_1.plus_select {
+    min-height: 40px; /* ajusta este valor según el alto real */
+    display: flex;
+    align-items: center;
+    padding: 0 0; /* si quieres puedes ajustar padding */
+}
+
+/* Marquesina */
+.marquee {
+    overflow: hidden;
+    white-space: nowrap;
+    width: 100%;
+    box-sizing: border-box;
+    color: #fff;
+    font-size: 14px;
+}
+
+/* Animación de desplazamiento */
+.marquee span {
+    display: inline-block;
+    padding-left: 100%;
+    animation: marquee 30s linear infinite;
+}
+
+@keyframes marquee {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
+}
+
+/* Asegurar que los toasts tengan el z-index más alto */
+.toast-container {
+    z-index: 99999 !important;
+}
+
+.toast {
+    z-index: 99999 !important;
+    position: relative;
+}
+
+/* Si usas Magnific Popup o otros modales */
+.mfp-wrap {
+    z-index: 1043;
+}
+
+.mfp-bg {
+    z-index: 1042;
+}
+
+/* Asegurar que los toasts estén por encima de todo */
+#toast-container .toast {
+    z-index: 99999 !important;
+    position: relative;
+}
