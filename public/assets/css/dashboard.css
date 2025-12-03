@@ -1,0 +1,48 @@
+/* Contenedor principal para truncar texto */
+.text-truncate-container {
+    min-width: 0; /* Necesario para que funcione text-truncate */
+}
+
+/* Para el nombre - una línea con puntos suspensivos */
+.text-truncate {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px; /* Ajusta según tu diseño */
+}
+
+/* Para la dirección - máximo 2 líneas con puntos suspensivos */
+.direccion-texto {
+    display: -webkit-box;
+    -webkit-line-clamp: 2; /* Número de líneas */
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.4;
+    max-height: 2.8em; /* 2 líneas * 1.4 line-height */
+    word-wrap: break-word;
+}
+
+/* Scroll personalizado para mejor apariencia */
+.dropdown-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.dropdown-body::-webkit-scrollbar-track {
+    background: #f8f9fa;
+    border-radius: 10px;
+}
+
+.dropdown-body::-webkit-scrollbar-thumb {
+    background: #dee2e6;
+    border-radius: 10px;
+}
+
+.dropdown-body::-webkit-scrollbar-thumb:hover {
+    background: #adb5bd;
+}
+
+/* Mejorar el hover */
+.dropdown-item:hover {
+    background-color: #f8f9fa;
+}

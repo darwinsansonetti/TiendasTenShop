@@ -63,6 +63,17 @@ Route::middleware('auth')->group(function() {
     // Seleccionar un Sucursal
     Route::get('/seleccionar-sucursal/{id}', [SucursalController::class, 'seleccionar'])->name('seleccionar.sucursal');
 
+    // Obtener ranking de sucursales por rango de fechas
+    Route::get('/cpanel/dashboard/ranking', [CpanelController::class, 'obtenerRankingSucursales'])->name('cpanel.dashboard.ranking');
+
+    // Obtener datos de gráfica Producción Mensual vía AJAX
+    Route::get('/cpanel/dashboard/produccion', [CpanelController::class, 'obtenerProduccionMensual'])
+     ->name('cpanel.dashboard.produccion');
+
+    // Obtener raning de vendedores
+    Route::get('cpanel/ranking-vendedores', [CpanelController::class, 'obtenerRankingVendedores'])
+    ->name('cpanel.ranking-vendedores');
+
 });
 
 

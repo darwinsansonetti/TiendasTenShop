@@ -360,7 +360,7 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
         // Redirigir después de 2 segundos
         setTimeout(() => { 
             window.location.href = "{{ route('cpanel.dashboard') }}";
-        }, 2000);
+        }, 500);
 
     } catch (err) {
         loader.style.display = "none";
