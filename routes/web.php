@@ -70,10 +70,15 @@ Route::middleware('auth')->group(function() {
     Route::get('/cpanel/dashboard/produccion', [CpanelController::class, 'obtenerProduccionMensual'])
      ->name('cpanel.dashboard.produccion');
 
-    // Obtener raning de vendedores
+    // Obtener ranking de vendedores
     Route::get('cpanel/ranking-vendedores', [CpanelController::class, 'obtenerRankingVendedores'])
     ->name('cpanel.ranking-vendedores');
 
+    // Resumen Ventas
+    Route::get('/cpanel/resumen', [CpanelController::class, 'resumen_ventas'])->name('cpanel.resumen.ventas');
+
+    // Estados de Cuentas
+    Route::get('/cpanel/estados/cuentas', [CpanelController::class, 'estado_cuentas'])->name('cpanel.estado.cuentas');
 });
 
 

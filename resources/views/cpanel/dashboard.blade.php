@@ -13,7 +13,7 @@
       <div class="col-sm-6"><h3 class="mb-0">Dashboard</h3></div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="#">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
           <li class="breadcrumb-item active" aria-current="page">Dashboard</li>
         </ol>
       </div>
@@ -522,6 +522,29 @@
         const fechaInicio = document.getElementById('fecha_inicio').value;
         const fechaFin = document.getElementById('fecha_fin').value;
 
+        // Validar que ambas fechas estén seleccionadas
+        if (!fechaInicio || !fechaFin) {
+            showToast('Debe seleccionar ambas fechas.', 'danger');
+            return;
+        }
+
+        // Convertir strings a objetos Date
+        const fechaInicioV = new Date(fechaInicio);
+        const fechaFinV = new Date(fechaFin);
+
+        if (fechaInicio > fechaFin) {
+            //e.preventDefault();
+            showToast('La fecha de inicio no puede ser mayor a la fecha final.', 'danger');
+            return;
+        }
+
+        const diffAnios = (fechaFinV - fechaInicioV) / (1000 * 60 * 60 * 24 * 365);
+        if (diffAnios > 1) {
+            //e.preventDefault();
+            showToast('El rango de fechas no puede ser mayor a 1 año.', 'danger');
+            return;
+        }
+
         const url = "{{ route('cpanel.dashboard.ranking') }}?fecha_inicio=" + fechaInicio + "&fecha_fin=" + fechaFin;
         fetch(url)
             .then(res => {
@@ -551,6 +574,29 @@
         const fechaInicio = document.getElementById('fecha_inicio_vendedores').value;
         const fechaFin = document.getElementById('fecha_fin_vendedores').value;
 
+        // Validar que ambas fechas estén seleccionadas
+        if (!fechaInicio || !fechaFin) {
+            showToast('Debe seleccionar ambas fechas.', 'danger');
+            return;
+        }
+
+        // Convertir strings a objetos Date
+        const fechaInicioV = new Date(fechaInicio);
+        const fechaFinV = new Date(fechaFin);
+
+        if (fechaInicio > fechaFin) {
+            //e.preventDefault();
+            showToast('La fecha de inicio no puede ser mayor a la fecha final.', 'danger');
+            return;
+        }
+
+        const diffAnios = (fechaFinV - fechaInicioV) / (1000 * 60 * 60 * 24 * 365);
+        if (diffAnios > 1) {
+            //e.preventDefault();
+            showToast('El rango de fechas no puede ser mayor a 1 año.', 'danger');
+            return;
+        }
+
         fetch("{{ route('cpanel.ranking-vendedores') }}?fecha_inicio=" + fechaInicio + "&fecha_fin=" + fechaFin)
             .then(res => {
                 if (!res.ok) throw new Error("HTTP " + res.status);
@@ -575,6 +621,11 @@
             .catch(err => console.error('Error al actualizar ranking de vendedores:', err));
     });
 
+
+    /* ============================================================
+       Validaciones de filtro de fechas
+    ============================================================ */
+    
 
 </script>
 

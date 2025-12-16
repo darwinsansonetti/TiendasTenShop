@@ -1,14 +1,24 @@
+@php
+    use App\Helpers\FileHelper;
+@endphp
+
 <div class="p-3">
 
     @if($rankingVendedores->isNotEmpty())
         @php
+
             $primerLugar = $rankingVendedores->first();
             $otrosLugares = $rankingVendedores->skip(1);
 
+            // Nombre del archivo (puede ser '' o null)
             $fotoPerfil = $primerLugar->Vendedor['FotoPerfil'] ?? '';
-            $imgSrc = $fotoPerfil === '' 
-                    ? asset('assets/img/adminlte/img/default.png') 
-                    : 'https://tiendastenshop.com/images/usuarios/' . $fotoPerfil;
+
+            // Usamos el helper genérico
+            $imgSrc = FileHelper::getOrDownloadFile(
+                'images/usuarios/',                          // Carpeta
+                $fotoPerfil,                                 // Archivo
+                'assets/img/adminlte/img/default.png'        // Default
+            );
         @endphp
 
         <!-- Primer Lugar Destacado -->
@@ -57,5 +67,12 @@
     @else
         <div class="text-center text-muted py-4">No hay vendedores en el ranking para este rango de fechas.</div>
     @endif
+
+    <!-- Enlace "Ver todos" -->
+    <div class="mt-3 text-center">
+        <a href="#" class="btn btn-outline-success btn-sm">
+            <i class="fas fa-list me-1"></i>Ver todos los vendedores
+        </a>
+    </div>
 
 </div>

@@ -15,7 +15,9 @@ use App\Models\VentaDiariaTotalizada;
 use App\Models\VentaVendedoresTotalizada;
 use App\Models\Usuario;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
+use App\Services\VentasService;
 
 class GeneralHelper
 {
@@ -195,7 +197,7 @@ class GeneralHelper
 
             // Obtener rango del mes seleccionado
             $fechaInicio = Carbon::create($anio, $mes, 1)->startOfDay();
-            $fechaFin = Carbon::create($anio, $mes, 1)->endOfMonth()->endOfDay();
+            $fechaFin = Carbon::create($anio, $mes, 1)->endOfMonth()->startOfDay();
 
             // Consultar producción del mes agrupada por sucursal
             $produccion = VentaDiariaTotalizada::query()
@@ -274,4 +276,768 @@ class GeneralHelper
         return $ranking;
     }
 
+    // Obtener informacion a mostrar en Resumen de ventas
+    public static function generarDatosVentas(ParametrosFiltroFecha $filtro)
+    {
+        // Rango de fechas manual para pruebas
+        // $fechaInicio = Carbon::parse('2025-11-01')->startOfDay();
+        // $fechaFin    = Carbon::parse('2025-12-08')->startOfDay();
+
+        $fechaInicio = $filtro->fechaInicio->startOfDay(); 
+        $fechaFin = $filtro->fechaFin->startOfDay();
+
+        // 1️⃣ IDs de ventas dentro del rango
+        $queryVentas = DB::table('Ventas')
+            ->whereBetween('FECHA', [$fechaInicio, $fechaFin]);
+
+        // Filtrar por sucursal si no es "Todas"
+        if (session('sucursal_id') != 0) {
+            $queryVentas->where('SucursalId', session('sucursal_id'));
+        }
+
+        $ventasIds = $queryVentas->pluck('ID');
+
+        $ventasDiariasQuery = DB::table('VentaDiariaTotalizada')
+                                ->select(
+                                    'FECHA',
+                                    DB::raw('SUM(Cantidad) as CantidadItems'),
+                                    DB::raw('SUM(CostoDivisa) as CostoDivisa'),
+                                    DB::raw('SUM(TotalBs) as TotalBs'),
+                                    DB::raw('SUM(TotalDivisa) as TotalDivisa'),
+                                    'TasaDeCambio'
+                                )
+                                ->whereBetween('FECHA', [$fechaInicio, $fechaFin]);
+
+        if (session('sucursal_id') != 0) {
+            $ventasDiariasQuery->where('SucursalId', session('sucursal_id'));
+        }
+
+        $ventasDiarias = $ventasDiariasQuery->groupBy('FECHA', 'TasaDeCambio')
+                        ->get()
+                        ->map(function ($venta) {
+                            $venta->fecha_formateada = Carbon::parse($venta->FECHA)->format('Y-m-d');
+                            return $venta;
+                        });
+
+        $detallesQuery = DB::table('VentaProductosView as vpv')
+            ->join('Productos as p', 'vpv.ProductoId', '=', 'p.ID')
+            ->whereIn('vpv.VentaId', $ventasIds)
+            ->select(
+                'vpv.VentaId',
+                'vpv.Cantidad',
+                'vpv.MontoDivisa',
+                'vpv.PrecioVenta',
+                'vpv.ProductoId',
+                'p.Codigo',
+                'p.Descripcion',
+                'p.CostoDivisa',
+                'p.UrlFoto'
+            );
+
+        if (session('sucursal_id') != 0) {
+            $detallesQuery->where('vpv.SucursalId', session('sucursal_id')); // si tienes SucursalId en la vista
+        }
+
+        $detalles = $detallesQuery->get();
+
+
+        // 4️⃣ Mapear ventas con fechas
+        $ventasMap = DB::table('Ventas')
+            ->whereIn('ID', $ventasIds)
+            ->select('ID', 'FECHA')
+            ->get()
+            ->keyBy('ID');
+
+        $detallesPorFecha = [];
+        foreach ($detalles as $d) {
+            if (!isset($ventasMap[$d->VentaId])) continue;
+
+            $fecha = Carbon::parse($ventasMap[$d->VentaId]->FECHA)->format('Y-m-d');
+
+            if (!isset($detallesPorFecha[$fecha])) {
+                $detallesPorFecha[$fecha] = [];
+            }
+
+            $detallesPorFecha[$fecha][] = $d;
+        }
+
+        // Totales para margen
+        $totalDivisaPeriodo = 0;
+        $costoTotalDivisaPeriodo = 0;
+
+        // RESULTADO INICIAL
+        $resultado = [
+            "FechaInicio" => $fechaInicio->format('Y-m-d H:i:s'),
+            "FechaFin" => $fechaFin->format('Y-m-d H:i:s'),
+            "ListaVentasDiarias" => [],
+            "ListaItemsPeriodo" => [],       // 🔥 INICIALIZADO AQUÍ
+            "MargenDivisasPeriodo" => 0,
+        ];
+
+        // 5️⃣ Recorrer ventas diarias
+        foreach ($ventasDiarias as $venta) {
+            $fecha = $venta->fecha_formateada;
+
+            $ventaDiaria = [
+                "Fecha" => $fecha,
+                "TasaDeCambio" => $venta->TasaDeCambio,
+                "TotalBS" => $venta->TotalBs,
+                "TotalDivisa" => $venta->TotalDivisa,
+                "ListadoProductosVentaDiaria" => [],
+                "UtilidadDivisaDiario" => 0,
+                "PromedioMontoPorFactura" => 0,
+                "PromedioMontoDivisaPorFactura" => 0,
+                "PromedioProductosPorFactura" => 0,
+            ];
+
+            if (isset($detallesPorFecha[$fecha])) {
+                $totalUnidades = 0;
+                $facturasDelDia = collect($detallesPorFecha[$fecha])->pluck('VentaId')->unique()->count();
+
+                foreach ($detallesPorFecha[$fecha] as $row) {
+                    $utilidadProducto = round(
+                        $row->MontoDivisa - ($row->CostoDivisa * $row->Cantidad),
+                        2
+                    );
+
+                    $totalUnidades += $row->Cantidad;
+
+                    $ventaDiaria["ListadoProductosVentaDiaria"][] = [
+                        "Cantidad"      => $row->Cantidad,
+                        "MontoDivisa"   => $row->MontoDivisa,
+                        "PrecioVenta"   => $row->PrecioVenta,
+                        "ProductoId"    => $row->ProductoId,
+                        "UtilidadDivisa" => $utilidadProducto,
+                        "Producto" => [
+                            "Id"          => $row->ProductoId,
+                            "Codigo"      => $row->Codigo,
+                            "Descripcion" => $row->Descripcion,
+                            "CostoDivisa" => $row->CostoDivisa,
+                            "UrlFoto"     => $row->UrlFoto ? strtolower($row->UrlFoto) : "",
+                        ],
+                    ];
+
+                    // 🔥 ESTE ARRAY ES EL QUE USAREMOS PARA EL TOP RENTABLES
+                    $resultado["ListaItemsPeriodo"][] = [
+                        "Cantidad"        => $row->Cantidad,
+                        "MontoDivisa"     => $row->MontoDivisa,
+                        "PrecioVenta"     => $row->PrecioVenta,
+                        "ProductoId"      => $row->ProductoId,
+                        "UtilidadDivisa"  => $utilidadProducto,
+                        "Codigo"          => $row->Codigo,
+                        "Descripcion"     => $row->Descripcion,
+                        "CostoDivisa"     => $row->CostoDivisa,
+                        "UrlFoto"         => $row->UrlFoto ? strtolower($row->UrlFoto) : "",
+                    ];
+
+                    $ventaDiaria["UtilidadDivisaDiario"] += $utilidadProducto;
+
+                    $totalDivisaPeriodo += $row->MontoDivisa;
+                    $costoTotalDivisaPeriodo += ($row->CostoDivisa * $row->Cantidad);
+                }
+
+                if ($facturasDelDia > 0) {
+                    $ventaDiaria["PromedioMontoPorFactura"] = round($ventaDiaria["TotalBS"] / $facturasDelDia, 2);
+                    $ventaDiaria["PromedioMontoDivisaPorFactura"] = round($ventaDiaria["TotalDivisa"] / $facturasDelDia, 2);
+                    $ventaDiaria["PromedioProductosPorFactura"] = round($totalUnidades / $facturasDelDia, 2);
+                }
+            }
+
+            $resultado["ListaVentasDiarias"][] = $ventaDiaria;
+        }
+
+        // ▶️ Margen del período
+        if ($costoTotalDivisaPeriodo != 0) {
+            $resultado["MargenDivisasPeriodo"] = round((($totalDivisaPeriodo * 100) / $costoTotalDivisaPeriodo) - 100, 2);
+        }
+
+        // ================================
+        //    🔥 CALCULAR TOP RENTABLES
+        // ================================
+
+        $acumulado = [];
+
+        foreach ($resultado["ListaItemsPeriodo"] as $item) {
+
+            $id = $item["ProductoId"];
+
+            if (!isset($acumulado[$id])) {
+                $acumulado[$id] = [
+                    "ProductoId" => $id,
+                    "Codigo" => $item["Codigo"],
+                    "Descripcion" => $item["Descripcion"],
+                    "UrlFoto" => $item["UrlFoto"],
+                    "Cantidad" => 0,
+                    "UtilidadDivisa" => 0,
+                ];
+            }
+
+            $acumulado[$id]["Cantidad"] += $item["Cantidad"];
+            $acumulado[$id]["UtilidadDivisa"] += $item["UtilidadDivisa"];
+        }
+
+        // Ordenar por utilidad DESC y tomar TOP 4
+        $resultado["TopProductosRentables"] = collect($acumulado)
+            ->sortByDesc("UtilidadDivisa")
+            ->take(4)
+            ->values()
+            ->all();
+
+        return $resultado;
+    }
+
+    // Obtener valores en 
+    /**
+     * Equivalente a BuscarValoresEstadoDeCuentaSucursal de .NET
+     */
+    public static function buscarValoresEstadoDeCuentaSucursal(ParametrosFiltroFecha $filtroFecha, int $sucursalId) 
+    {
+
+        // Instanciar servicios (puedes pasarlos por constructor si usas IoC)
+        $ventasService = new VentasService();
+
+        // Objeto final que devolveremos (array estilo DTO)
+        $balanceSucursal = [
+            'SucursalId' => $sucursalId,
+        ];
+
+        // ================================
+        // VENTAS
+        // ================================
+        $balanceSucursal['Ventas'] =
+            $ventasService->obtenerListadoVentasDiarias(
+                $filtroFecha,
+                $sucursalId,
+                false
+            );
+
+        // dd($balanceSucursal['Ventas']);
+
+        // ================================
+        // GASTOS DEL PERÍODO
+        // ================================
+        $balanceSucursal['ListadoGastosPeriodo'] = self::buscarGastosSucursal(
+                                                            $sucursalId,
+                                                            $filtroFecha,
+                                                            true
+                                                        );
+
+        // ================================
+        // GASTOS POR PAGAR (para cerrar)
+        // ================================
+        $balanceSucursal['ListadoGastosPorPagar'] =
+            self::buscarGastosSucursalParaCerrar(
+                $sucursalId,
+                $filtroFecha
+            );
+
+        // ================================
+        // RECEPCIONES
+        // ================================
+        $balanceSucursal['ListadoRecepciones'] =
+            self::buscarRecepcionesSucursalParaCerrar(
+                $sucursalId,
+                null
+            );
+
+        // ================================
+        // VALORIZACIÓN DE INVENTARIO
+        // ================================
+        $balanceSucursal['ValorizacionInventario'] =
+            self::buscarValorizacionInventario(
+                $sucursalId
+            );
+
+        // ================================
+        // PAGO DE SERVICIOS
+        // ================================
+        $balanceSucursal['ListadoPagoServicios'] =
+            self::buscarTransacciones(
+                'Servicio',
+                $sucursalId,
+                $filtroFecha
+            );
+
+        // ================================
+        // PAGO DE FACTURAS – MERCANCIA
+        // ================================
+        $balanceSucursal['ListadoPagoMercancia'] =
+            self::buscarTransacciones(
+                'PagoMercancia',
+                $sucursalId,
+                $filtroFecha
+            );
+
+        // ================================
+        // OPERACIONES (Balance final)
+        // ================================
+        $balanceSucursal['EDCOperaciones'] =
+            self::generarBalanceSucursalVentas(
+                $balanceSucursal['Ventas'],
+                null
+            );
+
+        $balanceSucursal['EDCOperaciones'] =
+            self::generarBalanceSucursalOperaciones(
+                $balanceSucursal['ListadoGastosPeriodo'],
+                $balanceSucursal['EDCOperaciones']
+            );
+
+        $balanceSucursal['EDCOperaciones'] =
+            self::generarBalanceSucursalOperaciones(
+                $balanceSucursal['ListadoPagoServicios'],
+                $balanceSucursal['EDCOperaciones']
+            );
+
+        // Calculo de gastos por mes
+        $balanceSucursal['GastosDivisaPeriodo'] = 0;
+        $balanceSucursal['MontoGastosBsPeriodo'] = 0;
+
+        if (!empty($balanceSucursal['ListadoGastosPeriodo'])) {
+            $balanceSucursal['GastosDivisaPeriodo'] = collect($balanceSucursal['ListadoGastosPeriodo'])
+                ->sum(fn ($g) => (float) ($g->MontoDivisaAbonado ?? 0));
+
+            $balanceSucursal['MontoGastosBsPeriodo'] = collect($balanceSucursal['ListadoGastosPeriodo'])
+                ->sum(fn ($g) => (float) ($g->MontoBsAbonado ?? 0));
+        }
+        
+        return $balanceSucursal;
+    }
+
+    // ===================================================================
+    // Métodos equivalentes a GenerarBalanceDeSucursalVentas / Operaciones
+    // ===================================================================
+    public static function generarBalanceSucursalVentas($ventas, $edc)
+    {
+        if (!$ventas || !isset($ventas['listaVentasDiarias']) || empty($ventas['listaVentasDiarias'])) 
+        {
+            return $edc;
+        }
+
+        if (!$edc || !is_object($edc)) {
+            $edc = new \stdClass();
+        }
+
+        if (!isset($edc->Detalles) || !$edc->Detalles) {
+            $edc->Detalles = [];
+        }
+
+        foreach ($ventas['listaVentasDiarias'] as $item) {
+            
+            // 👉 propiedades reales del DTO
+            $montoDivisa = (float) ($item->totalDivisa ?? 0);
+            $tasa        = (float) ($item->tasaDeCambio ?? 0);
+
+            $detalle = (object) [
+                'Descripcion'     => 'Ingreso por venta',
+                'Fecha'           => $item->fecha ?? null,
+                'MontoDivisa'     => $montoDivisa,
+                'MontoBs'         => round($montoDivisa * $tasa, 2),
+                'MontoPagoDivisa' => 0,
+                'MontoPagoBs'     => 0,
+                'Referencia'      => $item->id ? 'ID: ' . $item->Id : null,
+                'SaldoDivisa'     => 0,
+                'SaldoBs'         => 0,
+            ];
+
+            $edc->Detalles[] = $detalle;
+        }
+
+        self::ordenarOperacionesEDC($edc);
+
+        return $edc;
+    }
+
+
+    public static function generarBalanceSucursalOperaciones($operaciones, $edc)
+    {
+        if (!$operaciones || count($operaciones) === 0) {
+            return $edc;
+        }
+
+        if ($edc === null) {
+            $edc = new \stdClass();
+        }
+
+        if (!isset($edc->Detalles) || !$edc->Detalles) {
+            $edc->Detalles = [];
+        }
+
+        foreach ($operaciones as $item) {
+            $detalle = (object) [
+                'Descripcion'     => trim(($item->Descripcion ?? '') . (isset($item->Observacion) && $item->Observacion !== '' ? '-' . $item->Observacion : '')),
+                'Fecha'           => $item->Fecha,
+                'MontoPagoDivisa' => (float) ($item->MontoDivisaAbonado ?? 0),
+                'MontoPagoBs'     => (float) ($item->MontoAbonado ?? 0),
+                'Referencia'      => $item->NumeroOperacion ?? null,
+                'MontoDivisa'     => 0,
+                'MontoBs'         => 0,
+                'SaldoDivisa'     => 0,
+                'SaldoBs'         => 0,
+                'UrlComprobante'  => $item->UrlComprobante ?? null,
+            ];
+
+            $edc->Detalles[] = $detalle;
+        }
+
+        // Reordenar
+        self::ordenarOperacionesEDC($edc);
+
+        return $edc;
+    }
+
+
+    public static function ordenarOperacionesEDC($balanceGeneral)
+    {
+        if (!$balanceGeneral || empty($balanceGeneral->Detalles)) {
+            return;
+        }
+
+        // Ordenar: Fecha ASC, Referencia DESC
+        usort($balanceGeneral->Detalles, function ($a, $b) {
+
+            if ($a->Fecha == $b->Fecha) {
+                return strcmp($b->Referencia, $a->Referencia);
+            }
+
+            return strtotime($a->Fecha) <=> strtotime($b->Fecha);
+        });
+
+        $saldoDivisa = 0;
+        $saldoBs = 0;
+
+        foreach ($balanceGeneral->Detalles as $item) {
+
+            $saldoDivisa +=
+                (float) $item->MontoDivisa - (float) $item->MontoPagoDivisa;
+
+            $item->SaldoDivisa = $saldoDivisa;
+
+            $saldoBs +=
+                (float) $item->MontoBs - (float) $item->MontoPagoBs;
+
+            $item->SaldoBs = $saldoBs;
+        }
+
+        // Reverse como en .NET
+        $balanceGeneral->Detalles = array_reverse($balanceGeneral->Detalles);
+    }
+
+    public static function buscarGastosSucursal($sucursalId, ParametrosFiltroFecha $filtroFecha, bool $incluirGastosSucursal = true)
+    {
+        // Definir las fechas de inicio y fin basadas en el filtro
+        // $fechaInicio = $filtroFecha->fechaInicio->startOfDay();
+        // $fechaFin = $filtroFecha->fechaFin->startOfDay();
+
+        // ============================
+        // Buscar los gastos tipo "Gasto"
+        // ============================
+        // $listadoGastos = DB::table('Transacciones')
+        //     ->where('Tipo', 2)
+        //     ->whereBetween('fecha', [$filtroFecha->fechaInicio, $filtroFecha->fechaFin]);
+        //     //->whereBetween('Fecha', [$fechaInicio, $fechaFin]);
+                
+
+        // // Filtrar por sucursal si se pasa un ID de sucursal
+        // if ($sucursalId != null) {
+        //     $listadoGastos->where('SucursalId', $sucursalId);
+        // }
+
+        // // Obtener los resultados como un array de objetos
+        // $listadoGastos = $listadoGastos->get()->toArray();
+
+        $listadoGastos = DB::table('Transacciones as t')
+            ->leftJoin('Sucursales as s', 't.SucursalId', '=', 's.ID')
+            ->where('t.Tipo', 2)
+            ->whereBetween('t.Fecha', [$filtroFecha->fechaInicio, $filtroFecha->fechaFin]);
+
+        // Filtrar por sucursal si se pasa un ID de sucursal
+        if (!is_null($sucursalId) && $sucursalId != 0) {
+            $listadoGastos->where('t.SucursalId', $sucursalId);
+        }
+
+        // Seleccionar columnas (incluye el nombre de la sucursal)
+        $listadoGastos = $listadoGastos
+            ->select(
+                't.*',
+                's.Nombre as SucursalNombre'
+            )
+            ->orderBy('t.Fecha')
+            ->get()
+            ->toArray();    
+
+        // return $listadoGastos;
+
+        // ============================
+        // Si se incluyen los gastos de caja
+        // ============================
+        if ($incluirGastosSucursal) {
+            // $gastosCaja = DB::table('Transacciones')
+            //     ->where('Tipo', 3)
+            //     ->whereBetween('fecha', [$filtroFecha->fechaInicio, $filtroFecha->fechaFin]);
+
+            // // Filtrar por sucursal si es necesario
+            // if ($sucursalId != null) {
+            //     $gastosCaja->where('SucursalId', $sucursalId);
+            // }
+
+            // // Obtener los resultados como un array de objetos
+            // $gastosCaja = $gastosCaja->get()->toArray();
+
+            $gastosCaja = DB::table('Transacciones as t')
+                ->leftJoin('Sucursales as s', 't.SucursalId', '=', 's.ID')
+                ->where('t.Tipo', 3)
+                ->whereBetween('t.Fecha', [$filtroFecha->fechaInicio, $filtroFecha->fechaFin]);
+
+            // Filtrar por sucursal si aplica
+            if (!is_null($sucursalId) && $sucursalId != 0) {
+                $gastosCaja->where('t.SucursalId', $sucursalId);
+            }
+
+            // Seleccionar columnas con nombre de sucursal
+            $gastosCaja = $gastosCaja
+                ->select(
+                    't.*',
+                    's.Nombre as SucursalNombre'
+                )
+                ->orderBy('t.Fecha')
+                ->get()
+                ->toArray();
+
+            // Combinar los resultados de ambos tipos de gastos
+            $listadoGastos = array_merge($listadoGastos, $gastosCaja);
+        }
+
+        return $listadoGastos;
+    }
+
+    public static function buscarGastosSucursalParaCerrar(int $sucursalId, ParametrosFiltroFecha $filtroFecha) 
+    {
+        // Tipos permitidos (equivalentes al enum .NET)
+        $tiposTransacciones = [
+            2, // Gasto
+            3, // GastoCaja
+            0, // PagoMercancia
+            5, // PagoServicio
+        ];
+
+        // Consulta principal de gastos
+        $query = DB::table('Transacciones')
+            ->whereIn('Tipo', $tiposTransacciones)
+            ->where('Tipo', '!=', 7) // AbonoDeuda
+            ->where('SucursalId', $sucursalId)
+            ->where('Estatus', '!=', 5);
+
+        // Filtro de fecha solo si viene
+        if ($filtroFecha) {
+            $query->where('Fecha', '<=', $filtroFecha->fechaFin);
+        }
+
+        $transacciones = $query->get();
+
+        if ($transacciones->isEmpty()) {
+            return [];
+        }
+
+        $resultado = [];
+
+        // Obtener todos los IDs de gastos para JOIN
+        $gastoIds = $transacciones->pluck('ID')->toArray();
+
+        // Obtener todos los abonos de esos gastos usando JOIN (mejor rendimiento)
+        $abonosTodos = DB::table('Transacciones as t')
+            ->join('TransaccionesGastos as tg', 'tg.TransaccionId', '=', 't.ID')
+            ->where('t.Tipo', 7) // AbonoDeuda
+            ->whereIn('tg.GastoId', $gastoIds)
+            ->select('t.*', 'tg.GastoId')
+            ->get()
+            ->groupBy('GastoId'); // Agrupamos por gasto para fácil asignación
+
+        // Recorremos los gastos y calculamos saldo
+        foreach ($transacciones as $gasto) {
+            $abonos = $abonosTodos->get($gasto->ID, collect());
+
+            $totalAbonosDivisa = $abonos->sum('MontoDivisaAbonado');
+            $saldoDivisa = ($gasto->MontoDivisaAbonado ?? 0) - $totalAbonosDivisa;
+
+            if ($saldoDivisa > 0) {
+                $gasto->AbonoVentas = $abonos;
+                $gasto->SaldoDivisa = $saldoDivisa;
+                $resultado[] = $gasto;
+            }
+        }
+
+        return $resultado;
+    }
+
+    public static function buscarRecepcionesSucursalParaCerrar(int $sucursalId, ?ParametrosFiltroFecha $filtroFecha = null) 
+    {
+        // ================================
+        // 1️⃣ Buscar recepciones pendientes
+        // ================================
+        $query = DB::table('Recepciones')
+            ->where('SucursalDestinoId', $sucursalId)
+            ->whereNotIn('Estatus', [
+                7, // Pagada
+                8  // FinalizadaPagada
+            ]);
+
+        if ($filtroFecha) {
+            $query->where('FechaCreacion', '<=', $filtroFecha->fechaFin);
+        }
+
+        $recepciones = $query->get();
+
+        if ($recepciones->isEmpty()) {
+            return [];
+        }
+
+        $resultado = [];
+
+        // ================================
+        // 2️⃣ Procesar cada recepción
+        // ================================
+        foreach ($recepciones as $recepcion) {
+
+            // ================================
+            // Buscar abonos de la recepción
+            // ================================
+            $abonos = DB::table('Transacciones')
+                ->where('Tipo', 7) // AbonoDeuda
+                ->whereExists(function ($q) use ($recepcion) {
+                    $q->select(DB::raw(1))
+                    ->from('TransaccionesRecepciones')
+                    ->whereColumn(
+                        'TransaccionesRecepciones.TransaccionId',
+                        'Transacciones.ID'
+                    )
+                    ->where(
+                        'TransaccionesRecepciones.RecepcionId',
+                        $recepcion->RecepcionId
+                    );
+                })
+                ->get();
+
+            // ================================
+            // Calcular saldo
+            // ================================
+            $totalAbonosDivisa = $abonos->sum('MontoDivisaAbonado');
+            $montoRecepcionDivisa = $recepcion->TotalDivisa ?? 0;
+
+            $saldoDivisa = $montoRecepcionDivisa - $totalAbonosDivisa;
+
+            if ($saldoDivisa > 0) {
+                $recepcion->AbonoVentas = $abonos;
+                $recepcion->SaldoDivisa = $saldoDivisa;
+                $resultado[] = $recepcion;
+            }
+        }
+
+        return $resultado;
+    }
+
+    public static function buscarValorizacionInventario(int $sucursalId)
+    {
+        $valorizacion = DB::table('ValorizacionInventario')
+            ->where('SucursalId', $sucursalId)
+            ->first();
+
+        if (!$valorizacion) {
+            return null;
+        }
+
+        return (object) [
+            'Existencia'   => (int) $valorizacion->Existencia,
+            'Referencias'  => (int) $valorizacion->Referencias,
+            'CostoBs'      => (float) $valorizacion->CostoBs,
+            'CostoDivisa'  => (float) $valorizacion->CostoDivisa,
+            'PvpBs'        => (float) $valorizacion->PvpBs,
+            'PvpDivisa'    => (float) $valorizacion->PvpDivisa,
+            'SucursalId'   => (int) $valorizacion->SucursalId,
+        ];
+    }
+
+    public static function buscarTransacciones(string $tipoTransaccion, ?int $sucursalId, ?ParametrosFiltroFecha $filtroFecha) 
+    {
+        // Mapeo EnumTipoTransaccion .NET → int BD
+        $mapaTipos = [
+            'PagoMercancia' => 0,
+            'Servicio'      => 1,
+            'Gasto'         => 2,
+            'GastoCaja'     => 3,
+            'AbonoPrestamo' => 4,
+            'PagoServicio'  => 5,
+            'PagoFraccionado' => 6,
+            'AbonoDeuda'    => 7,
+            'Liberalidad'   => 8,
+        ];
+
+        $query = DB::table('Transacciones')
+            ->where('Tipo', $mapaTipos[$tipoTransaccion]);
+
+        if ($sucursalId !== null) {
+            $query->where('SucursalId', $sucursalId);
+        }
+
+        if ($filtroFecha) {
+            $fechaInicio = $filtroFecha->fechaInicio->startOfDay();
+            $fechaFin = $filtroFecha->fechaFin->startOfDay();
+
+            $query->whereBetween('Fecha', [$fechaInicio, $fechaFin]);
+        }
+
+        $transacciones = $query->get();
+
+        if ($transacciones->isEmpty()) {
+            return null;
+        }
+
+        $resultado = [];
+
+        foreach ($transacciones as $item) {
+            $transaccion = (object) [
+                'Id'           => $item->ID,
+                'Descripcion'  => $item->Descripcion,
+                'MontoAbonado' => (float) $item->MontoAbonado,
+                'MontoDivisaAbonado' => (float) $item->MontoDivisaAbonado,
+                'Tipo'         => (int) $item->Tipo,
+                'Estatus'      => (int) $item->Estatus,
+                'SucursalId'   => (int) $item->SucursalId,
+                'CategoriaId'  => $item->CategoriaId,
+                'Fecha'        => $item->Fecha,
+                'Categoria'    => null,
+            ];
+
+            // ✅ Equivalente a BuscarCategoriaGasto
+            if ($item->CategoriaId) {
+                $transaccion->Categoria =
+                    self::buscarCategoriaGasto((int) $item->CategoriaId);
+            }
+
+            $resultado[] = $transaccion;
+        }
+
+        return $resultado;
+    }
+
+    public static function buscarCategoriaGasto(int $categoriaId)
+    {
+        if ($categoriaId <= 0) {
+            return null;
+        }
+
+        $categoria = DB::table('CategoriaGastos')
+            ->where('CategoriaId', $categoriaId)
+            ->first();
+
+        if (!$categoria) {
+            return null;
+        }
+
+        return (object) [
+            'CategoriaId' => $categoria->CategoriaId,
+            'Nombre'      => $categoria->Nombre,
+            'Descripcion' => $categoria->Descripcion ?? null,
+        ];
+    }
 }

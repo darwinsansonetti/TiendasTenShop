@@ -23,6 +23,9 @@ class VentaDiariaDTO
     public $unidadesGlobalVendidas = 0;
     public $montoDivisaGlobal = 0;
 
+    public $nombreSucursal;
+
+
     // Calculados
     public function getUnidadesVendidas(): int
     {

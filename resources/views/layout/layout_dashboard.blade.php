@@ -1,5 +1,9 @@
+@php
+    use App\Helpers\FileHelper;
+@endphp
+
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <!--begin::Head-->
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
@@ -96,13 +100,13 @@
                 </button>
             </li>
             <li class="nav-item d-none d-md-block">
-              <span class="nav-link text-dark">
-                  Sucursal
-                  @if(session('sucursal_nombre'))
-                      : {{ session('sucursal_nombre') }}
-                  @endif
-              </span>
-          </li>
+                <span id="navbar-sucursal" class="nav-link text-dark">
+                    Sucursal
+                    @if(session('sucursal_nombre'))
+                        : {{ session('sucursal_nombre') }}
+                    @endif
+                </span>
+            </li>
             <!--<li class="nav-item d-none d-md-block"><a href="#" class="nav-link">Contact</a></li>-->  
           </ul>
           <!--end::Start Navbar Links-->
@@ -261,70 +265,61 @@
                   <!-- Lista con scroll -->
                   <div class="dropdown-body" style="max-height: 400px; overflow-y: auto;">
 
-                      {{-- 🔹 Listado normal --}}
-                      @foreach ($listaSucursales as $sucursal)
-                      <a href="{{ route('seleccionar.sucursal', $sucursal->ID) }}" class="dropdown-item py-3 border-bottom">
-                          <div class="d-flex align-items-start">
+                    @foreach ($listaSucursales as $sucursal)
+                    <a href="#" class="dropdown-item py-3 border-bottom seleccionar-sucursal"
+                      data-id="{{ $sucursal->ID }}">
+                        <div class="d-flex align-items-start">
+                            <!-- Icono -->
+                            <div class="flex-shrink-0 position-relative">
+                                <div class="bg-{{ $sucursal->EsActiva ? 'primary' : 'secondary' }} bg-opacity-10 rounded-circle
+                                            d-flex align-items-center justify-content-center"
+                                    style="width: 50px; height: 50px;">
+                                    <i class="bi bi-shop-window fs-4 text-{{ $sucursal->EsActiva ? 'primary' : 'secondary' }}"></i>
+                                </div>
 
-                              <!-- Icono -->
-                              <div class="flex-shrink-0 position-relative">
-                                  <div class="bg-{{ $sucursal->EsActiva ? 'primary' : 'secondary' }} bg-opacity-10 rounded-circle
-                                              d-flex align-items-center justify-content-center"
-                                      style="width: 50px; height: 50px;">
-                                      <i class="bi bi-shop-window fs-4 text-{{ $sucursal->EsActiva ? 'primary' : 'secondary' }}"></i>
-                                  </div>
+                                <!-- Estado -->
+                                <span class="position-absolute top-0 start-100 translate-middle p-1
+                                            bg-{{ $sucursal->EsActiva ? 'success' : 'danger' }}
+                                            border border-2 border-white rounded-circle"></span>
+                            </div>
 
-                                  <!-- Estado -->
-                                  <span class="position-absolute top-0 start-100 translate-middle p-1
-                                              bg-{{ $sucursal->EsActiva ? 'success' : 'danger' }}
-                                              border border-2 border-white rounded-circle"></span>
-                              </div>
+                            <!-- Información -->
+                            <div class="flex-grow-1 ms-3" style="min-width: 0; width: 100%;">
+                                <h6 class="fw-bold mb-1 text-dark text-truncate" title="{{ $sucursal->Nombre }}">
+                                    {{ $sucursal->Nombre }}
+                                </h6>
 
-                              <!-- Información -->
-                              <div class="flex-grow-1 ms-3" style="min-width: 0; width: 100%;">
-                                  <h6 class="fw-bold mb-1 text-dark text-truncate" title="{{ $sucursal->Nombre }}">
-                                      {{ $sucursal->Nombre }}
-                                  </h6>
+                                <div class="small text-muted mb-2 direccion-texto"
+                                    title="{{ $sucursal->Direccion ?? 'Sin dirección' }}">
+                                    <i class="bi bi-geo-alt me-1"></i>
+                                    {{ $sucursal->Direccion ?? 'Sin dirección' }}
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                    @endforeach
 
-                                  <div class="small text-muted mb-2 direccion-texto"
-                                      title="{{ $sucursal->Direccion ?? 'Sin dirección' }}">
-                                      <i class="bi bi-geo-alt me-1"></i>
-                                      {{ $sucursal->Direccion ?? 'Sin dirección' }}
-                                  </div>
-                              </div>
+                    {{-- Opción Todas las sucursales --}}
+                    <a href="#" class="dropdown-item py-3 seleccionar-sucursal" data-id="0">
+                        <div class="d-flex align-items-start">
+                            <div class="flex-shrink-0">
+                                <div class="bg-info bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center"
+                                    style="width: 50px; height: 50px;">
+                                    <i class="bi bi-building fs-4 text-info"></i>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <h6 class="fw-bold mb-1 text-dark">Todas las sucursales</h6>
+                                <div class="small text-muted">
+                                    <i class="bi bi-geo-alt me-1"></i>
+                                    Ver datos de todas las sucursales
+                                </div>
+                            </div>
+                        </div>
+                    </a>
 
-                          </div>
-                      </a>
-                      @endforeach
+                </div>
 
-
-                      {{-- 🔹 OPCIÓN: TODAS LAS SUCURSALES --}}
-                      <a href="{{ route('seleccionar.sucursal', 0) }}"
-                        class="dropdown-item py-3">
-
-                          <div class="d-flex align-items-start">
-
-                              <!-- Icono -->
-                              <div class="flex-shrink-0">
-                                  <div class="bg-info bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center"
-                                      style="width: 50px; height: 50px;">
-                                      <i class="bi bi-building fs-4 text-info"></i>
-                                  </div>
-                              </div>
-
-                              <div class="flex-grow-1 ms-3">
-                                  <h6 class="fw-bold mb-1 text-dark">Todas las sucursales</h6>
-
-                                  <div class="small text-muted">
-                                      <i class="bi bi-geo-alt me-1"></i>
-                                      Ver datos de todas las sucursales
-                                  </div>
-                              </div>
-
-                          </div>
-                      </a>
-
-                  </div>
               </div>
             </li>
 
@@ -341,9 +336,23 @@
 
             <!--begin::User Menu Dropdown-->
             <li class="nav-item dropdown user-menu">
+
+              @php
+
+                  // Nombre del archivo (puede ser '' o null)
+                  $fotoPerfil = $user->FotoPerfil ?? '';
+
+                  // Usamos el helper genérico
+                  $imgSrc = FileHelper::getOrDownloadFile(
+                      'images/usuarios/',                          // Carpeta
+                      $fotoPerfil,                                 // Archivo
+                      'assets/img/adminlte/img/avatar4.png'        // Default
+                  );
+              @endphp
+
               <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown">
                 <img
-                  src="{{ asset('assets/img/adminlte/img/avatar4.png') }}"
+                  src="{{ $imgSrc }}"
                   class="user-image rounded-circle shadow"
                   alt="User Image"
                 />
@@ -353,7 +362,7 @@
                 <!--begin::User Image-->
                 <li class="user-header text-bg-primary">
                   <img
-                    src="{{ asset('assets/img/adminlte/img/avatar4.png') }}"
+                    src="{{ $imgSrc }}"
                     class="rounded-circle shadow"
                     alt="User Image"
                   />
@@ -431,8 +440,43 @@
               data-accordion="false"
               id="navigation"
             >
-              <li class="nav-item menu-open">
-                <a href="#" class="nav-link active">
+              <li class="nav-item">
+                <a href="{{ route('cpanel.dashboard') }}" class="nav-link">
+                  <i class="nav-icon bi bi-speedometer2"></i>
+                  <p>Inicio</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link">
+                  <i class="nav-icon  bi bi-clipboard-fill"></i>
+                  <p>
+                    Informes - Resumen
+                    <i class="nav-arrow bi bi-chevron-right"></i>
+                  </p>
+                </a>
+                <ul class="nav nav-treeview">
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.resumen.ventas') }}" class="nav-link">
+                      <i class="nav-icon bi bi-circle"></i>
+                      <p>Resumen de ventas</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.estado.cuentas') }}" class="nav-link">
+                      <i class="nav-icon bi bi-circle"></i>
+                      <p>Estado de cuentas</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a href="./index3.html" class="nav-link">
+                      <i class="nav-icon bi bi-circle"></i>
+                      <p>Dashboard v3</p>
+                    </a>
+                  </li>
+                </ul>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link">
                   <i class="nav-icon bi bi-speedometer"></i>
                   <p>
                     Dashboard
@@ -441,7 +485,7 @@
                 </a>
                 <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="./index.html" class="nav-link active">
+                    <a href="./index.html" class="nav-link">
                       <i class="nav-icon bi bi-circle"></i>
                       <p>Dashboard v1</p>
                     </a>
@@ -1098,6 +1142,7 @@
     <!--end::Script-->
 
     <script>
+      
       // Función para mostrar toasts
       function showToast(message, type = 'success') {
           const toastId = 'toast-' + Date.now();
@@ -1286,6 +1331,51 @@
       // Inicializar contador al cargar
       document.addEventListener('DOMContentLoaded', function() {
           actualizarContador();
+
+          document.querySelectorAll('.seleccionar-sucursal').forEach(function(el) {
+            el.addEventListener('click', async function(e) {
+                e.preventDefault();
+
+                const sucursalId = this.dataset.id;
+
+                const url = "{{ route('seleccionar.sucursal', ['id' => 'ID_TEMP']) }}".replace('ID_TEMP', sucursalId);
+
+                // Rutas donde NO queremos recargar
+                const rutasSinReload = ['/cpanel/dashboard', '/dashboard'];
+                const rutaActual = window.location.pathname;
+                const sinReload = rutasSinReload.some(r => rutaActual.endsWith(r));
+
+                try {
+                    const response = await fetch(url, {
+                        method: 'GET',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json'
+                        }
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        showToast(data.message, 'success');
+
+                        const navbarSucursal = document.getElementById('navbar-sucursal');
+                        if (navbarSucursal) {
+                            navbarSucursal.textContent = 'Sucursal: ' + data.sucursal_nombre;
+                        }
+
+                        if (!sinReload) {
+                            setTimeout(() => location.reload(), 800);
+                        }
+                    } else {
+                        showToast('Error al seleccionar la sucursal.', 'danger');
+                    }
+
+                } catch (error) {
+                    showToast('Error en la conexión con el servidor.', 'danger');
+                }
+            });
+          });
       });
 
       // Función para limpiar formulario
@@ -1293,6 +1383,7 @@
           document.getElementById('texto-notificacion').value = '';
           actualizarContador();
       }
+
     </script>
 
     @yield('js') 

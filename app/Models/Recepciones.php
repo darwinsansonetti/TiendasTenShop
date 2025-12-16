@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Recepcion extends Model
+class Recepciones extends Model
 {
     protected $connection = 'sqlsrv';
     protected $table = 'Recepciones';
