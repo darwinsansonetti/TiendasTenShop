@@ -441,12 +441,12 @@
               id="navigation"
             >
               <li class="nav-item">
-                <a href="{{ route('cpanel.dashboard') }}" class="nav-link">
+                <a href="{{ route('cpanel.dashboard') }}" class="nav-link {{ session('menu_active') == 'Inicio' ? 'active' : '' }}">
                   <i class="nav-icon bi bi-speedometer2"></i>
                   <p>Inicio</p>
                 </a>
               </li>
-              <li class="nav-item">
+              <li class="nav-item {{ session('menu_active') == 'Informes - Resumen' ? 'menu-open' : '' }}">
                 <a href="#" class="nav-link">
                   <i class="nav-icon  bi bi-clipboard-fill"></i>
                   <p>
@@ -456,15 +456,21 @@
                 </a>
                 <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.resumen.ventas') }}" class="nav-link">
+                    <a href="{{ route('cpanel.resumen.ventas') }}" class="nav-link {{ session('submenu_active') == 'Resumen de ventas' ? 'active' : '' }}">
                       <i class="nav-icon bi bi-circle"></i>
                       <p>Resumen de ventas</p>
                     </a>
                   </li>
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.estado.cuentas') }}" class="nav-link">
+                    <a href="{{ route('cpanel.estado.cuentas') }}" class="nav-link {{ session('submenu_active') == 'Estado de cuentas' ? 'active' : '' }}">
                       <i class="nav-icon bi bi-circle"></i>
                       <p>Estado de cuentas</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.comparativa.sucursales') }}" class="nav-link {{ session('submenu_active') == 'Comparativa' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-circle"></i>
+                      <p>Comparativa</p>
                     </a>
                   </li>
                   <li class="nav-item">

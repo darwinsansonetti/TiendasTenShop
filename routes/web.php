@@ -79,6 +79,9 @@ Route::middleware('auth')->group(function() {
 
     // Estados de Cuentas
     Route::get('/cpanel/estados/cuentas', [CpanelController::class, 'estado_cuentas'])->name('cpanel.estado.cuentas');
+
+    // Comparativa entre sucursales
+    Route::get('/cpanel/comparativa/sucursales', [CpanelController::class, 'comparativa_sucursales'])->name('cpanel.comparativa.sucursales');
 });
 
 

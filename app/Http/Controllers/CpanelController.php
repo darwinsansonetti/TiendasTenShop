@@ -110,6 +110,12 @@ class CpanelController extends Controller
         session(['sucursal_nombre' => $sucursalNombre]);
         session(['sucursal_id' => 0]);
 
+        // Asignacion al menu
+        session([
+            'menu_active' => 'Inicio',
+            'submenu_active' => null
+        ]);
+
         if (!$tasa || !$tasa['DivisaValor']) {
             session()->flash('warning', 'No se ha registrado la tasa del día. Por favor, actualícela.');
         }
@@ -301,7 +307,13 @@ class CpanelController extends Controller
         })
         ->map(function($items) {
             return $items->sum('TotalDivisa'); // suma total por día
-        });
+        });        
+
+        // Asignacion al menu
+        session([
+            'menu_active' => 'Informes - Resumen',
+            'submenu_active' => 'Resumen de ventas'
+        ]);
 
         return view('cpanel.resumen.resumen_ventas', [
             'ventas' => $dtoVenta,
@@ -352,10 +364,52 @@ class CpanelController extends Controller
 
         // 7️⃣ Agregar mes/año al resultado para la vista
         $balanceSucursal['Mes'] = $mes;
-        $balanceSucursal['Anio'] = $anio;
+        $balanceSucursal['Anio'] = $anio;     
+
+        // Asignacion al menu
+        session([
+            'menu_active' => 'Informes - Resumen',
+            'submenu_active' => 'Estado de cuentas'
+        ]);
 
         // dd($balanceSucursal);
 
         return view('cpanel.resumen.estado_cuentas', $balanceSucursal);
+    }
+
+    // Comparativa entre sucursales
+    public function comparativa_sucursales(Request $request)
+    {       
+        // 🚀 Aquí: usar fechas del request si existen
+        $fechaInicio = $request->input('fecha_inicio')
+            ? Carbon::parse($request->input('fecha_inicio'))->startOfDay()
+            : null;
+
+        $fechaFin = $request->input('fecha_fin')
+            ? Carbon::parse($request->input('fecha_fin'))->startOfDay()
+            : null;
+
+        $filtroFecha = new ParametrosFiltroFecha(
+            null,
+            null,
+            null,
+            false,
+            $fechaInicio,
+            $fechaFin
+        );
+
+        $comparacion = GeneralHelper::ObtenerComparacionSucursales($filtroFecha);
+
+        // Asignacion al menu
+        session([
+            'menu_active' => 'Informes - Resumen',
+            'submenu_active' => 'Comparativa'
+        ]);
+
+        return view('cpanel.resumen.comparativa_sucursales', [
+            'fechaInicio' => $comparacion->fechaInicio,
+            'fechaFin'    => $comparacion->fechaFin,
+            'detalles'    => $comparacion->detalles,
+        ]);
     }
 }

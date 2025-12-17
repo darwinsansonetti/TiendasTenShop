@@ -19,6 +19,9 @@ use Illuminate\Support\Facades\DB;
 
 use App\Services\VentasService;
 
+use App\DTO\ComparacionSucursalesDTO;
+use App\DTO\ComparacionSucursalesDetalleDTO;
+
 class GeneralHelper
 {
     // Obtener Tasa del Dia
@@ -1039,5 +1042,86 @@ class GeneralHelper
             'Nombre'      => $categoria->Nombre,
             'Descripcion' => $categoria->Descripcion ?? null,
         ];
+    }
+
+    public static function ObtenerComparacionSucursales(ParametrosFiltroFecha $filtro)
+    {
+        $fechaInicio = $filtro->fechaInicio->startOfDay(); 
+        $fechaFin = $filtro->fechaFin->startOfDay();
+
+        $rows = DB::table('VentaProductosView as v')
+            ->join('Productos as p', 'p.Id', '=', 'v.ProductoId')
+            ->leftJoin('ProductoSucursal as ps', function ($q) {
+                $q->on('ps.ProductoId', '=', 'v.ProductoId')
+                ->where('ps.Estatus', 1);
+            })
+            ->whereBetween('v.Fecha', [$fechaInicio, $fechaFin])
+            ->where('v.Estatus', 1)
+            ->groupBy(
+                'v.ProductoId',
+                'p.Codigo',
+                'p.Descripcion',
+                'p.CostoDivisa',
+                'p.UrlFoto'
+            )
+            ->selectRaw('
+                p.UrlFoto,
+                v.ProductoId,
+                p.Codigo,
+                p.CostoDivisa,
+                p.Descripcion,
+
+                SUM(CASE WHEN v.SucursalId = 3 THEN v.Cantidad ELSE 0 END) AS CantidadCalzatodo,
+                SUM(CASE WHEN v.SucursalId = 4 THEN v.Cantidad ELSE 0 END) AS CantidadTenShop,
+                SUM(CASE WHEN v.SucursalId = 5 THEN v.Cantidad ELSE 0 END) AS Cantidad10y10,
+                SUM(CASE WHEN v.SucursalId = 7 THEN v.Cantidad ELSE 0 END) AS CantidadG1091,
+
+                SUM(CASE WHEN v.SucursalId = 3 THEN v.MontoDivisa ELSE 0 END) AS TotalDivisasCalzatodo,
+                SUM(CASE WHEN v.SucursalId = 4 THEN v.MontoDivisa ELSE 0 END) AS TotalDivisasTenShop,
+                SUM(CASE WHEN v.SucursalId = 5 THEN v.MontoDivisa ELSE 0 END) AS TotalDivisas10y10,
+                SUM(CASE WHEN v.SucursalId = 7 THEN v.MontoDivisa ELSE 0 END) AS TotalDivisasG1091,
+
+                SUM(CASE WHEN ps.SucursalId = 3 THEN ps.Existencia ELSE 0 END) AS ExistenciaCalzatodo,
+                SUM(CASE WHEN ps.SucursalId = 4 THEN ps.Existencia ELSE 0 END) AS ExistenciaTenShop,
+                SUM(CASE WHEN ps.SucursalId = 5 THEN ps.Existencia ELSE 0 END) AS Existencia10y10,
+                SUM(CASE WHEN ps.SucursalId = 7 THEN ps.Existencia ELSE 0 END) AS ExistenciaG1091,
+
+                SUM(CASE WHEN ps.SucursalId = 3 THEN ps.PvpDivisa ELSE 0 END) AS PvpDivisaCalzatodo,
+                SUM(CASE WHEN ps.SucursalId = 4 THEN ps.PvpDivisa ELSE 0 END) AS PvpDivisaTenShop,
+                SUM(CASE WHEN ps.SucursalId = 5 THEN ps.PvpDivisa ELSE 0 END) AS PvpDivisa10y10,
+                SUM(CASE WHEN ps.SucursalId = 7 THEN ps.PvpDivisa ELSE 0 END) AS PvpDivisaG1091
+            ')
+            ->havingRaw('
+                SUM(v.Cantidad) > 0
+            ')
+            ->get();
+
+        $dto = new ComparacionSucursalesDTO();
+        $dto->fechaInicio = $fechaInicio;
+        $dto->fechaFin = $fechaFin;
+
+        foreach ($rows as $row) {
+            $detalle = new ComparacionSucursalesDetalleDTO();
+
+            $detalle->producto = [
+                'Id' => $row->ProductoId,
+                'Codigo' => $row->Codigo,
+                'Descripcion' => $row->Descripcion,
+                'CostoDivisa' => (float) $row->CostoDivisa,
+                'UrlFoto' => $row->UrlFoto ? strtolower($row->UrlFoto) : ''
+            ];
+
+            foreach ($row as $key => $value) {
+                if (property_exists($detalle, $key)) {
+                    $detalle->$key = (float) $value;
+                }
+            }
+
+            $dto->detalles[] = $detalle;
+        }
+
+        // dd($dto);
+
+        return $dto;
     }
 }
