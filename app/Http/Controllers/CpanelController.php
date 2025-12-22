@@ -69,7 +69,7 @@ class CpanelController extends Controller
 
         // 🔹 Ranking Sucursales cacheado por fechas
         $rankingSucursalesKey = 'ranking_sucursales_' . md5($fechaInicio . '_' . $fechaFin);
-        $rankingSucursales = Cache::remember($rankingSucursalesKey, 3600, function() use ($filtroFecha) {
+        $rankingSucursales = Cache::remember($rankingSucursalesKey, 10800, function() use ($filtroFecha) {
             return GeneralHelper::ObtenerRankingSucursales($filtroFecha);
         });
         
@@ -77,7 +77,7 @@ class CpanelController extends Controller
         // $graficaSucursalesMeses = GeneralHelper::ObtenerGraficaSucursales();
 
         // 🔹 Gráfica Sucursales (últimos 7 meses) cacheada
-        $graficaSucursalesMeses = Cache::remember('grafica_sucursales_7meses', 3600, function() {
+        $graficaSucursalesMeses = Cache::remember('grafica_sucursales_7meses', 10800, function() {
             return GeneralHelper::ObtenerGraficaSucursales();
         });
 
@@ -92,7 +92,7 @@ class CpanelController extends Controller
 
         // 🔹 Ranking de producción mensual cacheado
         $graficaProduccionMesKey = 'produccion_mes_' . $filtroMesAnio['mes'] . '_' . $filtroMesAnio['anio'];
-        $graficaProduccionMes = Cache::remember($graficaProduccionMesKey, 3600, function() use ($filtroMesAnio) {
+        $graficaProduccionMes = Cache::remember($graficaProduccionMesKey, 10800, function() use ($filtroMesAnio) {
             return GeneralHelper::ObtenerProduccionSucursales($filtroMesAnio);
         });
 
@@ -101,7 +101,7 @@ class CpanelController extends Controller
 
         // 🔹 Ranking de vendedores cacheado por fechas
         $rankingVendedorKey = 'ranking_vendedores_' . md5($fechaInicio . '_' . $fechaFin);
-        $rankingVendedor = Cache::remember($rankingVendedorKey, 3600, function() use ($filtroFecha) {
+        $rankingVendedor = Cache::remember($rankingVendedorKey, 10800, function() use ($filtroFecha) {
             return GeneralHelper::ObtenerRankingVendedores($filtroFecha);
         });
 
@@ -149,7 +149,15 @@ class CpanelController extends Controller
                 Carbon::parse($fechaFin)->endOfDay()
             );
 
-            $rankingSucursales = GeneralHelper::ObtenerRankingSucursales($filtroFecha);
+            // $rankingSucursales = GeneralHelper::ObtenerRankingSucursales($filtroFecha);
+
+            // Clave única basada en ambas fechas
+            $rankingSucursalesKey = 'ranking_sucursales_' . md5($fechaInicio . '_' . $fechaFin);
+
+            // Cache por 1 hora (3600 seg)
+            $rankingSucursales = Cache::remember($rankingSucursalesKey, 10800, function() use ($filtroFecha) {
+                return GeneralHelper::ObtenerRankingSucursales($filtroFecha);
+            });
 
             $html = view('cpanel.partials.ranking_sucursales', compact('rankingSucursales'))->render();
 
@@ -183,7 +191,15 @@ class CpanelController extends Controller
             ];
 
             // Llamar al helper que ya tienes
-            $graficaProduccionMes = GeneralHelper::ObtenerProduccionSucursales($filtroMesAnio);
+            // $graficaProduccionMes = GeneralHelper::ObtenerProduccionSucursales($filtroMesAnio);
+
+            // Creamos una llave única para el cache
+            $produccionKey = 'produccion_sucursales_' . md5($mes . '_' . $anio);
+
+            // Cacheamos por 6 horas (21600 seg)
+            $graficaProduccionMes = Cache::remember($produccionKey, 21600, function () use ($filtroMesAnio) {
+                return GeneralHelper::ObtenerProduccionSucursales($filtroMesAnio);
+            });
 
             $categorias = $graficaProduccionMes->pluck('sucursal');
             $valores    = $graficaProduccionMes->pluck('produccion');
@@ -218,7 +234,15 @@ class CpanelController extends Controller
             );
 
             // Usar GeneralHelper para obtener ranking
-            $rankingVendedores = GeneralHelper::ObtenerRankingVendedores($filtroFecha);
+            // $rankingVendedores = GeneralHelper::ObtenerRankingVendedores($filtroFecha);
+
+            // Generamos una clave única para el cache, basada en las fechas
+            $rankingVendedoresKey = 'ranking_vendedores_' . md5($fechaInicio . '_' . $fechaFin);
+
+            // Cacheamos el resultado durante 1 hora (3600 segundos)
+            $rankingVendedores = Cache::remember($rankingVendedoresKey, 3600, function() use ($filtroFecha) {
+                return GeneralHelper::ObtenerRankingVendedores($filtroFecha);
+            });
 
             // Solo los 3 primeros
             $rankingVendedores = $rankingVendedores->take(3);
@@ -357,10 +381,18 @@ class CpanelController extends Controller
         $sucursalId = session('sucursal_id');
 
         // 6️⃣ Llamar al servicio igual que en .NET
-        $balanceSucursal = GeneralHelper::buscarValoresEstadoDeCuentaSucursal(
-            $filtroFecha,
-            $sucursalId
-        );
+        // $balanceSucursal = GeneralHelper::buscarValoresEstadoDeCuentaSucursal(
+        //     $filtroFecha,
+        //     $sucursalId
+        // );
+
+        // 6️⃣ Generar una clave de cache única basada en mes, año y sucursal
+        $balanceSucursalKey = 'balance_sucursal_' . md5($mes . '_' . $anio . '_' . $sucursalId);
+
+        // 7️⃣ Cachear el resultado por 1 hora (3600 segundos)
+        $balanceSucursal = Cache::remember($balanceSucursalKey, 3600, function () use ($filtroFecha, $sucursalId) {
+            return GeneralHelper::buscarValoresEstadoDeCuentaSucursal($filtroFecha, $sucursalId);
+        });
 
         // 7️⃣ Agregar mes/año al resultado para la vista
         $balanceSucursal['Mes'] = $mes;
@@ -398,7 +430,15 @@ class CpanelController extends Controller
             $fechaFin
         );
 
-        $comparacion = GeneralHelper::ObtenerComparacionSucursales($filtroFecha);
+        // $comparacion = GeneralHelper::ObtenerComparacionSucursales($filtroFecha);
+
+        // Generamos una clave única para el cache, basada en las fechas
+        $comparacionKey = 'comparacion_sucursales_' . md5($fechaInicio . '_' . $fechaFin);
+
+        // Cacheamos el resultado durante 1 hora (3600 segundos)
+        $comparacion = Cache::remember($comparacionKey, 3600, function () use ($filtroFecha) {
+            return GeneralHelper::ObtenerComparacionSucursales($filtroFecha);
+        });
 
         // Asignacion al menu
         session([
@@ -411,5 +451,84 @@ class CpanelController extends Controller
             'fechaFin'    => $comparacion->fechaFin,
             'detalles'    => $comparacion->detalles,
         ]);
+    }
+
+    // Indice de Rotacion
+    public function indice_rotacion(Request $request)
+    {       
+        // 🚀 Aquí: usar fechas del request si existen
+        $fechaInicio = $request->input('fecha_inicio')
+            ? Carbon::parse($request->input('fecha_inicio'))->startOfDay()
+            : null;
+
+        $fechaFin = $request->input('fecha_fin')
+            ? Carbon::parse($request->input('fecha_fin'))->startOfDay()
+            : null;
+
+        $filtroFecha = new ParametrosFiltroFecha(
+            null,
+            null,
+            null,
+            false,
+            $fechaInicio,
+            $fechaFin
+        );
+
+        // 5️⃣ Obtener sucursal activa
+        $sucursalId = session('sucursal_id');
+
+        $indices = GeneralHelper::ObtenerIndiceRotacion($filtroFecha, $sucursalId);
+
+        // // 🔑 Crear clave única para el cache:
+        // $cacheKey = 'indice_rotacion_' 
+        //     . ($fechaInicio ? $fechaInicio->format('Ymd') : 'null') . '_' 
+        //     . ($fechaFin ? $fechaFin->format('Ymd') : 'null');
+
+        // // 🧠 Cache por 5 minutos (ajusta si quieres)
+        // $indices = Cache::remember($cacheKey, 3600, function () use ($filtroFecha) {
+        //     return GeneralHelper::ObtenerIndiceRotacion($filtroFecha);
+        // });
+
+        // dd($indices);
+        // dd($indices->detalles->first()->producto);
+
+        session([
+            'menu_active' => 'Informes - Resumen',
+            'submenu_active' => 'Indice de Rotación'
+        ]);
+
+        return view('cpanel.resumen.indice_rotacion', compact('indices'));
+    }
+
+    // Productos poco vendidos
+    public function baja_demanda(Request $request)
+    {       
+        // 🚀 Aquí: usar fechas del request si existen
+        $fechaInicio = $request->input('fecha_inicio')
+            ? Carbon::parse($request->input('fecha_inicio'))->startOfDay()
+            : null;
+
+        $fechaFin = $request->input('fecha_fin')
+            ? Carbon::parse($request->input('fecha_fin'))->startOfDay()
+            : null;
+
+        $filtroFecha = new ParametrosFiltroFecha(
+            null,
+            null,
+            null,
+            false,
+            $fechaInicio,
+            $fechaFin
+        );
+
+        $comparacion = GeneralHelper::ObtenerSinVentaSucursales($filtroFecha);
+
+        // Asignacion al menu
+        session([
+            'menu_active' => 'Informes - Resumen',
+            'submenu_active' => 'Baja Demanda'
+        ]);
+
+        return view('cpanel.resumen.baja_demanda');
     }
 }

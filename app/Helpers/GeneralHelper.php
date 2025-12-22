@@ -22,6 +22,14 @@ use App\Services\VentasService;
 use App\DTO\ComparacionSucursalesDTO;
 use App\DTO\ComparacionSucursalesDetalleDTO;
 
+use App\DTO\IndiceDeRotacionDTO;
+use App\DTO\IndiceDeRotacionDetallesDTO;
+
+use App\DTO\ComparacionSinVentaDTO;
+use App\DTO\ComparacionSinVentaDetallesDTO;
+use App\DTO\ProductoDTO;
+
+
 class GeneralHelper
 {
     // Obtener Tasa del Dia
@@ -1049,12 +1057,9 @@ class GeneralHelper
         $fechaInicio = $filtro->fechaInicio->startOfDay(); 
         $fechaFin = $filtro->fechaFin->startOfDay();
 
+        // Primero obtener ventas SIN el join problemático
         $rows = DB::table('VentaProductosView as v')
-            ->join('Productos as p', 'p.Id', '=', 'v.ProductoId')
-            ->leftJoin('ProductoSucursal as ps', function ($q) {
-                $q->on('ps.ProductoId', '=', 'v.ProductoId')
-                ->where('ps.Estatus', 1);
-            })
+            ->join('Productos as p', 'p.ID', '=', 'v.ProductoId')
             ->whereBetween('v.Fecha', [$fechaInicio, $fechaFin])
             ->where('v.Estatus', 1)
             ->groupBy(
@@ -1079,22 +1084,23 @@ class GeneralHelper
                 SUM(CASE WHEN v.SucursalId = 3 THEN v.MontoDivisa ELSE 0 END) AS TotalDivisasCalzatodo,
                 SUM(CASE WHEN v.SucursalId = 4 THEN v.MontoDivisa ELSE 0 END) AS TotalDivisasTenShop,
                 SUM(CASE WHEN v.SucursalId = 5 THEN v.MontoDivisa ELSE 0 END) AS TotalDivisas10y10,
-                SUM(CASE WHEN v.SucursalId = 7 THEN v.MontoDivisa ELSE 0 END) AS TotalDivisasG1091,
-
-                SUM(CASE WHEN ps.SucursalId = 3 THEN ps.Existencia ELSE 0 END) AS ExistenciaCalzatodo,
-                SUM(CASE WHEN ps.SucursalId = 4 THEN ps.Existencia ELSE 0 END) AS ExistenciaTenShop,
-                SUM(CASE WHEN ps.SucursalId = 5 THEN ps.Existencia ELSE 0 END) AS Existencia10y10,
-                SUM(CASE WHEN ps.SucursalId = 7 THEN ps.Existencia ELSE 0 END) AS ExistenciaG1091,
-
-                SUM(CASE WHEN ps.SucursalId = 3 THEN ps.PvpDivisa ELSE 0 END) AS PvpDivisaCalzatodo,
-                SUM(CASE WHEN ps.SucursalId = 4 THEN ps.PvpDivisa ELSE 0 END) AS PvpDivisaTenShop,
-                SUM(CASE WHEN ps.SucursalId = 5 THEN ps.PvpDivisa ELSE 0 END) AS PvpDivisa10y10,
-                SUM(CASE WHEN ps.SucursalId = 7 THEN ps.PvpDivisa ELSE 0 END) AS PvpDivisaG1091
+                SUM(CASE WHEN v.SucursalId = 7 THEN v.MontoDivisa ELSE 0 END) AS TotalDivisasG1091
             ')
-            ->havingRaw('
-                SUM(v.Cantidad) > 0
-            ')
+            ->havingRaw('SUM(v.Cantidad) > 0')
             ->get();
+
+        // Luego obtener existencias por separado
+        $existencias = DB::table('ProductoSucursal as ps')
+            ->select([
+                'ps.ProductoId',
+                'ps.SucursalId',
+                DB::raw('MAX(ps.Existencia) as Existencia'),
+                DB::raw('MAX(ps.PvpDivisa) as PvpDivisa')
+            ])
+            ->where('ps.Estatus', 1)
+            ->groupBy('ps.ProductoId', 'ps.SucursalId')
+            ->get()
+            ->groupBy('ProductoId');
 
         $dto = new ComparacionSucursalesDTO();
         $dto->fechaInicio = $fechaInicio;
@@ -1111,17 +1117,257 @@ class GeneralHelper
                 'UrlFoto' => $row->UrlFoto ? strtolower($row->UrlFoto) : ''
             ];
 
-            foreach ($row as $key => $value) {
-                if (property_exists($detalle, $key)) {
-                    $detalle->$key = (float) $value;
+            // Asignar ventas (estas ya vienen correctas)
+            $detalle->CantidadCalzatodo = (float) $row->CantidadCalzatodo;
+            $detalle->CantidadTenShop = (float) $row->CantidadTenShop;
+            $detalle->Cantidad10y10 = (float) $row->Cantidad10y10;
+            $detalle->CantidadG1091 = (float) $row->CantidadG1091;
+            
+            $detalle->TotalDivisasCalzatodo = (float) $row->TotalDivisasCalzatodo;
+            $detalle->TotalDivisasTenShop = (float) $row->TotalDivisasTenShop;
+            $detalle->TotalDivisas10y10 = (float) $row->TotalDivisas10y10;
+            $detalle->TotalDivisasG1091 = (float) $row->TotalDivisasG1091;
+
+            // Asignar existencias si existen
+            if (isset($existencias[$row->ProductoId])) {
+                foreach ($existencias[$row->ProductoId] as $exist) {
+                    switch ($exist->SucursalId) {
+                        case 3:
+                            $detalle->ExistenciaCalzatodo = (float) $exist->Existencia;
+                            $detalle->PvpDivisaCalzatodo = (float) $exist->PvpDivisa;
+                            break;
+                        case 4:
+                            $detalle->ExistenciaTenShop = (float) $exist->Existencia;
+                            $detalle->PvpDivisaTenShop = (float) $exist->PvpDivisa;
+                            break;
+                        case 5:
+                            $detalle->Existencia10y10 = (float) $exist->Existencia;
+                            $detalle->PvpDivisa10y10 = (float) $exist->PvpDivisa;
+                            break;
+                        case 7:
+                            $detalle->ExistenciaG1091 = (float) $exist->Existencia;
+                            $detalle->PvpDivisaG1091 = (float) $exist->PvpDivisa;
+                            break;
+                    }
                 }
             }
 
             $dto->detalles[] = $detalle;
         }
 
-        // dd($dto);
-
+        // dd($dto->detalles[0] ?? 'No hay datos');
         return $dto;
+    }
+
+    public static function ObtenerIndiceRotacion(ParametrosFiltroFecha $filtro, ?int $sucursalId)
+    {
+        $fechaInicio = $filtro->fechaInicio->startOfDay(); 
+        $fechaFin = $filtro->fechaFin->startOfDay();
+
+        // Query base: productos vendidos
+        $ventasQuery = DB::table('VentaProductosView as v')
+            ->join('Productos as p', 'v.ProductoId', '=', 'p.ID')
+            ->select(
+                'v.ProductoId',
+                DB::raw('SUM(v.Cantidad) as TotalUnidades'),
+                'v.Existencia',
+                'p.Codigo',
+                'p.Descripcion',
+                'p.CostoDivisa',
+                'v.PvpDivisa',
+                'v.PvpAnterior',
+                'v.NuevoPvp',
+                'v.FechaNuevoPrecio',
+                'v.FechaUltimaVenta',
+                'p.UrlFoto',
+                'v.SucursalId'
+            )
+            ->where('v.Existencia', '>', 0)
+            ->where('v.Estatus', 1);
+
+        if ($fechaInicio && $fechaFin) {
+            $ventasQuery->whereBetween('v.Fecha', [$fechaInicio, $fechaFin]);
+        }
+
+        if ($sucursalId != 0) {
+            $ventasQuery->where('v.SucursalId', $sucursalId);
+        }
+
+        $ventas = $ventasQuery
+            ->groupBy(
+                'v.ProductoId', 'v.Existencia', 'p.Codigo', 'p.Descripcion', 'p.CostoDivisa',
+                'v.PvpDivisa', 'v.PvpAnterior', 'v.NuevoPvp', 'v.FechaNuevoPrecio', 
+                'v.FechaUltimaVenta', 'p.UrlFoto', 'v.SucursalId'
+            )
+            ->havingRaw('SUM(v.Cantidad) > 0')
+            ->get();
+
+        $ventaTotal = $ventas->sum('TotalUnidades');
+
+        if ($ventaTotal == 0) return null;
+
+        // **CORRECCIÓN: Calcular factor con MÁXIMA precisión**
+        $factor = $ventas->reduce(function ($max, $item) use ($ventaTotal) {
+            $calculo = ($item->TotalUnidades / $ventaTotal) * 365;
+            return $calculo > $max ? $calculo : $max;
+        }, 0);
+
+        // Mapear detalles con CÁLCULO EXACTO
+        $detalles = $ventas->map(function ($item) use ($ventaTotal, $factor) {
+            $totalUnidades = $item->TotalUnidades;
+            
+            // 1. Calcular base con alta precisión
+            $base = ($totalUnidades / $ventaTotal) * 365;
+            
+            if ($factor > 10000) {
+                $indice = $base / 100;
+            } elseif ($factor > 1000) {
+                $indice = $base / 10;
+            } elseif ($factor > 100) {
+                $indice = $base; // /1
+            } elseif ($factor > 10) {
+                $indice = $base / 0.1; // *10
+            } else {
+                $indice = $base * 0.9576;
+            }
+            
+            // Redondear EXACTAMENTE como SQL Server: 2 decimales
+            $indice = round($indice, 2);
+
+            $producto = [
+                'id' => $item->ProductoId,
+                'codigo' => $item->Codigo,
+                'descripcion' => $item->Descripcion,
+                'existencia' => $item->Existencia ?? 0,
+                'costo_divisa' => $item->CostoDivisa ?? 0,
+                'pvp_divisa' => $item->PvpDivisa ?? 0,
+                'pvp_anterior' => $item->PvpAnterior ?? 0,
+                'nuevo_pvp' => $item->NuevoPvp ?? 0,
+                'fecha_nuevo_precio' => $item->FechaNuevoPrecio ? Carbon::parse($item->FechaNuevoPrecio) : null,
+                'fecha_ultima_venta' => $item->FechaUltimaVenta ? Carbon::parse($item->FechaUltimaVenta) : null,
+                'url_foto' => strtolower($item->UrlFoto ?? ''),
+                'sucursal_id' => $item->SucursalId
+            ];
+
+            return new IndiceDeRotacionDetallesDTO(
+                $item->ProductoId,
+                $totalUnidades,
+                $indice,
+                $producto
+            );
+        })->sortByDesc('indice_rotacion')->values();
+
+        return new IndiceDeRotacionDTO($detalles, $fechaInicio, $fechaFin);
+    }
+
+    public static function ObtenerSinVentaSucursales(ParametrosFiltroFecha $filtro)
+    {
+        $fechaInicio = $filtro->fechaInicio->startOfDay(); 
+        $fechaFin = $filtro->fechaFin->startOfDay();
+
+        // Paso 1: Productos sin ninguna venta
+        $productosSinVenta = DB::table('ProductoSucursal as ps')
+            ->select('ps.ProductoId')
+            ->whereNotIn('ps.ProductoId', function($q) use ($fechaInicio, $fechaFin) {
+                $q->select('ProductoId')
+                ->from('VentaProductosView')
+                ->where('Estatus', 1)
+                ->when($fechaInicio && $fechaFin, function ($sq) use ($fechaInicio, $fechaFin) {
+                    $sq->whereBetween('Fecha', [$fechaInicio, $fechaFin]);
+                });
+            })
+            ->where('ps.Estatus', 1)
+            ->groupBy('ps.ProductoId')
+            ->pluck('ps.ProductoId');
+
+        if ($productosSinVenta->isEmpty()) {
+            return null;
+        }
+
+        // Paso 2: Existencias pivot
+        $existencias = DB::table('ProductoSucursal')
+            ->select(
+                'ProductoId',
+                DB::raw('MAX(CASE WHEN SucursalId = 3 THEN Existencia ELSE 0 END) as ExistenciaCalzatodo'),
+                DB::raw('MAX(CASE WHEN SucursalId = 4 THEN Existencia ELSE 0 END) as ExistenciaTenShop'),
+                DB::raw('MAX(CASE WHEN SucursalId = 5 THEN Existencia ELSE 0 END) as Existencia10y10'),
+                DB::raw('MAX(CASE WHEN SucursalId = 7 THEN Existencia ELSE 0 END) as ExistenciaG1091')
+            )
+            ->whereIn('ProductoId', $productosSinVenta)
+            ->where('Estatus', 1)
+            ->groupBy('ProductoId');
+
+        // Paso 3: PVP Divisa pivot
+        $pvps = DB::table('ProductoSucursal')
+            ->select(
+                'ProductoId',
+                DB::raw('MAX(CASE WHEN SucursalId = 3 THEN PvpDivisa ELSE 0 END) as PvpDivisaCalzatodo'),
+                DB::raw('MAX(CASE WHEN SucursalId = 4 THEN PvpDivisa ELSE 0 END) as PvpDivisaTenShop'),
+                DB::raw('MAX(CASE WHEN SucursalId = 5 THEN PvpDivisa ELSE 0 END) as PvpDivisa10y10'),
+                DB::raw('MAX(CASE WHEN SucursalId = 7 THEN PvpDivisa ELSE 0 END) as PvpDivisaG1091')
+            )
+            ->whereIn('ProductoId', $productosSinVenta)
+            ->where('Estatus', 1)
+            ->groupBy('ProductoId');
+
+        // Paso 4: Join con Productos
+        $items = DB::query()
+            ->fromSub($existencias, 'e')
+            ->joinSub($pvps, 'p', 'e.ProductoId', '=', 'p.ProductoId')
+            ->join('Productos as pr', 'pr.Id', '=', 'e.ProductoId')
+            ->select(
+                'pr.Id',
+                'pr.Codigo',
+                'pr.CostoDivisa',
+                'pr.Descripcion',
+                'pr.UrlFoto',
+                'e.*',
+                'p.PvpDivisaCalzatodo',
+                'p.PvpDivisaTenShop',
+                'p.PvpDivisa10y10',
+                'p.PvpDivisaG1091'
+            )
+            ->where(function($w) {
+                $w->where('ExistenciaCalzatodo', '>', 0)
+                ->orWhere('ExistenciaTenShop', '>', 0)
+                ->orWhere('Existencia10y10', '>', 0)
+                ->orWhere('ExistenciaG1091', '>', 0);
+            })
+            ->get();
+
+        // Paso 5: Armar DTO final
+        $response = new ComparacionSinVentaDTO();
+        $response->FechaInicio = $fechaInicio;
+        $response->FechaFin = $fechaFin;
+
+        foreach ($items as $row) {
+            $detalle = new ComparacionSinVentaDetallesDTO();
+
+            $detalle->ProductoId = $row->Id;
+            $detalle->ExistenciaCalzatodo = $row->ExistenciaCalzatodo;
+            $detalle->ExistenciaTenShop  = $row->ExistenciaTenShop;
+            $detalle->Existencia10y10    = $row->Existencia10y10;
+            $detalle->ExistenciaG1091    = $row->ExistenciaG1091;
+
+            $detalle->PvpDivisaCalzatodo = $row->PvpDivisaCalzatodo;
+            $detalle->PvpDivisaTenShop   = $row->PvpDivisaTenShop;
+            $detalle->PvpDivisa10y10     = $row->PvpDivisa10y10;
+            $detalle->PvpDivisaG1091     = $row->PvpDivisaG1091;
+
+            $producto = new ProductoDTO();
+            $producto->Id          = $row->Id;
+            $producto->Codigo      = $row->Codigo;
+            $producto->CostoDivisa = $row->CostoDivisa;
+            $producto->Descripcion = $row->Descripcion;
+            $producto->UrlFoto     = $row->UrlFoto ?? '';
+
+            $detalle->Producto = $producto;
+
+            $response->Detalles[] = $detalle;
+        }
+
+        // dd($response);
+
+        return $response;
     }
 }

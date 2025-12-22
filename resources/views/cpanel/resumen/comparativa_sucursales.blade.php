@@ -15,16 +15,18 @@
     $config = [
         'stock_minimo' => 5,           // Stock mínimo de seguridad
         'stock_optimo' => 15,          // Stock óptimo
-        'umbral_transferencia' => 10,  // Diferencia para sugerir transferencia
+        'umbral_transferencia' => 0.3, // 30% de diferencia en ratio ventas/existencia
         'umbral_reposicion' => 3,      // Stock por debajo del cual reponer urgente
+        'dias_para_analisis' => $fechaInicio->diffInDays($fechaFin) + 1, // Días del período
     ];
     
     // Estadísticas mejoradas
     $estadisticas = [
         'necesita_reposicion' => 0,
-        'puede_transferir' => 0,
-        'con_diferencias' => 0,
-        'equilibrado' => 0,
+        'puede_transferir'    => 0,
+        'revisar'             => 0,
+        'con_diferencias'     => 0,
+        'equilibrado'         => 0,
     ];
     
     $totalVentas = 0;
@@ -107,52 +109,159 @@
         }
         // 2. Verificar si puede transferir (AMARILLO/INFO)
         else {
-            // Calcular desbalance de inventario
-            $existenciasPositivas = array_filter($existencias, function($e) {
-                return $e > 0;
-            });
+            // Calcular ratio ventas/existencia por sucursal
+            $ratios = [];
+            $sucursalesConDatos = [];
             
-            if (count($existenciasPositivas) >= 2) {
-                $max = max($existenciasPositivas);
-                $min = min($existenciasPositivas);
-                $diferencia = $max - $min;
+            foreach($sucursales as $suc) {
+                $nombre = $suc['nombre'];
+                $existencia = $existencias[$nombre] ?? 0;
+                $ventas = $ventas[$nombre] ?? 0;
                 
-                // Encontrar sucursales con más y menos stock
-                $sucursalMax = array_search($max, $existencias);
-                $sucursalMin = array_search($min, $existencias);
+                if ($existencia > 0 && $ventas > 0) {
+                    // Ratio: ventas por día / existencia
+                    $ratio = ($ventas / $config['dias_para_analisis']) / $existencia;
+                    $ratios[$nombre] = $ratio;
+                    $sucursalesConDatos[$nombre] = [
+                        'ratio' => $ratio,
+                        'existencia' => $existencia,
+                        'ventas' => $ventas,
+                        'dias_inventario' => $existencia / ($ventas / $config['dias_para_analisis'])
+                    ];
+                }
+            }
+            
+            if (count($sucursalesConDatos) >= 2) {
+                // Encontrar sucursal con mayor ratio (más ventas por unidad)
+                $sucursalAltaDemanda = null;
+                $maxRatio = 0;
                 
-                // Verificar si hay ventas en la sucursal con poco stock
-                $ventaSucursalMin = $ventas[$sucursalMin] ?? 0;
-                $ventaSucursalMax = $ventas[$sucursalMax] ?? 0;
+                // Encontrar sucursal con menor ratio (menos ventas por unidad)
+                $sucursalBajaDemanda = null;
+                $minRatio = PHP_FLOAT_MAX;
                 
-                if ($diferencia >= $config['umbral_transferencia']) {
-                    if ($ventaSucursalMin > 0) {
-                        // La sucursal con poco stock SÍ vende → necesita transferencia
-                        $estadoProducto = 'puede_transferir';
-                        $claseFila = 'table-warning';
-                        $mensajeEstado = "🔄 Transferir de $sucursalMax a $sucursalMin";
-                        $iconoEstado = 'fa-exchange-alt text-warning';
-                        $estadisticas['puede_transferir']++;
-                    } elseif ($ventaSucursalMax == 0) {
-                        // La sucursal con mucho stock NO vende → considerar devolución
-                        $estadoProducto = 'puede_transferir';
-                        $claseFila = 'table-info';
-                        $mensajeEstado = "📦 $sucursalMax no vende pero tiene stock";
-                        $iconoEstado = 'fa-box text-info';
-                        $estadisticas['puede_transferir']++;
-                    } else {
-                        // Solo desbalance sin criterio claro
-                        $estadoProducto = 'con_diferencias';
-                        $claseFila = 'table-secondary';
-                        $mensajeEstado = "⚖️ Desbalance: {$diferencia} unidades";
-                        $iconoEstado = 'fa-balance-scale text-secondary';
-                        $estadisticas['con_diferencias']++;
+                foreach ($sucursalesConDatos as $sucursal => $datos) {
+                    if ($datos['ratio'] > $maxRatio) {
+                        $maxRatio = $datos['ratio'];
+                        $sucursalAltaDemanda = $sucursal;
                     }
+                    if ($datos['ratio'] < $minRatio) {
+                        $minRatio = $datos['ratio'];
+                        $sucursalBajaDemanda = $sucursal;
+                    }
+                }
+                
+                // Calcular diferencia de ratios
+                if ($sucursalAltaDemanda && $sucursalBajaDemanda && $maxRatio > 0) {
+                    $diferenciaRatio = ($maxRatio - $minRatio) / $maxRatio; // Diferencia porcentual
+                    
+                    // Verificar si hay diferencia significativa (ej: 30% o más)
+                    if ($diferenciaRatio >= $config['umbral_transferencia']) {
+                        $existenciaAlta = $sucursalesConDatos[$sucursalAltaDemanda]['existencia'];
+                        $existenciaBaja = $sucursalesConDatos[$sucursalBajaDemanda]['existencia'];
+                        
+                        // Calcular días de inventario
+                        $diasInventarioAlta = $sucursalesConDatos[$sucursalAltaDemanda]['dias_inventario'];
+                        $diasInventarioBaja = $sucursalesConDatos[$sucursalBajaDemanda]['dias_inventario'];
+                        
+                        // Sugerir cantidad a transferir (hasta equilibrar días de inventario)
+                        $cantidadSugerida = 0;
+                        
+                        if ($diasInventarioBaja > $diasInventarioAlta * 1.5) {
+                            // La sucursal con baja demanda tiene mucho inventario vs ventas
+                            $cantidadSugerida = min(
+                                floor($existenciaBaja * 0.3), // Máximo 30% del stock
+                                max(1, floor(($diasInventarioBaja - $diasInventarioAlta) * 
+                                    ($ventas[$sucursalAltaDemanda] / $config['dias_para_analisis'])))
+                            );
+                            
+                            if ($cantidadSugerida >= 3) { // Solo sugerir si son al menos 3 unidades
+                                $estadoProducto = 'puede_transferir';
+                                $claseFila = 'table-warning';
+                                $mensajeEstado = "🔄 Transferir {$cantidadSugerida} uds de $sucursalBajaDemanda a $sucursalAltaDemanda";
+                                $iconoEstado = 'fa-exchange-alt text-warning';
+                                $estadisticas['puede_transferir']++;
+                            }
+                        }
+                    }
+                }
+                
+                // Si no hay transferencia sugerida pero hay desbalance de existencias
+                if ($estadoProducto === 'equilibrado') {
+                    // Calcular desbalance simple de existencias
+                    $existenciasPositivas = array_filter($existencias, function($e) {
+                        return $e > 0;
+                    });
+                    
+                    if (count($existenciasPositivas) >= 2) {
+                        $max = max($existenciasPositivas);
+                        $min = min($existenciasPositivas);
+                        $diferencia = $max - $min;
+                        
+                        if ($diferencia >= 10) { // Umbral antiguo para mantener compatibilidad
+                            $sucursalMax = array_search($max, $existencias);
+                            $sucursalMin = array_search($min, $existencias);
+                            
+                            // Verificar si la sucursal con poco stock tiene ventas
+                            $ventaSucursalMin = $ventas[$sucursalMin] ?? 0;
+                            
+                            if ($ventaSucursalMin > 0) {
+                                $estadoProducto = 'puede_transferir';
+                                $claseFila = 'table-info';
+                                $mensajeEstado = "📦 Considerar mover de $sucursalMax a $sucursalMin";
+                                $iconoEstado = 'fa-box text-info';
+                                $estadisticas['puede_transferir']++;
+                            } else {
+                                $estadoProducto = 'con_diferencias';
+                                $claseFila = 'table-secondary';
+                                $mensajeEstado = "⚖️ Desbalance: {$diferencia} uds";
+                                $iconoEstado = 'fa-balance-scale text-secondary';
+                                $estadisticas['con_diferencias']++;
+                            }
+                        } else {
+                            $estadisticas['equilibrado']++;
+                        }
+                    } else {
+                        $estadisticas['equilibrado']++;
+                    }
+                }
+            } else {
+                // Verificar sucursales con stock alto pero sin ventas
+                $sucursalesStockAltoSinVentas = [];
+                $sucursalesConStockYBajasVentas = []; // Nuevo: para stock alto con BAJAS ventas
+
+                foreach($existencias as $sucursal => $existencia) {
+                    $ventasSucursal = $ventas[$sucursal] ?? 0;
+                    
+                    // Stock alto y CERO ventas
+                    if ($existencia >= 10 && $ventasSucursal == 0) {
+                        $sucursalesStockAltoSinVentas[] = $sucursal;
+                    }
+                    // Stock alto y BAJAS ventas (ratio ventas/existencia < 0.1)
+                    elseif ($existencia >= 10 && $ventasSucursal > 0) {
+                        $ratio = $ventasSucursal / $existencia;
+                        if ($ratio < 0.1) { // Menos de 1 venta por cada 10 unidades
+                            $sucursalesConStockYBajasVentas[] = $sucursal . " (" . $ventasSucursal . "v)";
+                        }
+                    }
+                }
+
+                if (count($sucursalesStockAltoSinVentas) > 0) {
+                    $estadoProducto = 'revisar';
+                    $claseFila = 'table-info';
+                    $mensajeEstado = "📊 Revisar: " . implode(', ', $sucursalesStockAltoSinVentas) . " sin ventas";
+                    $iconoEstado = 'fa-chart-line text-info';
+                    $estadisticas['revisar']++;
+                } elseif (count($sucursalesConStockYBajasVentas) > 0) {
+                    // Si hay stock alto con BAJAS ventas (no cero)
+                    $estadoProducto = 'revisar';
+                    $claseFila = 'table-info';
+                    $mensajeEstado = "📊 Revisar: " . implode(', ', $sucursalesConStockYBajasVentas) . " con bajas ventas";
+                    $iconoEstado = 'fa-chart-line text-info';
+                    $estadisticas['revisar']++;
                 } else {
                     $estadisticas['equilibrado']++;
                 }
-            } else {
-                $estadisticas['equilibrado']++;
             }
         }
         
@@ -160,6 +269,7 @@
         $productosAnalizados[] = [
             'detalle' => $detalle,
             'estado' => $estadoProducto,
+            'data_estado'    => $estadoProducto,
             'clase_fila' => $claseFila,
             'mensaje_estado' => $mensajeEstado,
             'icono_estado' => $iconoEstado,
@@ -220,57 +330,81 @@
     <div class="container-fluid">
         
         <!-- Panel de Filtros Simplificado -->
-        <!-- En la sección del panel de filtros -->
-        <div class="card mb-4 border-0 shadow-sm">
-            <div class="card-body p-3">
-                <div class="row align-items-center">
-                    <div class="col-md-4">
-                        <h5 class="card-title mb-0">
-                            <strong>Comparativa entre Sucursales</strong>
-                        </h5>
-                    </div>
-                    <div class="col-md-8">
-                        <div class="card-tools">
-                            <div class="d-flex align-items-center">
-                                @php
-                                    $filtroEstado = request('filtro_estado', 'todos');
-                                @endphp
-
-                                <!-- Filtro de estado (JavaScript) -->
-                                <select id="filtro_estado" class="form-select form-select-sm me-2" style="min-width: 180px;">
-                                    <option value="todos">📋 Todos los registros</option>
-                                    <option value="reponer">🔴 Reponer urgente</option>
-                                    <option value="transferir">🟡 Transferir stock</option>
-                                    <option value="revisar">🔵 Revisar stock</option>
-                                    <option value="desbalance">⚪ Solo desbalance</option>
-                                    <option value="equilibrado">✅ Equilibrado</option>
-                                </select>
-
-                                <!-- Formulario para fechas (solo para fechas) -->
-                                <form method="GET" action="{{ route('cpanel.comparativa.sucursales') }}" class="d-flex align-items-center">
-                                    @php
-                                        $fechaInicioInput = request('fecha_inicio', $fechaInicio->format('Y-m-d'));
-                                        $fechaFinInput = request('fecha_fin', $fechaFin->format('Y-m-d'));
-                                    @endphp
-
-                                    <input type="date" id="fecha_inicio" name="fecha_inicio" 
-                                        class="form-control form-control-sm me-1" 
-                                        value="{{ $fechaInicioInput }}"
-                                        style="max-width: 150px;">
-                                    
-                                    <input type="date" id="fecha_fin" name="fecha_fin" 
-                                        class="form-control form-control-sm me-2" 
-                                        value="{{ $fechaFinInput }}"
-                                        style="max-width: 150px;">
-
-                                    <button type="submit" class="btn btn-sm btn-primary">
-                                        <i class="fas fa-search me-1"></i> Buscar
-                                    </button>
-                                </form>
+        <!-- Card de filtros -->
+        <div class="card card-primary card-outline mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-filter me-2"></i>Filtros de búsqueda
+                </h5>
+            </div>
+            <div class="card-body">
+                @php
+                    $filtroEstado = request('filtro_estado', 'todos');
+                    $fechaInicioInput = request('fecha_inicio', $fechaInicio->format('Y-m-d'));
+                    $fechaFinInput = request('fecha_fin', $fechaFin->format('Y-m-d'));
+                @endphp
+                
+                <form method="GET" action="{{ route('cpanel.comparativa.sucursales') }}" id="filtroForm">
+                    <div class="row g-3">
+                        <!-- Filtro de estado -->
+                        <div class="col-md-3">
+                            <label for="filtro_estado" class="form-label">
+                                <i class="fas fa-filter me-1"></i>Filtrar por estado
+                            </label>
+                            <select id="filtro_estado" name="filtro_estado" class="form-select" style="min-width: 100%;">
+                                <option value="todos" {{ $filtroEstado == 'todos' ? 'selected' : '' }}>📋 Todos los registros</option>
+                                <option value="reponer" {{ $filtroEstado == 'reponer' ? 'selected' : '' }}>🔴 Reponer urgente</option>
+                                <option value="transferir" {{ $filtroEstado == 'transferir' ? 'selected' : '' }}>🟡 Transferir stock</option>
+                                <option value="revisar" {{ $filtroEstado == 'revisar' ? 'selected' : '' }}>🔵 Revisar stock</option>
+                                <option value="desbalance" {{ $filtroEstado == 'desbalance' ? 'selected' : '' }}>⚪ Solo desbalance</option>
+                                <option value="equilibrado" {{ $filtroEstado == 'equilibrado' ? 'selected' : '' }}>✅ Equilibrado</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Fecha Inicio -->
+                        <div class="col-md-3">
+                            <label for="fecha_inicio" class="form-label">
+                                <i class="fas fa-calendar-alt me-1"></i>Fecha Inicio
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="fas fa-calendar"></i>
+                                </span>
+                                <input type="date" 
+                                    class="form-control" 
+                                    id="fecha_inicio" 
+                                    name="fecha_inicio"
+                                    value="{{ $fechaInicioInput }}"
+                                    required>
                             </div>
                         </div>
+                        
+                        <!-- Fecha Fin -->
+                        <div class="col-md-3">
+                            <label for="fecha_fin" class="form-label">
+                                <i class="fas fa-calendar-alt me-1"></i>Fecha Fin
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="fas fa-calendar"></i>
+                                </span>
+                                <input type="date" 
+                                    class="form-control" 
+                                    id="fecha_fin" 
+                                    name="fecha_fin"
+                                    value="{{ $fechaFinInput }}"
+                                    required>
+                            </div>
+                        </div>
+                        
+                        <!-- Botón Buscar -->
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-search me-2"></i>Buscar
+                            </button>
+                        </div>
                     </div>
-                </div>
+                </form>
             </div>
         </div>
 
@@ -345,79 +479,39 @@
             </div>
         </div>
 
-        <!-- Leyenda de Estados -->
-        <div class="card mb-4 border-0 shadow-sm">
-            <div class="card-body py-2">
-                <div class="d-flex flex-wrap gap-3">
-                    <div class="d-flex align-items-center">
-                        <span class="badge bg-danger me-2" style="width: 20px; height: 20px;"></span>
-                        <span class="small">Reponer Urgente (Stock muy bajo)</span>
-                    </div>
-                    <div class="d-flex align-items-center">
-                        <span class="badge bg-warning me-2" style="width: 20px; height: 20px;"></span>
-                        <span class="small">Transferir (Desbalance con ventas)</span>
-                    </div>
-                    <div class="d-flex align-items-center">
-                        <span class="badge bg-info me-2" style="width: 20px; height: 20px;"></span>
-                        <span class="small">Revisar (Stock alto sin ventas)</span>
-                    </div>
-                    <div class="d-flex align-items-center">
-                        <span class="badge bg-secondary me-2" style="width: 20px; height: 20px;"></span>
-                        <span class="small">Solo desbalance</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tarjetas de Sucursales -->
-        <div class="row mb-4">
-            @foreach($sucursales as $id => $sucursal)
-            <div class="col-lg-3 col-md-6 mb-3">
-                <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid {{ $sucursal['color'] }} !important;">
-                    <div class="card-body p-3">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-shrink-0">
-                                <div class="rounded-circle p-3" style="background-color: {{ $sucursal['color'] }}20;">
-                                    <i class="fas fa-{{ $sucursal['icon'] }} fa-lg" style="color: {{ $sucursal['color'] }}"></i>
-                                </div>
-                            </div>
-                            <div class="flex-grow-1 ms-3">
-                                <h6 class="mb-1 fw-bold">{{ $sucursal['nombre'] }}</h6>
-                                <div class="text-muted small">
-                                    @php
-                                        $nombreCol = str_replace(' ', '', $sucursal['nombre']);
-                                        $totalVentasSuc = array_sum(array_column($detallesMostrar, 'TotalDivisas' . $nombreCol));
-                                        $totalExistencias = array_sum(array_column($detallesMostrar, 'Existencia' . $nombreCol));
-                                    @endphp
-                                    <div class="d-flex justify-content-between mb-1">
-                                        <span>Ventas:</span>
-                                        <span class="fw-bold text-success">${{ number_format($totalVentasSuc, 2) }}</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between">
-                                        <span>Inventario:</span>
-                                        <span class="fw-bold" style="color: {{ $sucursal['color'] }}">{{ $totalExistencias }} und.</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            @endforeach
-        </div>
-
         <!-- Tabla de Comparación -->
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white border-0 py-3">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0 fw-bold text-dark">
-                        <i class="fas fa-chart-line text-primary me-2"></i>
-                        Comparativa de Productos con Análisis Inteligente
-                    </h5>
-                    <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-sm btn-success" id="exportExcel">
-                            <i class="fas fa-file-excel me-1"></i> Exportar
-                        </button>
+                <div class="row align-items-center g-2">
+                    <!-- Título -->
+                    <div class="col-md-3">
+                        <h5 class="card-title mb-0 fw-bold text-dark">
+                            <i class="fas fa-chart-line text-primary me-2"></i>
+                            Comparativa Inteligente
+                        </h5>
+                    </div>
+                    
+                    <!-- Campo de búsqueda -->
+                    <div class="col-md-5">
+                        <div class="input-group input-group-sm">
+                            <input type="text" 
+                                class="form-control" 
+                                id="buscarComparativa"
+                                placeholder="Buscar por código o descripción..."
+                                onkeyup="filtrarTablaComparativa()">
+                        </div>
+                    </div>
+                    
+                    <!-- Botones de acción -->
+                    <div class="col-md-4 text-md-end">
+                        <div class="btn-group">
+                            <!-- <button type="button" class="btn btn-outline-secondary btn-sm" onclick="pdfComparativa()">
+                                <i class="fas fa-file-pdf me-1"></i>PDF
+                            </button> -->
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="exportExcel" onclick="exportarExcelComparativa()">
+                                <i class="fas fa-file-excel me-1"></i>Exportar
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -431,28 +525,28 @@
                                     <i class="fas fa-box me-1"></i> Producto
                                 </th>
                                 
-                                <!-- Ventas Cantidad -->
-                                <th colspan="{{ count($sucursales) }}" class="text-center bg-primary bg-opacity-10">
+                                <!-- VENTAS (Cantidad) - Con borde derecho grueso -->
+                                <th colspan="{{ count($sucursales) }}" class="text-center bg-primary bg-opacity-10" style="border-right: 3px solid #dee2e6;">
                                     <div class="text-primary fw-bold">
                                         <i class="fas fa-chart-bar me-1"></i> VENTAS (Cantidad)
                                     </div>
                                 </th>
                                 
-                                <!-- Existencias -->
-                                <th colspan="{{ count($sucursales) }}" class="text-center bg-success bg-opacity-10">
+                                <!-- EXISTENCIAS - Con borde derecho grueso -->
+                                <th colspan="{{ count($sucursales) }}" class="text-center bg-success bg-opacity-10" style="border-right: 3px solid #dee2e6;">
                                     <div class="text-success fw-bold">
                                         <i class="fas fa-warehouse me-1"></i> EXISTENCIAS
                                     </div>
                                 </th>
                                 
-                                <!-- Ventas $ -->
-                                <th colspan="{{ count($sucursales) }}" class="text-center bg-info bg-opacity-10">
+                                <!-- VENTAS ($) - Con borde derecho grueso -->
+                                <th colspan="{{ count($sucursales) }}" class="text-center bg-info bg-opacity-10" style="border-right: 3px solid #dee2e6;">
                                     <div class="text-info fw-bold">
                                         <i class="fas fa-money-bill-wave me-1"></i> VENTAS ($)
                                     </div>
                                 </th>
                                 
-                                <!-- PVP $ -->
+                                <!-- PVP ($) - Sin borde derecho (última columna) -->
                                 <th colspan="{{ count($sucursales) }}" class="text-center bg-warning bg-opacity-10">
                                     <div class="text-warning fw-bold">
                                         <i class="fas fa-tag me-1"></i> PVP ($)
@@ -463,31 +557,31 @@
                                 <th></th>
                                 <th></th>
                                 
-                                <!-- Encabezados de sucursales para Ventas Cantidad -->
+                                <!-- Encabezados de sucursales para Ventas Cantidad - con borde derecho -->
                                 @foreach($sucursales as $sucursal)
-                                <th class="text-center small">
+                                <th class="text-center small" style="border-right: {{ $loop->last ? '3px solid #dee2e6' : 'none' }};">
                                     <i class="fas fa-store me-1" style="color: {{ $sucursal['color'] }}"></i>
                                     {{ $sucursal['nombre'] }}
                                 </th>
                                 @endforeach
                                 
-                                <!-- Encabezados de sucursales para Existencias -->
+                                <!-- Encabezados de sucursales para Existencias - con borde derecho -->
                                 @foreach($sucursales as $sucursal)
-                                <th class="text-center small">
+                                <th class="text-center small" style="border-right: {{ $loop->last ? '3px solid #dee2e6' : 'none' }};">
                                     <i class="fas fa-box me-1" style="color: {{ $sucursal['color'] }}"></i>
                                     {{ $sucursal['nombre'] }}
                                 </th>
                                 @endforeach
                                 
-                                <!-- Encabezados de sucursales para Ventas $ -->
+                                <!-- Encabezados de sucursales para Ventas $ - con borde derecho -->
                                 @foreach($sucursales as $sucursal)
-                                <th class="text-center small">
+                                <th class="text-center small" style="border-right: {{ $loop->last ? '3px solid #dee2e6' : 'none' }};">
                                     <i class="fas fa-dollar-sign me-1" style="color: {{ $sucursal['color'] }}"></i>
                                     {{ $sucursal['nombre'] }}
                                 </th>
                                 @endforeach
                                 
-                                <!-- Encabezados de sucursales para PVP $ -->
+                                <!-- Encabezados de sucursales para PVP $ - sin borde derecho -->
                                 @foreach($sucursales as $sucursal)
                                 <th class="text-center small">
                                     <i class="fas fa-tag me-1" style="color: {{ $sucursal['color'] }}"></i>
@@ -509,7 +603,7 @@
                                 );
                             @endphp
                             
-                            <tr class="{{ $producto['clase_fila'] }}">
+                            <tr data-estado="{{ $producto['estado'] }}">
                                 <td class="text-center fw-bold align-middle">
                                     {{ $index + 1 }}
                                     @if($producto['icono_estado'])
@@ -538,27 +632,27 @@
                                                 <div class="mb-1">
                                                     <i class="fas fa-barcode me-1"></i> {{ $detalle->producto['Codigo'] }}
                                                 </div>
-                                                <div class="d-flex gap-2">
-                                                    <span class="badge bg-primary bg-opacity-10 text-primary">
-                                                        <i class="fas fa-dollar-sign me-1"></i> 
-                                                        ${{ number_format($detalle->producto['CostoDivisa'], 2) }}
+                                                
+                                                <!-- Segunda línea: mensaje de estado (solo si existe) -->
+                                                @if($producto['mensaje_estado'])
+                                                <div class="mt-1">
+                                                    @php
+                                                        // Verificar si el mensaje contiene información incorrecta
+                                                        $mensaje = $producto['mensaje_estado'];
+                                                        // Opcional: puedes hacer algún ajuste aquí si detectas patrones incorrectos
+                                                    @endphp
+                                                    <span class="badge {{ $producto['estado'] == 'necesita_reposicion' ? 'bg-danger' : ($producto['estado'] == 'puede_transferir' ? 'bg-warning' : 'bg-secondary') }}"
+                                                        title="Estado basado en análisis de stock y ventas">
+                                                        {{ $mensaje }}
                                                     </span>
-                                                    <span class="badge bg-success bg-opacity-10 text-success">
-                                                        <i class="fas fa-box me-1"></i> 
-                                                        {{ $producto['total_existencia'] }} und.
-                                                    </span>
-                                                    @if($producto['mensaje_estado'])
-                                                        <span class="badge {{ $producto['estado'] == 'necesita_reposicion' ? 'bg-danger' : ($producto['estado'] == 'puede_transferir' ? 'bg-warning' : 'bg-secondary') }}">
-                                                            {{ $producto['mensaje_estado'] }}
-                                                        </span>
-                                                    @endif
                                                 </div>
+                                                @endif
                                             </div>
                                         </div>
                                     </div>
                                 </td>
                                 
-                                <!-- VENTAS Cantidad -->
+                                <!-- VENTAS Cantidad - con borde derecho en la última celda del grupo -->
                                 @foreach($sucursales as $sucursal)
                                 @php
                                     $nombreCol = str_replace(' ', '', $sucursal['nombre']);
@@ -572,14 +666,14 @@
                                         $claseCelda .= ' bg-danger bg-opacity-25';
                                     }
                                 @endphp
-                                <td class="text-center align-middle {{ $claseCelda }}">
+                                <td class="text-center align-middle" style="border-right: {{ $loop->last ? '3px solid #dee2e6' : 'none' }};">
                                     <div class="{{ $tieneVentas ? 'bg-primary bg-opacity-10 rounded py-1 px-2' : '' }}">
                                         {{ $cantidad }}
                                     </div>
                                 </td>
                                 @endforeach
                                 
-                                <!-- EXISTENCIAS -->
+                                <!-- EXISTENCIAS - con borde derecho en la última celda del grupo -->
                                 @foreach($sucursales as $sucursal)
                                 @php
                                     $nombreCol = str_replace(' ', '', $sucursal['nombre']);
@@ -596,27 +690,27 @@
                                         $claseCelda = 'bg-warning bg-opacity-25 fw-bold text-dark';
                                     }
                                 @endphp
-                                <td class="text-center align-middle {{ $claseCelda }}">
+                                <td class="text-center align-middle" style="border-right: {{ $loop->last ? '3px solid #dee2e6' : 'none' }};">
                                     <div class="rounded py-1 px-2">
                                         {{ $existencia }}
                                     </div>
                                 </td>
                                 @endforeach
                                 
-                                <!-- VENTAS $ -->
+                                <!-- VENTAS $ - con borde derecho en la última celda del grupo -->
                                 @foreach($sucursales as $sucursal)
                                 @php
                                     $nombreCol = str_replace(' ', '', $sucursal['nombre']);
                                     $montoVenta = $detalle->{'TotalDivisas'.$nombreCol} ?? 0;
                                 @endphp
-                                <td class="text-center align-middle fw-bold" style="color: #10b981;">
+                                <td class="text-center align-middle fw-bold" style="color: #10b981; border-right: {{ $loop->last ? '3px solid #dee2e6' : 'none' }};">
                                     <div class="bg-success bg-opacity-10 rounded py-1 px-2">
                                         ${{ number_format($montoVenta, 2) }}
                                     </div>
                                 </td>
                                 @endforeach
                                 
-                                <!-- PVP $ -->
+                                <!-- PVP $ - sin borde derecho -->
                                 @foreach($sucursales as $sucursal)
                                 @php
                                     $nombreCol = str_replace(' ', '', $sucursal['nombre']);
@@ -637,28 +731,28 @@
                                     <div class="text-nowrap">TOTALES / PROMEDIOS:</div>
                                 </td>
                                 
-                                <!-- Totales Ventas Cantidad -->
-                                @foreach($totales['cantidades'] as $total)
-                                <td class="text-center fw-bold bg-primary bg-opacity-25 text-white">
+                                <!-- Totales Ventas Cantidad - con borde derecho -->
+                                @foreach($totales['cantidades'] as $index => $total)
+                                <td class="text-center fw-bold bg-primary bg-opacity-25 text-white" style="border-right: {{ $loop->last ? '3px solid #dee2e6' : 'none' }};">
                                     {{ $total }}
                                 </td>
                                 @endforeach
                                 
-                                <!-- Totales Existencias -->
-                                @foreach($totales['existencias'] as $total)
-                                <td class="text-center fw-bold bg-success bg-opacity-25 text-white">
+                                <!-- Totales Existencias - con borde derecho -->
+                                @foreach($totales['existencias'] as $index => $total)
+                                <td class="text-center fw-bold bg-success bg-opacity-25 text-white" style="border-right: {{ $loop->last ? '3px solid #dee2e6' : 'none' }};">
                                     {{ $total }}
                                 </td>
                                 @endforeach
                                 
-                                <!-- Totales Ventas $ -->
-                                @foreach($totales['ventas'] as $total)
-                                <td class="text-center fw-bold bg-info bg-opacity-25 text-white">
+                                <!-- Totales Ventas $ - con borde derecho -->
+                                @foreach($totales['ventas'] as $index => $total)
+                                <td class="text-center fw-bold bg-info bg-opacity-25 text-white" style="border-right: {{ $loop->last ? '3px solid #dee2e6' : 'none' }};">
                                     ${{ number_format($total, 2) }}
                                 </td>
                                 @endforeach
                                 
-                                <!-- Promedios PVP $ -->
+                                <!-- Promedios PVP $ - sin borde derecho -->
                                 @foreach($promediosPvp as $promedio)
                                 <td class="text-center fw-bold bg-warning bg-opacity-25 text-white">
                                     ${{ number_format($promedio, 2) }}
@@ -774,6 +868,11 @@
 
 @section('js')
 <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+
+<!-- jsPDF y autoTable para PDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
 <script>
     // Solo función básica para exportar a Excel
     document.getElementById('exportExcel').addEventListener('click', function() {
@@ -781,9 +880,7 @@
         const wb = XLSX.utils.table_to_book(table, {sheet: "Comparativa"});
         const fecha = new Date().toISOString().split('T')[0];
         XLSX.writeFile(wb, `Comparativa_Sucursales_${fecha}.xlsx`);
-    });
-
-    
+    });    
 
     // Abrir zoom al hacer clic
     document.querySelectorAll('.img-zoomable').forEach(img => {
@@ -844,13 +941,9 @@
         
         function aplicarFiltro(tipoFiltro) {
             let filasFiltradas = 0;
-            
-            // Ocultar todas las filas primero
-            filasOriginales.forEach(fila => {
-                fila.style.display = 'none';
-            });
-            
-            // Mostrar solo las filas que coincidan con el filtro
+
+            filasOriginales.forEach(fila => fila.style.display = 'none');
+
             if (tipoFiltro === 'todos') {
                 filasOriginales.forEach(fila => {
                     fila.style.display = '';
@@ -858,118 +951,41 @@
                 filasFiltradas = totalRegistros;
             } else {
                 filasOriginales.forEach(fila => {
-                    const claseFila = fila.className;
+                    const estado = fila.getAttribute('data-estado');
                     let mostrar = false;
-                    
+
                     switch(tipoFiltro) {
                         case 'reponer':
-                            mostrar = claseFila.includes('table-danger');
+                            mostrar = (estado === 'necesita_reposicion');
                             break;
                         case 'transferir':
-                            mostrar = claseFila.includes('table-warning');
+                            mostrar = (estado === 'puede_transferir');
                             break;
                         case 'revisar':
-                            mostrar = claseFila.includes('table-info');
+                            mostrar = (estado === 'revisar');
                             break;
                         case 'desbalance':
-                            mostrar = claseFila.includes('table-secondary');
+                            mostrar = (estado === 'solo_desbalance');
                             break;
                         case 'equilibrado':
-                            // Las filas equilibradas no tienen clase especial
-                            mostrar = !claseFila.includes('table-danger') && 
-                                    !claseFila.includes('table-warning') &&
-                                    !claseFila.includes('table-info') &&
-                                    !claseFila.includes('table-secondary');
+                            mostrar = (estado === 'equilibrado');
                             break;
                     }
-                    
+
                     if (mostrar) {
                         fila.style.display = '';
                         filasFiltradas++;
                     }
                 });
             }
-            
-            // Actualizar contador
+
             if (contadorMostrando) {
                 contadorMostrando.textContent = `Mostrando ${filasFiltradas} de ${totalRegistros} productos`;
             }
-            
-            // // Agregar efecto visual
-            // if (tipoFiltro !== 'todos') {
-            //     mostrarNotificacionFiltro(tipoFiltro, filasFiltradas);
-            // }
-            
-            // Actualizar URL sin recargar (opcional)
+
             actualizarURL(tipoFiltro);
         }
-        
-        // function mostrarNotificacionFiltro(tipo, cantidad) {
-        //     // Crear o actualizar notificación
-        //     let notificacion = document.getElementById('notificacionFiltro');
-        //     if (!notificacion) {
-        //         notificacion = document.createElement('div');
-        //         notificacion.id = 'notificacionFiltro';
-        //         notificacion.className = 'alert alert-info alert-dismissible fade show mb-3';
-        //         notificacion.style.position = 'fixed';
-        //         notificacion.style.top = '70px';
-        //         notificacion.style.right = '20px';
-        //         notificacion.style.zIndex = '1000';
-        //         notificacion.style.maxWidth = '300px';
-                
-        //         const btnCerrar = document.createElement('button');
-        //         btnCerrar.type = 'button';
-        //         btnCerrar.className = 'btn-close';
-        //         btnCerrar.setAttribute('data-bs-dismiss', 'alert');
-                
-        //         notificacion.appendChild(btnCerrar);
-        //         document.body.appendChild(notificacion);
-        //     }
-            
-        //     const nombresFiltro = {
-        //         'reponer': 'Reponer urgente',
-        //         'transferir': 'Transferir stock',
-        //         'revisar': 'Revisar stock',
-        //         'desbalance': 'Solo desbalance',
-        //         'equilibrado': 'Equilibrado'
-        //     };
-            
-        //     notificacion.innerHTML = `
-        //         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        //         <strong>Filtro aplicado:</strong> ${nombresFiltro[tipo]}<br>
-        //         <small>${cantidad} productos encontrados</small>
-        //         <div class="mt-2">
-        //             <button onclick="limpiarFiltro()" class="btn btn-sm btn-outline-secondary">
-        //                 <i class="fas fa-times me-1"></i> Limpiar filtro
-        //             </button>
-        //         </div>
-        //     `;
-            
-        //     // Auto-ocultar después de 5 segundos
-        //     setTimeout(() => {
-        //         if (notificacion && notificacion.classList.contains('show')) {
-        //             notificacion.classList.remove('show');
-        //             setTimeout(() => {
-        //                 if (notificacion && notificacion.parentNode) {
-        //                     notificacion.parentNode.removeChild(notificacion);
-        //                 }
-        //             }, 300);
-        //         }
-        //     }, 5000);
-        // }
-        
-        // window.limpiarFiltro = function() {
-        //     const filtroEstado = document.getElementById('filtro_estado');
-        //     if (filtroEstado) {
-        //         filtroEstado.value = 'todos';
-        //         aplicarFiltro('todos');
-        //     }
-            
-        //     const notificacion = document.getElementById('notificacionFiltro');
-        //     if (notificacion && notificacion.parentNode) {
-        //         notificacion.parentNode.removeChild(notificacion);
-        //     }
-        // };
+
         
         function actualizarURL(tipoFiltro) {
             // Actualizar URL sin recargar la página
@@ -996,6 +1012,542 @@
             }
         });
     });
+
+    // Función para filtrar la tabla de comparativa
+    // Función para filtrar la tabla de comparativa por código o descripción
+    function filtrarTablaComparativa() {
+        try {
+            const input = document.getElementById("buscarComparativa");
+            if (!input) {
+                console.error('No se encontró el input de búsqueda');
+                return;
+            }
+            
+            const filter = input.value.trim().toUpperCase();
+            const table = document.getElementById("comparativaTable");
+            
+            if (!table) {
+                console.error('No se encontró la tabla con ID "comparativaTable"');
+                return;
+            }
+            
+            const tbody = table.querySelector('tbody');
+            if (!tbody) {
+                console.error('No se encontró el tbody en la tabla');
+                return;
+            }
+            
+            const rows = tbody.querySelectorAll('tr');
+            let filasVisibles = 0;
+            
+            // Recorrer todas las filas del cuerpo (no incluir footer)
+            rows.forEach(row => {
+                if (row.style.display === 'none' && filter === '') {
+                    row.style.display = ''; // Mostrar si está vacío
+                }
+                
+                // Obtener la celda de producto (columna 1, índice 1)
+                const cells = row.querySelectorAll('td');
+                if (cells.length < 2) return; // Si no tiene suficientes celdas, saltar
+                
+                const celdaProducto = cells[1]; // Segunda columna (índice 1) donde está el producto
+                
+                // Extraer código y descripción del contenido de la celda
+                let codigo = '';
+                let descripcion = '';
+                
+                // Buscar el código (está en un div con <i class="fas fa-barcode">)
+                const barcodeElement = celdaProducto.querySelector('.fa-barcode');
+                if (barcodeElement && barcodeElement.parentElement) {
+                    const textoBarcode = barcodeElement.parentElement.textContent || '';
+                    // El código está después del icono de barcode
+                    codigo = textoBarcode.replace('', '').trim(); // Remover el icono si existe
+                }
+                
+                // Buscar la descripción (está en un h6 con clase fw-bold)
+                const descripcionElement = celdaProducto.querySelector('h6.fw-bold');
+                if (descripcionElement) {
+                    descripcion = descripcionElement.textContent || '';
+                }
+                
+                // También buscar en el texto completo de la celda por si acaso
+                const textoCompleto = celdaProducto.textContent || '';
+                
+                // Verificar coincidencia
+                const coincide = filter === '' || 
+                                (codigo && codigo.toUpperCase().includes(filter)) ||
+                                (descripcion && descripcion.toUpperCase().includes(filter)) ||
+                                textoCompleto.toUpperCase().includes(filter);
+                
+                row.style.display = coincide ? '' : 'none';
+                if (coincide) filasVisibles++;
+            });
+            
+            // Actualizar contador de resultados si existe
+            // actualizarContadorResultados(filasVisibles, rows.length);
+            
+        } catch (error) {
+            console.error('Error al filtrar la tabla:', error);
+        }
+    }
+
+    // Función para generar PDF de la comparativa
+    async function pdfComparativa() {
+        const tabla = document.getElementById('comparativaTable');
+        
+        if (!tabla) {
+            alert('No se encontró la tabla para exportar');
+            return;
+        }
+        
+        // Mostrar mensaje de carga
+        const loading = document.createElement('div');
+        loading.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 5px;
+            z-index: 9999;
+        `;
+        loading.innerHTML = '<div style="text-align:center"><div class="spinner-border text-light"></div><p class="mt-2">Generando PDF de comparativa...</p></div>';
+        document.body.appendChild(loading);
+        
+        try {
+            await generarPDFComparativa();
+        } catch (error) {
+            console.error('Error generando PDF:', error);
+            alert('Error generando PDF. Intente nuevamente.');
+        } finally {
+            document.body.removeChild(loading);
+        }
+    }
+
+    // Función principal para generar el PDF de comparativa
+    async function generarPDFComparativa() {
+        const tabla = document.getElementById('comparativaTable');
+        
+        if (!tabla) {
+            alert('No se encontró la tabla para exportar');
+            return;
+        }
+        
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('landscape');
+        
+        // Título del documento
+        const titulo = 'Comparativa de Productos - ' + new Date().toLocaleDateString('es-ES');
+        doc.setFontSize(16);
+        doc.text(titulo, 14, 15);
+        
+        // Información de fechas si está disponible
+        const fechaInicio = document.querySelector('input[name="fecha_inicio"]')?.value;
+        const fechaFin = document.querySelector('input[name="fecha_fin"]')?.value;
+        
+        if (fechaInicio && fechaFin) {
+            doc.setFontSize(10);
+            doc.text(`Período: ${fechaInicio} a ${fechaFin}`, 14, 22);
+        }
+        
+        // Preparar datos para la tabla
+        // En la comparativa, tenemos una estructura compleja con encabezados anidados
+        // Vamos a crear una versión simplificada para el PDF
+        
+        const datos = [];
+        const promesasImagenes = [];
+        
+        // Obtener sucursales de los headers
+        const sucursales = [];
+        const encabezadosSucursales = tabla.querySelectorAll('thead tr:nth-child(2) th');
+        let columnaInicioSucursales = 2; // Después de # y Producto
+        
+        // Procesar encabezados de sucursales
+        for (let i = columnaInicioSucursales; i < encabezadosSucursales.length; i++) {
+            const th = encabezadosSucursales[i];
+            const nombreSucursal = th.textContent.trim();
+            if (nombreSucursal) {
+                sucursales.push(nombreSucursal);
+            }
+        }
+        
+        // Dividir las sucursales en grupos (Ventas, Existencias, Ventas$, PVP$)
+        const sucursalesPorGrupo = sucursales.length / 4; // 4 grupos de métricas
+        const grupos = ['VENTAS (Cantidad)', 'EXISTENCIAS', 'VENTAS ($)', 'PVP ($)'];
+        
+        // Crear encabezados simplificados para el PDF
+        const encabezadosPDF = ['#', 'Producto'];
+        
+        // Agregar métricas por sucursal
+        grupos.forEach((grupo, grupoIndex) => {
+            sucursales.slice(0, sucursalesPorGrupo).forEach((sucursal, sucIndex) => {
+                let nombreColumna = `${grupo}`;
+                if (grupos.length > 1) {
+                    nombreColumna = `${sucursal} - ${grupo}`;
+                }
+                encabezadosPDF.push(nombreColumna);
+            });
+        });
+        
+        // Procesar filas de datos
+        let filaNumero = 0;
+        const filasVisibles = Array.from(tabla.querySelectorAll('tbody tr')).filter(fila => 
+            fila.style.display !== 'none'
+        );
+        
+        filasVisibles.forEach((fila, filaIndex) => {
+            filaNumero++;
+            const filaData = [filaNumero.toString()];
+            
+            // Obtener datos del producto (columna 1)
+            const celdaProducto = fila.cells[1];
+            if (celdaProducto) {
+                // Extraer descripción
+                const descripcionElement = celdaProducto.querySelector('h6.fw-bold');
+                const descripcion = descripcionElement ? descripcionElement.textContent.trim() : '';
+                
+                // Extraer código
+                const codigoElement = celdaProducto.querySelector('.fa-barcode');
+                const codigo = codigoElement ? codigoElement.parentElement.textContent.replace('', '').trim() : '';
+                
+                // Combinar para mostrar en el PDF
+                const textoProducto = `${descripcion}\nCódigo: ${codigo}`;
+                filaData.push(textoProducto);
+                
+                // Guardar imagen si existe
+                const imgElement = celdaProducto.querySelector('img');
+                if (imgElement && imgElement.src) {
+                    promesasImagenes.push({
+                        filaIndex: filaNumero - 1,
+                        imgUrl: imgElement.src,
+                        descripcion: descripcion
+                    });
+                }
+            } else {
+                filaData.push('');
+            }
+            
+            // Obtener datos de métricas por sucursal
+            // Las columnas 2 en adelante contienen las métricas
+            for (let i = 2; i < fila.cells.length; i++) {
+                const celda = fila.cells[i];
+                if (celda) {
+                    // Extraer el valor numérico
+                    const texto = celda.textContent.trim();
+                    // Limpiar y formatear
+                    let valor = texto;
+                    
+                    // Si contiene $, es moneda
+                    if (texto.includes('$')) {
+                        valor = texto;
+                    }
+                    // Si es solo número, mantenerlo
+                    
+                    filaData.push(valor);
+                } else {
+                    filaData.push('');
+                }
+            }
+            
+            datos.push(filaData);
+        });
+        
+        // Crear tabla en PDF
+        doc.autoTable({
+            head: [encabezadosPDF],
+            body: datos,
+            startY: fechaInicio ? 28 : 25,
+            theme: 'grid',
+            headStyles: {
+                fillColor: [41, 128, 185],
+                textColor: 255,
+                fontSize: 7,
+                fontStyle: 'bold',
+                halign: 'center'
+            },
+            bodyStyles: {
+                fontSize: 6,
+                cellPadding: 1,
+                lineWidth: 0.1
+            },
+            alternateRowStyles: {
+                fillColor: [245, 245, 245]
+            },
+            columnStyles: {
+                0: { cellWidth: 10, halign: 'center' }, // #
+                1: { cellWidth: 60, fontStyle: 'bold' }, // Producto
+                // Las demás columnas se ajustarán automáticamente
+            },
+            margin: { top: fechaInicio ? 30 : 27 },
+            styles: {
+                overflow: 'linebreak',
+                cellWidth: 'wrap'
+            },
+            didParseCell: function(data) {
+                // Si es la celda de producto, ajustar para múltiples líneas
+                if (data.column.index === 1 && data.cell.section === 'body') {
+                    data.cell.styles.fontSize = 5;
+                    data.cell.styles.cellPadding = { top: 1, right: 1, bottom: 1, left: 1 };
+                }
+                
+                // Si son columnas de datos numéricos, alinear a la derecha
+                if (data.column.index >= 2) {
+                    data.cell.styles.halign = 'right';
+                    data.cell.styles.fontSize = 6;
+                }
+            }
+        });
+        
+        // Agregar imágenes de productos si las hay
+        if (promesasImagenes.length > 0) {
+            const table = doc.autoTable.previous;
+            
+            for (const imgInfo of promesasImagenes) {
+                try {
+                    const base64 = await cargarImagenABase64(imgInfo.imgUrl);
+                    if (base64 && table && table.cells && table.cells[imgInfo.filaIndex]) {
+                        const cell = table.cells[imgInfo.filaIndex][1]; // Columna de producto
+                        if (cell) {
+                            // Calcular posición para la imagen (en la parte superior de la celda)
+                            const x = cell.x + 2;
+                            const y = cell.y + 2;
+                            
+                            doc.addImage(
+                                base64,
+                                'JPEG',
+                                x,
+                                y,
+                                15,
+                                15
+                            );
+                            
+                            // Mover el texto para que no se superponga con la imagen
+                            // Actualizar posición del texto en la celda
+                            const textoX = x + 18; // Después de la imagen
+                            const textoY = y + 4;
+                            
+                            // Agregar texto al lado de la imagen
+                            doc.setFontSize(5);
+                            doc.text(imgInfo.descripcion.substring(0, 30) + '...', textoX, textoY);
+                        }
+                    }
+                } catch (error) {
+                    console.log('Error cargando imagen para PDF:', error);
+                }
+            }
+        }
+        
+        // Pie de página
+        const totalPaginas = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= totalPaginas; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.text(
+                `Página ${i} de ${totalPaginas}`,
+                doc.internal.pageSize.width - 30,
+                doc.internal.pageSize.height - 10
+            );
+            doc.text(
+                `Generado: ${new Date().toLocaleString('es-ES')}`,
+                14,
+                doc.internal.pageSize.height - 10
+            );
+        }
+        
+        // Descargar PDF
+        const fecha = new Date().toISOString().split('T')[0];
+        doc.save(`Comparativa_Productos_${fecha}.pdf`);
+    }
+
+    // Función para cargar imagen a base64 (reutilizable)
+    function cargarImagenABase64(url) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'Anonymous';
+            
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // Redimensionar para PDF
+                const maxSize = 50;
+                let width = img.width;
+                let height = img.height;
+                
+                // Mantener proporción
+                if (width > height) {
+                    if (width > maxSize) {
+                        height = (height * maxSize) / width;
+                        width = maxSize;
+                    }
+                } else {
+                    if (height > maxSize) {
+                        width = (width * maxSize) / height;
+                        height = maxSize;
+                    }
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // Convertir a JPEG con calidad media
+                const dataURL = canvas.toDataURL('image/jpeg', 0.7);
+                resolve(dataURL);
+            };
+            
+            img.onerror = function() {
+                console.log('No se pudo cargar la imagen:', url);
+                resolve(null);
+            };
+            
+            // Agregar timestamp para evitar cache
+            const timestamp = new Date().getTime();
+            const urlConTimestamp = url.includes('?') ? 
+                `${url}&t=${timestamp}` : 
+                `${url}?t=${timestamp}`;
+            
+            img.src = urlConTimestamp;
+        });
+    }
+
+    // Función simplificada para PDF (sin imágenes, más rápida)
+    function pdfComparativaSimple() {
+        const tabla = document.getElementById('comparativaTable');
+        
+        if (!tabla) {
+            alert('No se encontró la tabla para exportar');
+            return;
+        }
+        
+        // Mostrar mensaje de carga
+        const loading = document.createElement('div');
+        loading.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 5px;
+            z-index: 9999;
+        `;
+        loading.innerHTML = '<div style="text-align:center"><div class="spinner-border text-light"></div><p class="mt-2">Generando PDF...</p></div>';
+        document.body.appendChild(loading);
+        
+        setTimeout(() => {
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('landscape');
+                
+                // Título
+                doc.setFontSize(16);
+                doc.text('Comparativa de Productos', 14, 15);
+                doc.setFontSize(10);
+                doc.text(`Fecha: ${new Date().toLocaleDateString('es-ES')}`, 14, 22);
+                
+                // Obtener datos simplificados
+                const datos = [];
+                
+                // Solo tomar columnas clave: #, Producto, y algunas métricas
+                const filasVisibles = Array.from(tabla.querySelectorAll('tbody tr')).filter(fila => 
+                    fila.style.display !== 'none'
+                );
+                
+                let filaNumero = 0;
+                filasVisibles.forEach((fila) => {
+                    filaNumero++;
+                    const filaData = [filaNumero.toString()];
+                    
+                    // Producto (columna 1)
+                    const celdaProducto = fila.cells[1];
+                    if (celdaProducto) {
+                        const descripcion = celdaProducto.querySelector('h6.fw-bold')?.textContent?.trim() || '';
+                        const codigo = celdaProducto.querySelector('.fa-barcode')?.parentElement?.textContent?.replace('', '').trim() || '';
+                        filaData.push(`${descripcion.substring(0, 30)}...\n${codigo}`);
+                    } else {
+                        filaData.push('');
+                    }
+                    
+                    // Tomar algunas métricas de ejemplo (primeras 4 sucursales de cada grupo)
+                    for (let i = 2; i < Math.min(10, fila.cells.length); i++) {
+                        const celda = fila.cells[i];
+                        filaData.push(celda ? celda.textContent.trim() : '');
+                    }
+                    
+                    datos.push(filaData);
+                });
+                
+                // Encabezados simplificados
+                const encabezados = ['#', 'Producto'];
+                for (let i = 1; i <= Math.min(8, datos[0]?.length - 2 || 0); i++) {
+                    encabezados.push(`Métrica ${i}`);
+                }
+                
+                // Crear tabla
+                doc.autoTable({
+                    head: [encabezados],
+                    body: datos,
+                    startY: 28,
+                    theme: 'striped',
+                    headStyles: {
+                        fillColor: [41, 128, 185],
+                        textColor: 255,
+                        fontSize: 8
+                    },
+                    bodyStyles: {
+                        fontSize: 7
+                    },
+                    columnStyles: {
+                        0: { cellWidth: 10, halign: 'center' },
+                        1: { cellWidth: 50 }
+                    }
+                });
+                
+                // Pie de página
+                const pageCount = doc.internal.getNumberOfPages();
+                for (let i = 1; i <= pageCount; i++) {
+                    doc.setPage(i);
+                    doc.setFontSize(8);
+                    doc.text(
+                        `Página ${i} de ${pageCount}`,
+                        doc.internal.pageSize.width - 30,
+                        doc.internal.pageSize.height - 10
+                    );
+                }
+                
+                const fecha = new Date().toISOString().split('T')[0];
+                doc.save(`Comparativa_Simple_${fecha}.pdf`);
+                
+            } catch (error) {
+                console.error('Error generando PDF simple:', error);
+                alert('Error generando PDF. Intente nuevamente.');
+            } finally {
+                document.body.removeChild(loading);
+            }
+        }, 500);
+    }
+
+    // Función para exportar a Excel de la comparativa
+    function exportarExcelComparativa() {
+        const tabla = document.getElementById('comparativaTable');
+        
+        if (!tabla) {
+            alert('No se encontró la tabla para exportar');
+            return;
+        }
+        
+        // Implementar lógica de exportación a Excel
+        // Similar a tu función exportarExcel() pero adaptada para la comparativa
+        console.log('Exportando comparativa a Excel...');
+        alert('Función de exportar a Excel para comparativa (pendiente de implementar)');
+        
+        // Puedes reutilizar tu función exportarExcel() si es genérica
+        // o crear una específica para la comparativa
+    }
 </script>
 
 <style>

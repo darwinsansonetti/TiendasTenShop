@@ -82,6 +82,12 @@ Route::middleware('auth')->group(function() {
 
     // Comparativa entre sucursales
     Route::get('/cpanel/comparativa/sucursales', [CpanelController::class, 'comparativa_sucursales'])->name('cpanel.comparativa.sucursales');
+
+    // Indice de Rotacion
+    Route::get('/cpanel/indice/rotacion', [CpanelController::class, 'indice_rotacion'])->name('cpanel.indice.rotacion');
+
+    // Comparativa de precios
+    Route::get('/cpanel/baja/demanda', [CpanelController::class, 'baja_demanda'])->name('cpanel.baja.ventas');
 });
 
 

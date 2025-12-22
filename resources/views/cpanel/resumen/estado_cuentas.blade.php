@@ -633,6 +633,14 @@
                                                 <option value="egreso">Solo egresos</option>
                                             </select>
                                         </div>
+
+                                        <!-- Botón de exportar PDF -->
+                                        <div>
+                                            <button class="btn btn-sm btn-outline-primary" 
+                                                    onclick="exportarPDF()">
+                                                <i class="bi bi-file-pdf me-1"></i> PDF
+                                            </button>
+                                        </div>
                                         
                                         <!-- Botón de exportar -->
                                         <div>
@@ -792,6 +800,14 @@
                                             </div>
                                             @endif
                                         @endif
+
+                                        <!-- Botón de exportar PDF -->
+                                        <div>
+                                            <button class="btn btn-sm btn-outline-primary" 
+                                                    onclick="exportarPDFventas()">
+                                                <i class="bi bi-file-pdf me-1"></i> PDF
+                                            </button>
+                                        </div>
                                         
                                         <!-- Botón exportar -->
                                         <button class="btn btn-sm btn-outline-primary" 
@@ -1135,15 +1151,23 @@
                                                         @endforeach
                                                     </select>
                                                 </div>
-                                                <div class="col-md-3">
-                                                    <button class="btn btn-sm btn-outline-secondary w-100" 
+
+                                                <!-- Botón de exportar PDF -->
+                                                <div class="col-md-1"> <!-- Añadido: col-md-1 para PDF -->
+                                                    <button class="btn btn-sm btn-outline-primary w-100" 
+                                                            onclick="exportarPDFgastos()">
+                                                        <i class="bi bi-file-pdf me-1"></i> PDF
+                                                    </button>
+                                                </div>
+
+                                                <div class="col-md-2"> <!-- Cambiado: col-md-2 para Exportar -->
+                                                    <button class="btn btn-sm btn-outline-primary w-100" 
                                                             onclick="exportarGastos()">
                                                         <i class="bi bi-download me-1"></i> Exportar
                                                     </button>
                                                 </div>
                                             </div>
                                         </div>
-                                        
                                         <!-- Tabla responsive -->
                                         <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
                                             <table class="table table-hover mb-0" id="tablaGastos">
@@ -1419,6 +1443,10 @@
 @section('js')
 
 <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+
+<!-- jsPDF y autoTable para PDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 
 <script>
     document.getElementById('form-periodo').addEventListener('submit', function(e) {
@@ -2050,6 +2078,645 @@
         // } else {
         //     alert(`Índice ${index} fuera de rango. Total ventas: ${ventas.length}`);
         // }
+    }
+
+    function exportarPDF() {
+        const tabla = document.getElementById('tablaEDC');
+        
+        if (!tabla) {
+            alert('No se encontró la tabla para exportar');
+            return;
+        }
+        
+        // Crear un canvas para la tabla
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const margin = 15;
+        const maxWidth = pageWidth - (margin * 2);
+        
+        // Configuración del documento
+        const fechaActual = new Date().toLocaleDateString('es-ES');
+        const titulo = 'Reporte de Movimientos EDC';
+        
+        // Título del documento
+        pdf.setFontSize(16);
+        pdf.text(titulo, margin, margin + 10);
+        
+        pdf.setFontSize(10);
+        pdf.text(`Fecha: ${fechaActual}`, margin, margin + 18);
+        
+        // Preparar datos de la tabla
+        const headers = [];
+        const rows = [];
+        
+        // Obtener encabezados (excluir si es necesario)
+        tabla.querySelectorAll('thead th').forEach((th, index) => {
+            const texto = th.textContent.trim();
+            // Puedes excluir columnas específicas si lo necesitas
+            headers.push(texto);
+        });
+        
+        // Obtener filas visibles
+        const filasVisibles = Array.from(tabla.querySelectorAll('tbody tr')).filter(fila => {
+            return fila.style.display !== 'none' && 
+                !fila.classList.contains('d-none') &&
+                fila.textContent.trim() !== '';
+        });
+        
+        // Procesar cada fila
+        filasVisibles.forEach(fila => {
+            const rowData = [];
+            fila.querySelectorAll('td').forEach((td, index) => {
+                let texto = td.textContent.trim().replace(/\n/g, ' ').replace(/\s+/g, ' ');
+                
+                // Si tiene badge, tomar el texto del badge
+                const badge = td.querySelector('.badge');
+                if (badge) {
+                    texto = badge.textContent.trim();
+                }
+                
+                // Limpiar valores monetarios para mejor presentación
+                if (index === 2 || index === 3 || index === 4) { // Columnas de montos
+                    texto = texto.replace(/\$ /g, '');
+                }
+                
+                rowData.push(texto);
+            });
+            rows.push(rowData);
+        });
+        
+        // Configurar autoTable
+        pdf.autoTable({
+            startY: margin + 25,
+            head: [headers],
+            body: rows,
+            theme: 'grid',
+            styles: {
+                fontSize: 8,
+                cellPadding: 3,
+                overflow: 'linebreak',
+                lineWidth: 0.1,
+                lineColor: [200, 200, 200]
+            },
+            headStyles: {
+                fillColor: [66, 133, 244],
+                textColor: [255, 255, 255],
+                fontSize: 9,
+                fontStyle: 'bold'
+            },
+            alternateRowStyles: {
+                fillColor: [245, 247, 250]
+            },
+            columnStyles: {
+                0: { cellWidth: 25 }, // Fecha
+                1: { cellWidth: 'auto' }, // Descripción
+                2: { cellWidth: 25, halign: 'right' }, // Ingreso
+                3: { cellWidth: 25, halign: 'right' }, // Egreso
+                4: { cellWidth: 25, halign: 'right' }  // Saldo
+            },
+            margin: { left: margin, right: margin },
+            didDrawPage: function(data) {
+                // Número de página
+                const pageCount = pdf.internal.getNumberOfPages();
+                pdf.setFontSize(8);
+                pdf.text(
+                    `Página ${data.pageNumber} de ${pageCount}`, 
+                    pageWidth - margin, 
+                    pdf.internal.pageSize.getHeight() - 10,
+                    { align: 'right' }
+                );
+            }
+        });
+        
+        // Calcular totales para el pie
+        const totalIngreso = filasVisibles.reduce((total, fila) => {
+            const celdas = fila.querySelectorAll('td');
+            if (celdas.length > 2) {
+                const ingresoTexto = celdas[2].textContent.trim()
+                    .replace('$', '')
+                    .replace('.', '')
+                    .replace(',', '.')
+                    .replace('-', '0');
+                return total + parseFloat(ingresoTexto || 0);
+            }
+            return total;
+        }, 0);
+        
+        const totalEgreso = filasVisibles.reduce((total, fila) => {
+            const celdas = fila.querySelectorAll('td');
+            if (celdas.length > 3) {
+                const egresoTexto = celdas[3].textContent.trim()
+                    .replace('$', '')
+                    .replace('.', '')
+                    .replace(',', '.')
+                    .replace('-', '0');
+                return total + parseFloat(egresoTexto || 0);
+            }
+            return total;
+        }, 0);
+        
+        // Agregar totales al final si es la última fila
+        const ultimaFila = filasVisibles[filasVisibles.length - 1];
+        if (ultimaFila && ultimaFila.classList.contains('table-light')) {
+            // Ya hay totales en la tabla
+            pdf.setFontSize(10);
+            pdf.text(
+                `Total Ingresos: $${totalIngreso.toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2})} | ` +
+                `Total Egresos: $${totalEgreso.toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`,
+                margin,
+                pdf.autoTable.previous.finalY + 10
+            );
+        }
+        
+        // Guardar el PDF
+        const fecha = new Date().toISOString().split('T')[0];
+        pdf.save(`Reporte_EDC_${fecha}.pdf`);
+    }
+
+    function exportarPDFventas() {
+        const tabla = document.getElementById('tablaVentasDiarias');
+        
+        if (!tabla) {
+            alert('No se encontró la tabla para exportar');
+            return;
+        }
+        
+        // Obtener datos de la tabla
+        const datos = [];
+        
+        // Encabezados (excluir columna de acciones)
+        const headers = [];
+        tabla.querySelectorAll('thead th').forEach((th, index) => {
+            // Excluir la última columna si es "Acciones" o similar
+            const texto = th.textContent.trim();
+            if (!texto.toLowerCase().includes('accion') && 
+                !texto.toLowerCase().includes('acción') &&
+                texto !== '#') {
+                headers.push(texto);
+            }
+        });
+        
+        // Si no hay encabezados, usar predeterminados
+        if (headers.length === 0) {
+            headers.push('Fecha', 'Sucursal', 'Cantidad', 'Costo Divisa', 'Total Divisa', 'Total Bs', 'Tasa Cambio');
+        }
+        
+        datos.push(headers);
+        
+        // Variables para totales
+        let totalCantidad = 0;
+        let totalCostoDivisa = 0;
+        let totalTotalDivisa = 0;
+        let totalTotalBs = 0;
+        
+        // Filas del cuerpo de la tabla (solo las visibles)
+        tabla.querySelectorAll('tbody tr').forEach(fila => {
+            if (fila.style.display !== 'none' && 
+                !fila.textContent.includes('No hay registros')) {
+                const rowData = [];
+                
+                fila.querySelectorAll('td').forEach((td, index) => {
+                    // Omitir la última columna (acciones)
+                    const thCorrespondiente = tabla.querySelector(`thead th:nth-child(${index + 1})`);
+                    if (thCorrespondiente) {
+                        const textoTh = thCorrespondiente.textContent.trim();
+                        if (!textoTh.toLowerCase().includes('accion') && 
+                            !textoTh.toLowerCase().includes('acción') &&
+                            textoTh !== '#') {
+                            
+                            // Obtener texto limpio
+                            let texto = td.textContent.trim().replace(/\n/g, ' ').replace(/\s+/g, ' ');
+                            
+                            // Si tiene badge, tomar el texto del badge
+                            const badge = td.querySelector('.badge');
+                            if (badge) {
+                                texto = badge.textContent.trim();
+                            }
+                            
+                            // Si tiene span, tomar el texto del span
+                            const span = td.querySelector('span:not(.badge)');
+                            if (span && !badge) {
+                                texto = span.textContent.trim();
+                            }
+                            
+                            // Si tiene small, tomar el texto del small
+                            const small = td.querySelector('small');
+                            if (small && !badge && !span) {
+                                texto = small.textContent.trim();
+                            }
+                            
+                            // Acumular totales basado en el encabezado
+                            if (textoTh.includes('Cantidad') || textoTh.includes('Cant.')) {
+                                const cantidad = parseFloat(texto.replace(/\./g, '').replace(',', '.'));
+                                if (!isNaN(cantidad)) {
+                                    totalCantidad += cantidad;
+                                    // Mantener como número para cálculos
+                                    texto = cantidad;
+                                }
+                            } 
+                            else if (textoTh.includes('Costo') && textoTh.includes('Divisa')) {
+                                const costo = parseFloat(texto.replace('$', '').replace(/\./g, '').replace(',', '.').trim());
+                                if (!isNaN(costo)) {
+                                    totalCostoDivisa += costo;
+                                    // Mantener como número para cálculos
+                                    texto = costo;
+                                } else {
+                                    texto = texto.replace('$', '').trim();
+                                }
+                            }
+                            else if (textoTh.includes('Total') && textoTh.includes('Divisa')) {
+                                const total = parseFloat(texto.replace('$', '').replace(/\./g, '').replace(',', '.').trim());
+                                if (!isNaN(total)) {
+                                    totalTotalDivisa += total;
+                                    // Mantener como número para cálculos
+                                    texto = total;
+                                } else {
+                                    texto = texto.replace('$', '').trim();
+                                }
+                            }
+                            else if (textoTh.includes('Total') && textoTh.includes('Bs')) {
+                                const totalBs = parseFloat(texto.replace('Bs', '').replace(/\./g, '').replace(',', '.').trim());
+                                if (!isNaN(totalBs)) {
+                                    totalTotalBs += totalBs;
+                                    // Mantener como número para cálculos
+                                    texto = totalBs;
+                                } else {
+                                    texto = texto.replace('Bs', '').trim();
+                                }
+                            }
+                            else if (textoTh.includes('Tasa') || textoTh.includes('Cambio')) {
+                                texto = texto.replace('Promedio:', '').trim();
+                            }
+                            
+                            rowData.push(texto);
+                        }
+                    }
+                });
+                
+                // Solo agregar si tiene datos
+                if (rowData.length > 0) {
+                    datos.push(rowData);
+                }
+            }
+        });
+        
+        // Verificar que hay datos
+        if (datos.length <= 1) {
+            alert('No hay datos para exportar');
+            return;
+        }
+        
+        // Crear el PDF
+        try {
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('l', 'mm', 'a4'); // Orientación landscape
+            
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const margin = 10;
+            
+            // Título
+            const fechaActual = new Date().toLocaleDateString('es-ES');
+            const titulo = 'Reporte de Ventas Diarias';
+            
+            pdf.setFontSize(16);
+            pdf.text(titulo, margin, margin + 10);
+            
+            pdf.setFontSize(10);
+            pdf.text(`Fecha: ${fechaActual}`, margin, margin + 18);
+            
+            // Preparar datos para autoTable
+            const headersPDF = datos[0];
+            const rowsPDF = datos.slice(1);
+            
+            // Calcular anchos de columna proporcionales
+            const availableWidth = pageWidth - (margin * 2);
+            const columnCount = headersPDF.length;
+            
+            // Anchuras específicas basadas en el contenido
+            let columnWidths = [];
+            if (columnCount === 7) {
+                // Para la tabla de ventas con 7 columnas
+                columnWidths = [20, 25, 15, 25, 25, 25, 15];
+            } else {
+                // Distribución proporcional genérica
+                const baseWidth = availableWidth / columnCount;
+                for (let i = 0; i < columnCount; i++) {
+                    columnWidths.push(baseWidth);
+                }
+            }
+            
+            // Configurar autoTable
+            pdf.autoTable({
+                startY: margin + 25,
+                head: [headersPDF],
+                body: rowsPDF,
+                theme: 'grid',
+                styles: {
+                    fontSize: 8,
+                    cellPadding: 3,
+                    overflow: 'linebreak',
+                    lineWidth: 0.1,
+                    lineColor: [200, 200, 200]
+                },
+                headStyles: {
+                    fillColor: [58, 186, 244],
+                    textColor: [255, 255, 255],
+                    fontSize: 9,
+                    fontStyle: 'bold',
+                    halign: 'center'
+                },
+                bodyStyles: {
+                    fontSize: 8
+                },
+                margin: { left: margin, right: margin },
+                tableWidth: 'auto'
+            });
+            
+            // Calcular utilidad
+            const utilidadTotal = totalTotalDivisa - totalCostoDivisa;
+            const margenTotal = totalCostoDivisa > 0 ? (utilidadTotal / totalCostoDivisa) * 100 : 0;
+            
+            // Agregar resumen después de la tabla
+            const finalY = pdf.autoTable.previous.finalY + 10;
+            
+            if (finalY < pdf.internal.pageSize.getHeight() - 50) {
+                pdf.setFontSize(10);
+                pdf.setFont(undefined, 'bold');
+                pdf.text('RESUMEN FINANCIERO:', margin, finalY);
+                
+                pdf.setFont(undefined, 'normal');
+                pdf.setFontSize(9);
+                
+                let yPos = finalY + 8;
+                
+                // Formatear números para display
+                const formatNumber = (num, decimals = 2) => {
+                    return num.toLocaleString('es-ES', {
+                        minimumFractionDigits: decimals,
+                        maximumFractionDigits: decimals
+                    });
+                };
+                
+                pdf.text(`• Total Cantidad: ${formatNumber(totalCantidad, 0)} unidades`, margin, yPos);
+                yPos += 7;
+                
+                pdf.text(`• Total Costo Divisa: $ ${formatNumber(totalCostoDivisa)}`, margin, yPos);
+                yPos += 7;
+                
+                pdf.text(`• Total Venta Divisa: $ ${formatNumber(totalTotalDivisa)}`, margin, yPos);
+                yPos += 7;
+                
+                pdf.text(`• Total Venta Bs: Bs ${formatNumber(totalTotalBs)}`, margin, yPos);
+                yPos += 7;
+                
+                // Utilidad
+                pdf.setFont(undefined, 'bold');
+                if (utilidadTotal >= 0) {
+                    pdf.setTextColor(0, 128, 0); // Verde
+                    pdf.text(`✓ Utilidad: $ ${formatNumber(utilidadTotal)}`, margin, yPos);
+                } else {
+                    pdf.setTextColor(220, 53, 69); // Rojo
+                    pdf.text(`✗ Pérdida: $ ${formatNumber(Math.abs(utilidadTotal))}`, margin, yPos);
+                }
+                pdf.setTextColor(0, 0, 0); // Restaurar color
+                yPos += 7;
+                
+                // Margen
+                pdf.setFont(undefined, 'bold');
+                if (margenTotal >= 20) {
+                    pdf.setTextColor(0, 128, 0); // Verde
+                } else if (margenTotal >= 10) {
+                    pdf.setTextColor(255, 193, 7); // Amarillo/Naranja
+                } else {
+                    pdf.setTextColor(220, 53, 69); // Rojo
+                }
+                pdf.text(`• Margen: ${margenTotal.toFixed(1)}%`, margin, yPos);
+                pdf.setTextColor(0, 0, 0); // Restaurar color
+                
+                // Promedio de tasa de cambio
+                yPos += 7;
+                pdf.setFont(undefined, 'normal');
+                const promedioTasa = totalTotalDivisa > 0 ? totalTotalBs / totalTotalDivisa : 0;
+                pdf.text(`• Tasa Promedio: ${formatNumber(promedioTasa)} Bs/$`, margin, yPos);
+            }
+            
+            // Número de página
+            const pageCount = pdf.internal.getNumberOfPages();
+            pdf.setFontSize(8);
+            pdf.text(
+                `Página ${pageCount} de ${pageCount}`, 
+                pageWidth - margin, 
+                pdf.internal.pageSize.getHeight() - 5,
+                { align: 'right' }
+            );
+            
+            // Guardar el PDF
+            const fecha = new Date().toISOString().split('T')[0];
+            pdf.save(`Reporte_Ventas_${fecha}.pdf`);
+            
+        } catch (error) {
+            console.error('Error al generar PDF:', error);
+            alert('Error al generar el PDF. Verifique la consola para más detalles.');
+        }
+    }
+
+    function exportarPDFgastos() {
+        const tabla = document.getElementById('tablaGastos');
+        
+        if (!tabla) {
+            alert('No se encontró la tabla para exportar');
+            return;
+        }
+        
+        // Crear un canvas para la tabla
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const margin = 15;
+        const maxWidth = pageWidth - (margin * 2);
+        
+        // Configuración del documento
+        const fechaActual = new Date().toLocaleDateString('es-ES');
+        const titulo = 'Reporte de Gastos';
+        
+        // Título del documento
+        pdf.setFontSize(16);
+        pdf.text(titulo, margin, margin + 10);
+        
+        pdf.setFontSize(10);
+        pdf.text(`Fecha: ${fechaActual}`, margin, margin + 18);
+        
+        // Preparar datos de la tabla
+        const headers = [];
+        const rows = [];
+        
+        // Obtener encabezados (excluir primera columna de checkbox y última de acciones)
+        tabla.querySelectorAll('thead th').forEach((th, index) => {
+            const texto = th.textContent.trim();
+            // Excluir primera columna (checkbox) y última columna (acciones)
+            if (index > 0 && index < tabla.querySelectorAll('thead th').length - 1) {
+                headers.push(texto);
+            }
+        });
+        
+        // Obtener filas visibles
+        const filasVisibles = Array.from(tabla.querySelectorAll('tbody tr')).filter(fila => {
+            return fila.style.display !== 'none' && 
+                !fila.classList.contains('d-none') &&
+                fila.textContent.trim() !== '';
+        });
+        
+        // Variables para totales
+        let totalDivisa = 0;
+        let totalBs = 0;
+        
+        // Procesar cada fila
+        filasVisibles.forEach(fila => {
+            const rowData = [];
+            let colIndex = 0;
+            
+            fila.querySelectorAll('td').forEach((td, index) => {
+                // Saltar primera columna (checkbox) y última columna (acciones)
+                if (index === 0 || index === tabla.querySelectorAll('thead th').length - 1) {
+                    return;
+                }
+                
+                let texto = td.textContent.trim().replace(/\n/g, ' ').replace(/\s+/g, ' ');
+                
+                // Si tiene badge, tomar el texto del badge
+                const badge = td.querySelector('.badge');
+                if (badge) {
+                    texto = badge.textContent.trim();
+                }
+                
+                // Si tiene code, tomar el texto del code
+                const code = td.querySelector('code');
+                if (code && !badge) {
+                    texto = code.textContent.trim();
+                }
+                
+                // Limpiar valores monetarios para mejor presentación y cálculos
+                if (colIndex === 4) { // Columna Monto ($)
+                    texto = texto.replace(/\$ /g, '');
+                    // Calcular total divisa
+                    const montoDivisa = parseFloat(texto.replace(/\./g, '').replace(',', '.'));
+                    if (!isNaN(montoDivisa)) {
+                        totalDivisa += montoDivisa;
+                    }
+                } else if (colIndex === 5) { // Columna Monto (Bs)
+                    texto = texto.replace(/Bs /g, '');
+                    // Calcular total bolívares
+                    const montoBs = parseFloat(texto.replace(/\./g, '').replace(',', '.'));
+                    if (!isNaN(montoBs)) {
+                        totalBs += montoBs;
+                    }
+                }
+                
+                // Para la columna de fecha, combinar fecha y hora
+                if (colIndex === 0) {
+                    const fechaElements = td.querySelectorAll('small');
+                    if (fechaElements.length >= 2) {
+                        texto = `${fechaElements[0].textContent.trim()} ${fechaElements[1].textContent.trim()}`;
+                    }
+                }
+                
+                // Para la columna de descripción, tomar solo el texto principal
+                if (colIndex === 2) {
+                    const descripcionPrincipal = td.querySelector('.fw-medium');
+                    if (descripcionPrincipal) {
+                        texto = descripcionPrincipal.textContent.trim();
+                    }
+                }
+                
+                rowData.push(texto);
+                colIndex++;
+            });
+            
+            rows.push(rowData);
+        });
+        
+        // Configurar autoTable
+        pdf.autoTable({
+            startY: margin + 25,
+            head: [headers],
+            body: rows,
+            theme: 'grid',
+            styles: {
+                fontSize: 8,
+                cellPadding: 3,
+                overflow: 'linebreak',
+                lineWidth: 0.1,
+                lineColor: [200, 200, 200]
+            },
+            headStyles: {
+                fillColor: [220, 53, 69], // Rojo para gastos
+                textColor: [255, 255, 255],
+                fontSize: 9,
+                fontStyle: 'bold'
+            },
+            alternateRowStyles: {
+                fillColor: [245, 247, 250]
+            },
+            columnStyles: {
+                0: { cellWidth: 25 }, // Fecha
+                1: { cellWidth: 25 }, // No. Operación
+                2: { cellWidth: 'auto' }, // Descripción
+                3: { cellWidth: 25 }, // Categoría
+                4: { cellWidth: 20, halign: 'right' }, // Monto ($)
+                5: { cellWidth: 20, halign: 'right' }, // Monto (Bs)
+                6: { cellWidth: 15 } // Sucursal
+            },
+            margin: { left: margin, right: margin },
+            didDrawPage: function(data) {
+                // Número de página
+                const pageCount = pdf.internal.getNumberOfPages();
+                pdf.setFontSize(8);
+                pdf.text(
+                    `Página ${data.pageNumber} de ${pageCount}`, 
+                    pageWidth - margin, 
+                    pdf.internal.pageSize.getHeight() - 10,
+                    { align: 'right' }
+                );
+            }
+        });
+        
+        // Agregar totales al final
+        pdf.setFontSize(10);
+        pdf.text(
+            `Total Gastos en Divisa: $${totalDivisa.toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, 
+            margin,
+            pdf.autoTable.previous.finalY + 10
+        );
+        
+        pdf.text(
+            `Total Gastos en Bolívares: Bs ${totalBs.toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, 
+            margin,
+            pdf.autoTable.previous.finalY + 20
+        );
+        
+        // Calcular y agregar promedio si hay registros
+        if (filasVisibles.length > 0) {
+            const promedioDivisa = totalDivisa / filasVisibles.length;
+            const promedioBs = totalBs / filasVisibles.length;
+            
+            pdf.text(
+                `Promedio por gasto: $${promedioDivisa.toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2})} | ` +
+                `Bs ${promedioBs.toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, 
+                margin,
+                pdf.autoTable.previous.finalY + 30
+            );
+            
+            pdf.text(
+                `Total registros: ${filasVisibles.length} gastos`, 
+                margin,
+                pdf.autoTable.previous.finalY + 40
+            );
+        }
+        
+        // Guardar el PDF
+        const fecha = new Date().toISOString().split('T')[0];
+        pdf.save(`Reporte_Gastos_${fecha}.pdf`);
     }
 </script>
 

@@ -29,7 +29,8 @@
         },
     	"files": [
         	"app/Helpers/GeneralHelper.php",
-            "app/Helpers/FileHelper.php"
+            "app/Helpers/FileHelper.php",
+            "app/Helpers/CacheCleanerHelper.php"
     	]
     },
     "autoload-dev": {

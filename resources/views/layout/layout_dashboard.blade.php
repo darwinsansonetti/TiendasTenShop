@@ -470,13 +470,19 @@
                   <li class="nav-item">
                     <a href="{{ route('cpanel.comparativa.sucursales') }}" class="nav-link {{ session('submenu_active') == 'Comparativa' ? 'active' : '' }}">
                       <i class="nav-icon bi bi-circle"></i>
-                      <p>Comparativa</p>
+                      <p>Comparativa Sucursales</p>
                     </a>
                   </li>
                   <li class="nav-item">
-                    <a href="./index3.html" class="nav-link">
+                    <a href="{{ route('cpanel.indice.rotacion') }}" class="nav-link {{ session('submenu_active') == 'Indice de Rotación' ? 'active' : '' }}">
                       <i class="nav-icon bi bi-circle"></i>
-                      <p>Dashboard v3</p>
+                      <p>Indice de Rotación</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.baja.ventas') }}" class="nav-link {{ session('submenu_active') == 'Baja Demanda' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-circle"></i>
+                      <p>Baja Demanda</p>
                     </a>
                   </li>
                 </ul>
