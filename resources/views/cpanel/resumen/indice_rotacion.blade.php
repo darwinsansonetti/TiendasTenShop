@@ -140,43 +140,79 @@
         <!-- Card de tabla -->
         <div class="card">
             <div class="card-header">
-              <div class="row align-items-center g-2">
-                <!-- Título más compacto -->
-                <div class="col-md-3">
-                    <h5 class="card-title mb-0">
-                        <i class="fas fa-list me-2"></i>Índice de Rotación
-                    </h5>
-                </div>
-                
-                <!-- Campo de búsqueda -->
-                <div class="col-md-5">
-                    <div class="input-group input-group-sm">
+                <div class="row align-items-center g-2">
+
+                    <!-- Título -->
+                    <div class="col-md-2">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-list me-2"></i>Índice de Rotación
+                        </h5>
+                    </div>
+
+                    <!-- Filtro de valoración -->
+                    <div class="col-md-2">
+                        <select id="filtroValoracion" 
+                                class="form-select form-select-sm"
+                                onchange="filtrarTabla()">
+                            <option value="">⭐ Todas</option>
+                            <option value="5">★★★★★ Muy alta</option>
+                            <option value="4">★★★★☆ Alta</option>
+                            <option value="3">★★★☆☆ Media</option>
+                            <option value="2">★★☆☆☆ Baja</option>
+                            <option value="1">★☆☆☆☆ Muy baja</option>
+                        </select>
+                    </div>
+
+                    <!-- Buscador -->
+                    <div class="col-md-2">
                         <input type="text" 
-                              class="form-control" 
-                              id="buscarProducto"
-                              placeholder="Buscar por código o descripción..."
-                              onkeyup="filtrarTabla()">
+                            class="form-control form-control-sm"
+                            id="buscarProducto"
+                            placeholder="Buscar código o descripción..."
+                            onkeyup="filtrarTabla()">
                     </div>
-                </div>
-                
-                <!-- Botones de acción -->
-                <div class="col-md-4 text-md-end">
-                    <div class="btn-group">
-                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="pdfTablaConImagenes()">
-                            <i class="fas fa-print me-1"></i>PDF
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="exportarExcel()">
-                            <i class="fas fa-file-excel me-1"></i>Excel
-                        </button>
+
+                    <!-- Botones -->
+                    <div class="col-md-6 text-md-end">
+                        <div class="btn-group">
+                            <button type="button" 
+                                    class="btn btn-outline-secondary btn-sm"
+                                    onclick="ingresarPorcentaje({{ session('sucursal_id', 0) }}, '{{ session('sucursal_nombre') }}')">
+                                <i class="fas fa-print me-1"></i>Porcentaje
+                            </button>
+                            <button type="button" 
+                                    class="btn btn-outline-secondary btn-sm"
+                                    onclick="descargarSeleccionadas({{ session('sucursal_id', 0) }}, '{{ session('sucursal_nombre') }}')">
+                                <i class="fas fa-print me-1"></i>Seleccionadas
+                            </button>
+                            <button type="button" 
+                                    class="btn btn-outline-secondary btn-sm"
+                                    onclick="cambiosPVP({{ session('sucursal_id', 0) }}, '{{ session('sucursal_nombre') }}')">
+                                <i class="fas fa-print me-1"></i>Descargar PVP
+                            </button>
+                            <button type="button" 
+                                    class="btn btn-outline-secondary btn-sm"
+                                    onclick="pdfTablaConImagenes()">
+                                <i class="fas fa-print me-1"></i>PDF
+                            </button>
+                            <button type="button" 
+                                    class="btn btn-outline-secondary btn-sm"
+                                    onclick="exportarExcel()">
+                                <i class="fas fa-file-excel me-1"></i>Excel
+                            </button>
+                        </div>
                     </div>
+
                 </div>
-            </div>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
                       <table class="table table-hover mb-0" id="tablaIndiceRotacion">
                         <thead class="table-light">
                             <tr>
+                                <th width="40" class="text-center">
+                                    <input type="checkbox" id="checkAllRotacion">
+                                </th>
                                 <th width="80" class="text-center">Imagen</th>
                                 <th width="100">Código</th>
                                 <th>Descripción</th>
@@ -190,7 +226,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach($indices->detalles as $index => $detalle)
+                            @foreach($indices->detalles->sortByDesc('indice_rotacion') as $detalle)
                             @php
                                 $urlImagen = FileHelper::getOrDownloadFile(
                                     'images/items/thumbs/',
@@ -238,8 +274,32 @@
                                     $tieneAlertas = true;
                                     $alertas[] = 'Sin ventas recientes';
                                 }
+
+                                $mayorIndice = $indices->mayor_indice ?? 0;
+                                $porcentaje = $mayorIndice > 0
+                                    ? ($detalle->indice_rotacion / $mayorIndice) * 100
+                                    : 0;
+
+                                if ($porcentaje >= 90) {
+                                    $estrellas = 5;
+                                } elseif ($porcentaje >= 70) {
+                                    $estrellas = 4;
+                                } elseif ($porcentaje >= 50) {
+                                    $estrellas = 3;
+                                } elseif ($porcentaje >= 30) {
+                                    $estrellas = 2;
+                                } else {
+                                    $estrellas = 1;
+                                }
                             @endphp
-                            <tr>
+                            <tr class="align-middle" data-id="{{ $detalle->producto['id'] }}" data-rating="{{ $estrellas }}">
+                                <td class="text-center">
+                                    <input type="checkbox" 
+                                        name="productosSeleccionados[]" 
+                                        class="checkProductoRotacion"
+                                        value="{{ $detalle->producto_id }}"
+                                        data-sucursal="{{ session('sucursal_id', 0) }}">
+                                </td>
                                 <!-- Foto -->
                                 <td class="text-center">
                                     <div class="position-relative">
@@ -289,16 +349,29 @@
                                 </td>
                                 
                                 <!-- PVP -->
-                                <td class="text-center fw-bold text-success">
-                                    ${{ number_format($detalle->producto['pvp_divisa'] ?? 0, 2) }}
+                                <td class="text-center fw-bold text-success celdaPVP">
+                                    ${{ number_format($detalle->producto['nuevo_pvp'] ?? $detalle->producto['pvp_divisa'] ?? 0, 2) }}
                                 </td>
                                 
                                 <!-- Índice Rotación -->
                                 <td class="text-center {{ $colorIndice }}">
-                                    <span class="badge {{ $detalle->indice_rotacion >= $indices->indice_promedio ? 'bg-success bg-opacity-10 text-success' : 'bg-light text-dark' }}">
+                                    <!-- Índice -->
+                                    <span class="badge 
+                                        {{ $detalle->indice_rotacion >= $indices->indice_promedio
+                                            ? 'bg-success bg-opacity-10 text-success'
+                                            : 'bg-light text-dark' }}">
                                         {{ number_format($detalle->indice_rotacion, 2) }}
                                     </span>
+
+                                    <!-- Estrellas de valoración -->
+                                    <div class="mt-1">
+                                        @for ($i = 1; $i <= 5; $i++)
+                                            <i class="bi bi-star{{ $i <= $estrellas ? '-fill text-warning' : ' text-muted' }}"
+                                            style="font-size: 0.75rem;"></i>
+                                        @endfor
+                                    </div>
                                 </td>
+
                                 
                                 <!-- Última Venta -->
                                 <td class="text-center">
@@ -322,9 +395,9 @@
                                                 {{ json_encode([
                                                     'codigo' => $detalle->producto['codigo'],
                                                     'descripcion' => $detalle->producto['descripcion'],
-                                                    'pvp_actual' => $detalle->producto['pvp_divisa'] ?? 0,
-                                                    'pvp_anterior' => $detalle->producto['pvp_anterior'] ?? 0,
-                                                    'nuevo_pvp' => $detalle->producto['nuevo_pvp'] ?? 0,
+                                                    'pvp_actual' => $detalle->producto['nuevo_pvp'] ?? $detalle->producto['pvp_divisa'] ?? 0,
+                                                    'pvp_anterior' => $detalle->producto['pvp_anterior'] ?? $detalle->producto['pvp_divisa'] ?? 0,
+                                                    'nuevo_pvp' => $detalle->producto['nuevo_pvp'] ?? $detalle->producto['pvp_divisa'] ?? 0,
                                                     'fecha_nuevo_precio' => $detalle->producto['fecha_nuevo_precio'] ? $detalle->producto['fecha_nuevo_precio']->format('Y-m-d H:i:s') : null,
                                                     'existencia' => $detalle->producto['existencia'] ?? 0,
                                                     'costo_divisa' => $detalle->producto['costo_divisa'] ?? 0,
@@ -480,6 +553,50 @@
     </div>
 </div>
 
+<!-- Modal para aplicar porcentaje -->
+<div class="modal fade" id="modalPorcentaje" tabindex="-1" aria-labelledby="modalPorcentajeLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalPorcentajeLabel">Aplicar porcentaje a productos seleccionados</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <!-- Input para porcentaje -->
+        <div class="mb-3">
+          <label for="inputPorcentaje" class="form-label">Porcentaje (%):</label>
+          <input type="number" class="form-control" id="inputPorcentaje" placeholder="Ej: 10 para +10%, -5 para -5%">
+        </div>
+
+        <!-- Tabla de productos seleccionados -->
+        <div style="max-height:400px; overflow-y:auto;">
+          <table class="table table-hover table-sm" id="tablaPorcentaje">
+            <thead class="table-light">
+              <tr>
+                <th>ID</th>
+                <th>Sucursal</th>
+                <th>Código</th>
+                <th>Descripción</th>
+                <th>Existencia</th>
+                <th>Ventas</th>
+                <th>Costo</th>
+                <th>PVP</th>
+                <th>Índice Rotación</th>
+                <th>Última Venta</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="aplicarPorcentajeConfirmado()">Aplicar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 @endsection
 
 @section('js')
@@ -497,6 +614,9 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
+    // Definir el array global al inicio de tu script
+    let productosActualizados = [];
+
     // Función para filtrar la tabla
     function filtrarTabla() {
         var input, filter, table, tr, tdCodigo, tdDescripcion, i, txtValueCodigo, txtValueDescripcion;
@@ -561,134 +681,217 @@
             
             const nuevoPVP = parseFloat(document.getElementById('nuevoPVP').value);
             const pvpActual = parseFloat(productoActual.pvp_actual);
+            const mensajeValidacion = document.getElementById('mensajeValidacion');
+            
+            // Resetear mensaje previo
+            mensajeValidacion.innerText = '';
             
             if (nuevoPVP <= 0) {
-                alert('El PVP debe ser mayor a 0');
+                mensajeValidacion.innerText = 'El PVP debe ser mayor a 0';
                 return;
             }
             
             if (nuevoPVP === pvpActual) {
-                alert('El nuevo PVP no puede ser igual al actual');
+                mensajeValidacion.innerText = 'El nuevo PVP no puede ser igual al actual';
                 return;
             }
-            
-            // Confirmar cambio
-            if (confirm(`¿Está seguro de cambiar el PVP de $${pvpActual.toFixed(2)} a $${nuevoPVP.toFixed(2)}?`)) {
-                // Mostrar loading
-                const btn = document.getElementById('btnGuardarCambio');
-                const originalText = btn.innerHTML;
-                btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Procesando...';
-                btn.disabled = true;
-                
-                // Enviar formulario
-                this.submit();
-            }
+
+            // Si pasa las validaciones, ya no hay mensajes
+            mensajeValidacion.innerText = '';
+
+            // if (!confirm(`¿Está seguro de cambiar el PVP de $${pvpActual.toFixed(2)} a $${nuevoPVP.toFixed(2)}?`)) return;
+            Swal.fire({
+                title: '¿Confirmar cambio de precio?',
+                html: `
+                    <p class="mb-1">PVP actual: <b>$${pvpActual.toFixed(2)}</b></p>
+                    <p class="mb-1">Nuevo PVP: <b class="text-success">$${nuevoPVP.toFixed(2)}</b></p>
+                `,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, actualizar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#f0ad4e',
+                cancelButtonColor: '#6c757d'
+            }).then((result) => {
+                if (!result.isConfirmed) return;
+
+                // Preparar datos
+                const data = {
+                    producto_id: productoActual.id,
+                    sucursal_id: sucursalIdActual,
+                    nuevo_pvp: nuevoPVP,
+                    _token: '{{ csrf_token() }}' // Laravel CSRF
+                };
+
+                fetch('{{ url("/ruta/actualizar-pvp") }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                    body: JSON.stringify({
+                        producto_id: productoActual.id,
+                        sucursal_id: sucursalIdActual,
+                        nuevo_pvp: parseFloat(document.getElementById('nuevoPVP').value),
+                    })
+                })
+                .then(res => res.json())
+                .then(res => {
+                    if (res.success) {
+                        const data = res.data;
+
+                        // Actualizar celda PVP
+                        const fila = document.querySelector(`#tablaIndiceRotacion tr[data-id="${data.producto_id}"]`);
+                        if (fila) {
+                            fila.querySelector('.celdaPVP').textContent = `$${parseFloat(data.pvp_actual).toFixed(2)}`;
+                        }
+
+                        // Actualizar array global
+                        const index = productosActualizados.findIndex(p => p.Id === data.producto_id);
+                        const productoDTO = {
+                            Id: data.producto_id,
+                            Codigo: data.codigo,
+                            Descripcion: data.descripcion,
+                            PvpAnterior: data.pvp_anterior,
+                            NuevoPvp: parseFloat(data.pvp_actual),
+                            CostoDivisa: data.costo_divisa
+                        };
+                        
+                        if (index >= 0) {
+                            productosActualizados[index] = productoDTO; // actualizar
+                        } else {
+                            productosActualizados.push(productoDTO); // agregar
+                        }
+
+                        // Cerrar modal
+                        bootstrap.Modal.getInstance(document.getElementById('modalActualizarPVP')).hide();
+                        showToast('El precio se ha registrado', 'success');
+                    } else {
+                        showToast('Error al actualizar el PVP', 'danger');
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    showToast('Error en la petición', 'danger');
+                });
+            });
         });
+
     });
     
     function exportarExcel() {
         const tabla = document.getElementById('tablaIndiceRotacion');
-        
+
         if (!tabla) {
             alert('No se encontró la tabla para exportar');
             return;
         }
-        
-        // Obtener datos de la tabla
+
         const datos = [];
-        
-        // Encabezados (excluir columna de acciones si existe)
-        const headers = [];
+
+        /* =========================
+        ENCABEZADOS
+        ========================== */
+        const headers = ['ID', 'Sucursal'];
+
         tabla.querySelectorAll('thead th').forEach((th, index) => {
-            // Excluir la última columna si es "Acciones" o similar
+            // Saltar Check (0) e Imagen (1)
+            if (index < 2) return;
+
             const texto = th.textContent.trim();
-            if (!texto.toLowerCase().includes('accion') && 
-                !texto.toLowerCase().includes('acción') &&
-                texto !== '#') {
+
+            if (!texto.toLowerCase().includes('accion') &&
+                !texto.toLowerCase().includes('acción')) {
                 headers.push(texto);
             }
         });
+
         datos.push(headers);
-        
-        // Filas del cuerpo de la tabla (solo las visibles)
+
+        /* =========================
+        FILAS
+        ========================== */
         tabla.querySelectorAll('tbody tr').forEach(fila => {
-            if (fila.style.display !== 'none') {
-                const rowData = [];
-                fila.querySelectorAll('td').forEach((td, index) => {
-                    // Omitir la última columna (acciones)
-                    const thCorrespondiente = tabla.querySelector(`thead th:nth-child(${index + 1})`);
-                    if (thCorrespondiente) {
-                        const textoTh = thCorrespondiente.textContent.trim();
-                        if (!textoTh.toLowerCase().includes('accion') && 
-                            !textoTh.toLowerCase().includes('acción') &&
-                            textoTh !== '#') {
-                            
-                            // Obtener texto limpio
-                            let texto = td.textContent.trim().replace(/\n/g, ' ').replace(/\s+/g, ' ');
-                            
-                            // Si tiene badge, tomar el texto del badge
-                            const badge = td.querySelector('.badge');
-                            if (badge) {
-                                texto = badge.textContent.trim();
-                            }
-                            
-                            // Si es la columna de índice, asegurar formato numérico
-                            if (textoTh.includes('Índice') || textoTh.includes('Indice')) {
-                                // Convertir a número si es posible
-                                const numero = parseFloat(texto.replace(',', '.'));
-                                if (!isNaN(numero)) {
-                                    texto = numero;
-                                }
-                            }
-                            
-                            // Si es la columna de costo o PVP, limpiar formato de moneda
-                            if (textoTh.includes('Costo') || textoTh.includes('PVP') || textoTh.includes('Precio')) {
-                                // Remover símbolo $ y convertir a número
-                                texto = texto.replace('$', '').trim();
-                                const numero = parseFloat(texto.replace(',', ''));
-                                if (!isNaN(numero)) {
-                                    texto = numero;
-                                }
-                            }
-                            
-                            rowData.push(texto);
-                        }
-                    }
-                });
-                datos.push(rowData);
-            }
+            if (fila.style.display === 'none') return;
+
+            const rowData = [];
+
+            // --- Columna A: ID producto ---
+            const checkbox = fila.querySelector('.checkProductoRotacion');
+            const productoId = checkbox ? checkbox.value : '';
+            const sucursal = checkbox ? checkbox.dataset.sucursal : '';
+
+            rowData.push(productoId);
+            rowData.push(sucursal);
+
+            // --- Resto de columnas ---
+            fila.querySelectorAll('td').forEach((td, index) => {
+                // Saltar Check (0) e Imagen (1)
+                if (index < 2) return;
+
+                const th = tabla.querySelector(`thead th:nth-child(${index + 1})`);
+                if (!th) return;
+
+                const textoTh = th.textContent.trim();
+
+                if (textoTh.toLowerCase().includes('accion') ||
+                    textoTh.toLowerCase().includes('acción')) {
+                    return;
+                }
+
+                let texto = td.textContent
+                    .trim()
+                    .replace(/\n/g, ' ')
+                    .replace(/\s+/g, ' ');
+
+                // Badge
+                const badge = td.querySelector('.badge');
+                if (badge) {
+                    texto = badge.textContent.trim();
+                }
+
+                // Índice
+                if (textoTh.includes('Índice') || textoTh.includes('Indice')) {
+                    const numero = parseFloat(texto.replace(',', '.'));
+                    if (!isNaN(numero)) texto = numero;
+                }
+
+                // Costo / PVP / Precio
+                if (textoTh.includes('Costo') || textoTh.includes('PVP') || textoTh.includes('Precio')) {
+                    texto = texto.replace('$', '').trim();
+                    const numero = parseFloat(texto.replace(',', ''));
+                    if (!isNaN(numero)) texto = numero;
+                }
+
+                rowData.push(texto);
+            });
+
+            datos.push(rowData);
         });
-        
-        // Verificar que hay datos
+
         if (datos.length <= 1) {
             alert('No hay datos para exportar');
             return;
         }
-        
-        // Crear workbook
+
+        /* =========================
+        EXCEL
+        ========================== */
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.aoa_to_sheet(datos);
-        
-        // Ajustar anchos de columna automáticamente
+
+        // Auto ancho columnas
         const maxColLengths = [];
         datos.forEach(row => {
             row.forEach((cell, colIndex) => {
-                const cellLength = String(cell).length;
-                if (!maxColLengths[colIndex] || cellLength > maxColLengths[colIndex]) {
-                    maxColLengths[colIndex] = cellLength;
-                }
+                const length = String(cell).length;
+                maxColLengths[colIndex] = Math.max(maxColLengths[colIndex] || 10, length);
             });
         });
-        
-        const colWidths = maxColLengths.map(length => ({ 
-            wch: Math.min(Math.max(length, 10), 50) // Mínimo 10, máximo 50 caracteres
+
+        ws['!cols'] = maxColLengths.map(l => ({
+            wch: Math.min(l, 50)
         }));
-        ws['!cols'] = colWidths;
-        
-        // Agregar hoja al workbook
+
         XLSX.utils.book_append_sheet(wb, ws, 'Indice Rotacion');
-        
-        // Generar y descargar archivo
+
         const fecha = new Date().toISOString().split('T')[0];
         XLSX.writeFile(wb, `Indice_Rotacion_${fecha}.xlsx`);
     }
@@ -1087,11 +1290,18 @@
             return; // No abrir el modal
         }
         
+        document.getElementById('nuevoPVP').value = '';
+        const alerta = document.getElementById('alertaValidacion');
+        const mensaje = document.getElementById('mensajeValidacion');
+        mensaje.textContent = '';
+        alerta.classList.add('d-none');
+        
         // Establecer la ruta del formulario
         const form = document.getElementById('formActualizarPVP');
         
         // Llenar información del producto
         document.getElementById('productoId').value = productoId;
+        document.getElementById('sucursalId').value = sucursalId;
         document.getElementById('productoCodigo').textContent = datos.codigo;
         document.getElementById('productoDescripcion').textContent = datos.descripcion;
         document.getElementById('productoExistencia').textContent = datos.existencia;
@@ -1156,6 +1366,453 @@
         const modal = bootstrap.Modal.getInstance(document.getElementById('modalActualizarPVP'));
         modal.hide();
     }
+
+    // Seleccionar o Deseleccionar todos
+    document.getElementById('checkAllRotacion')?.addEventListener('change', function() {
+        const marcados = document.querySelectorAll('.checkProductoRotacion');
+        marcados.forEach(chk => chk.checked = this.checked);
+    });
+
+    document.getElementById('filtroValoracion').addEventListener('change', function () {
+        const valor = this.value;
+        const filas = document.querySelectorAll('#tablaIndiceRotacion tbody tr');
+
+        filas.forEach(fila => {
+            const rating = fila.getAttribute('data-rating');
+
+            if (!valor || rating === valor) {
+                fila.style.display = '';
+            } else {
+                fila.style.display = 'none';
+            }
+        });
+    });
+
+    function cambiosPVP(sucursalId, _sucursalNombre) {
+        sucursalIdActual = sucursalId;
+        sucursalNombre = _sucursalNombre;
+
+        if (sucursalId === 0 || sucursalId === '0') {
+            mostrarAlertaSucursalNoSeleccionada();
+            return;
+        }
+
+        if (productosActualizados.length === 0) {
+            showToast('No hay productos con cambios de PVP para descargar', 'info');
+            return;
+        }
+
+        // Crear libro
+        const wb = XLSX.utils.book_new();
+        const nombreArchivo = `CambioDePrecios-${new Date().toISOString().slice(0,10)}.xlsx`;
+
+        // Construir datos: encabezados + productos
+        const dataExcel = [];
+
+        // Encabezados tipo .NET
+        dataExcel.push(['CAMBIO DE PRECIOS']);
+        dataExcel.push([`Sucursal: ${sucursalNombre}`]);
+        dataExcel.push([`Fecha: ${new Date().toLocaleDateString()}`]);
+        dataExcel.push([]); // fila vacía
+        dataExcel.push(['Productos']);
+        dataExcel.push(['CODIGO', 'REFERENCIA', 'DESCRIPCION', 'PVP ANTERIOR', 'NUEVO PVP']);
+
+        // Agregar productos
+        productosActualizados.forEach(prod => {
+            dataExcel.push([
+                prod.Codigo,
+                prod.Referencia ?? 'N/A',
+                prod.Descripcion,
+                prod.PvpAnterior ?? 0,
+                prod.NuevoPvp
+            ]);
+        });
+
+        // Crear hoja
+        const ws = XLSX.utils.aoa_to_sheet(dataExcel);
+        XLSX.utils.book_append_sheet(wb, ws, 'Cambio de Precios');
+
+        // Descargar archivo
+        XLSX.writeFile(wb, nombreArchivo);
+
+        showToast(`Se ha generado el Excel con ${productosActualizados.length} productos`, 'success');
+    }
+
+    function descargarSeleccionadas(sucursalId, _sucursalNombre) {
+        sucursalIdActual = sucursalId;
+        sucursalNombre = _sucursalNombre;
+
+        if (sucursalId === 0 || sucursalId === '0') {
+            mostrarAlertaSucursalNoSeleccionada();
+            return;
+        }
+
+        const tabla = document.getElementById('tablaIndiceRotacion');
+
+        if (!tabla) {
+            showToast('No se encontró la tabla para exportar', 'info');
+            return;
+        }
+
+        const datos = [];
+
+        // Encabezados
+        const headers = ['ID', 'Sucursal'];
+        tabla.querySelectorAll('thead th').forEach((th, index) => {
+            if (index < 2) return; // Saltar Check e Imagen
+            const texto = th.textContent.trim();
+            if (!texto.toLowerCase().includes('accion') && !texto.toLowerCase().includes('acción')) {
+                headers.push(texto);
+            }
+        });
+        datos.push(headers);
+
+        // Recorrer filas seleccionadas
+        tabla.querySelectorAll('tbody tr').forEach(fila => {
+            const checkbox = fila.querySelector('.checkProductoRotacion');
+            if (checkbox && checkbox.checked) {
+                const rowData = [];
+
+                // Columna ID
+                rowData.push(fila.dataset.id || '');
+
+                // Columna Sucursal
+                rowData.push(sucursalIdActual);
+
+                fila.querySelectorAll('td').forEach((td, index) => {
+                    if (index < 2) return; // Saltar Check e Imagen
+                    const thCorrespondiente = tabla.querySelector(`thead th:nth-child(${index + 1})`);
+                    if (!thCorrespondiente) return;
+                    const textoTh = thCorrespondiente.textContent.trim();
+                    if (!textoTh.toLowerCase().includes('accion') && !textoTh.toLowerCase().includes('acción')) {
+                        let texto = td.textContent.trim().replace(/\n/g, ' ').replace(/\s+/g, ' ');
+
+                        // Si tiene badge, tomar texto
+                        const badge = td.querySelector('.badge');
+                        if (badge) texto = badge.textContent.trim();
+
+                        // Convertir índice a número
+                        if (textoTh.includes('Índice') || textoTh.includes('Indice')) {
+                            const numero = parseFloat(texto.replace(',', '.'));
+                            if (!isNaN(numero)) texto = numero;
+                        }
+
+                        // Limpiar moneda
+                        if (textoTh.includes('Costo') || textoTh.includes('PVP') || textoTh.includes('Precio')) {
+                            texto = texto.replace('$', '').trim();
+                            const numero = parseFloat(texto.replace(',', ''));
+                            if (!isNaN(numero)) texto = numero;
+                        }
+
+                        rowData.push(texto);
+                    }
+                });
+
+                datos.push(rowData);
+            }
+        });
+
+        if (datos.length <= 1) {
+            showToast('No hay productos seleccionados para exportar', 'warning');
+
+            return;
+        }
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(datos);
+
+        // Ajustar anchos de columna
+        const maxColLengths = [];
+        datos.forEach(row => {
+            row.forEach((cell, colIndex) => {
+                const cellLength = String(cell).length;
+                if (!maxColLengths[colIndex] || cellLength > maxColLengths[colIndex]) {
+                    maxColLengths[colIndex] = cellLength;
+                }
+            });
+        });
+        ws['!cols'] = maxColLengths.map(length => ({ wch: Math.min(Math.max(length, 10), 50) }));
+
+        XLSX.utils.book_append_sheet(wb, ws, 'Productos Seleccionados');
+
+        const fecha = new Date().toISOString().split('T')[0];
+        XLSX.writeFile(wb, `Productos_Rotacion_${fecha}.xlsx`);
+
+        showToast(`Se ha generado el Excel con ${datos.length - 1} productos`, 'success');
+    }
+
+    function ingresarPorcentaje(sucursalId, _sucursalNombre) {
+        const tablaPrincipal = document.getElementById('tablaIndiceRotacion');
+        if (!tablaPrincipal) return;
+
+        const filasSeleccionadas = [];
+        tablaPrincipal.querySelectorAll('tbody tr').forEach(fila => {
+            const checkbox = fila.querySelector('.checkProductoRotacion');
+            if (checkbox && checkbox.checked) {
+                filasSeleccionadas.push(fila);
+            }
+        });
+
+        if (filasSeleccionadas.length === 0) {
+            showToast('No hay productos seleccionados', 'warning');
+            return;
+        }
+
+        // Vaciar la tabla del modal
+        const tbodyModal = document.querySelector('#tablaPorcentaje tbody');
+        tbodyModal.innerHTML = '';
+
+        // Recorrer productos seleccionados y agregarlos al modal
+        filasSeleccionadas.forEach(fila => {
+            const checkbox = fila.querySelector('.checkProductoRotacion');
+            const productoId = checkbox.value;
+            const sucursalIdFila = checkbox.dataset.sucursal || sucursalId;
+
+            const cols = fila.querySelectorAll('td');
+            const codigo = cols[2].textContent.trim();
+            const descripcion = cols[3].textContent.trim();
+            const existencia = cols[4].textContent.trim();
+            const ventas = cols[5].textContent.trim();
+            const costo = cols[6].textContent.trim();
+            const pvp = cols[7].textContent.trim();
+            const indice = cols[8].textContent.trim();
+            const ultimaVenta = cols[9].textContent.trim();
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${productoId}</td>
+                <td>${sucursalIdFila}</td>
+                <td>${codigo}</td>
+                <td>${descripcion}</td>
+                <td>${existencia}</td>
+                <td>${ventas}</td>
+                <td>${costo}</td>
+                <td class="pvp">${pvp}</td>
+                <td>${indice}</td>
+                <td>${ultimaVenta}</td>
+            `;
+            tbodyModal.appendChild(tr);
+        });
+
+        // Abrir modal
+        const modal = new bootstrap.Modal(document.getElementById('modalPorcentaje'));
+        modal.show();
+    }
+
+    // Versión CORREGIDA de aplicarPorcentajeConfirmado:
+    async function aplicarPorcentajeConfirmado() {
+        const porcentaje = parseFloat(document.getElementById('inputPorcentaje').value);
+        if (isNaN(porcentaje) || porcentaje === 0) {
+            showToast('Ingrese un porcentaje válido distinto de 0', 'warning');
+            return;
+        }
+
+        const filas = document.querySelectorAll('#tablaPorcentaje tbody tr');
+        if (filas.length === 0) {
+            showToast('No hay productos seleccionados', 'info');
+            return;
+        }
+
+        const result = await Swal.fire({
+            title: '¿Confirmar cambios de precios?',
+            html: `<p>Porcentaje: <b>${porcentaje}%</b></p>
+                <p>Productos: <b>${filas.length}</b></p>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, actualizar',
+            cancelButtonText: 'Cancelar'
+        });
+
+        if (!result.isConfirmed) return;
+
+        // 🔄 Mostrar cargando
+        Swal.fire({
+            title: 'Aplicando porcentaje...',
+            text: `0 de ${filas.length} productos procesados`,
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        let exitosos = 0;
+        let errores = [];
+
+        try {
+            for (let i = 0; i < filas.length; i++) {
+                const fila = filas[i];
+                
+                // Actualizar progreso
+                Swal.update({
+                    text: `${i + 1} de ${filas.length} productos procesados`
+                });
+
+                // OBTENER DATOS DE LAS CELDAS (CORRECCIÓN)
+                const celdas = fila.querySelectorAll('td');
+                
+                // Las celdas están en este orden según tu HTML:
+                // 0: ID, 1: Sucursal, 2: Código, 3: Descripción, 4: Existencia, 
+                // 5: Ventas, 6: Costo, 7: PVP (con clase .pvp), 8: Índice, 9: Última Venta
+                
+                const productoId = celdas[0].textContent.trim();
+                const sucursalId = celdas[1].textContent.trim();
+                const tdPvp = celdas[7]; // Esto es el elemento td con clase .pvp
+                
+                // Extraer PVP actual (quitar símbolos)
+                const pvpTexto = tdPvp.textContent.trim();
+                const pvpActual = parseFloat(
+                    pvpTexto.replace(/[^\d.-]/g, '')
+                );
+
+                if (isNaN(pvpActual) || pvpActual <= 0) {
+                    errores.push(`Producto ${productoId}: PVP inválido (${pvpTexto})`);
+                    continue;
+                }
+
+                // Calcular nuevo PVP
+                const nuevoPvp = parseFloat(
+                    (pvpActual * (1 + porcentaje / 100)).toFixed(2)
+                );
+
+                if (nuevoPvp <= 0) {
+                    errores.push(`Producto ${productoId}: Nuevo PVP inválido (${nuevoPvp})`);
+                    continue;
+                }
+
+                console.log(`Enviando request para producto ${productoId}:`, {
+                    producto_id: productoId,
+                    sucursal_id: sucursalId,
+                    nuevo_pvp: nuevoPvp
+                });
+
+                // Hacer la petición
+                const res = await fetch('{{ url("/ruta/actualizar-pvp") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({
+                        producto_id: productoId,
+                        sucursal_id: sucursalId,
+                        nuevo_pvp: nuevoPvp
+                    })
+                });
+
+                // DEBUG: Ver qué responde el servidor
+                const responseText = await res.text();
+                console.log('Respuesta raw:', responseText);
+
+                try {
+                    const data = JSON.parse(responseText);
+                    
+                    if (data.success) {
+                        // 1. Actualizar celda en tabla principal
+                        const filaPrincipal = document.querySelector(
+                            `#tablaIndiceRotacion tr[data-id="${productoId}"]`
+                        );
+                        if (filaPrincipal) {
+                            const celdaPVP = filaPrincipal.querySelector('.celdaPVP');
+                            if (celdaPVP) {
+                                celdaPVP.textContent = `$${parseFloat(data.data.pvp_actual).toFixed(2)}`;
+                            }
+                        }
+
+                        // 2. Actualizar tabla del modal
+                        tdPvp.textContent = `$${nuevoPvp.toFixed(2)}`;
+
+                        // 3. Actualizar array global
+                        const productoDTO = {
+                            Id: parseInt(productoId),
+                            Codigo: data.data.codigo,
+                            Descripcion: data.data.descripcion,
+                            PvpAnterior: data.data.pvp_anterior,
+                            NuevoPvp: nuevoPvp,
+                            CostoDivisa: data.data.costo_divisa
+                        };
+
+                        const index = productosActualizados.findIndex(p => p.Id == productoId);
+                        if (index >= 0) {
+                            productosActualizados[index] = productoDTO;
+                        } else {
+                            productosActualizados.push(productoDTO);
+                        }
+
+                        exitosos++;
+                    } else {
+                        errores.push(`Producto ${productoId}: ${data.message || 'Error del servidor'}`);
+                    }
+                } catch (jsonError) {
+                    console.error('Error parseando JSON:', jsonError);
+                    console.error('Respuesta del servidor:', responseText);
+                    errores.push(`Producto ${productoId}: Respuesta no válida del servidor`);
+                }
+
+                // Pequeña pausa para no saturar
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+
+            // Cerrar modal
+            const modal = bootstrap.Modal.getInstance(
+                document.getElementById('modalPorcentaje')
+            );
+            if (modal) modal.hide();
+
+            // Mostrar resultado
+            Swal.fire({
+                title: exitosos === filas.length ? '¡Completado!' : 'Proceso finalizado',
+                html: `<div class="text-start">
+                        <p>✅ <b>${exitosos}</b> productos actualizados correctamente</p>
+                        ${errores.length > 0 ? `
+                            <p class="mt-2">❌ <b>${errores.length}</b> errores:</p>
+                            <ul class="small text-danger">
+                                ${errores.map(error => `<li>${error}</li>`).join('')}
+                            </ul>
+                        ` : ''}
+                    </div>`,
+                icon: exitosos > 0 ? 'success' : 'error',
+                confirmButtonText: 'Aceptar'
+            });
+
+        } catch (error) {
+            console.error('Error general:', error);
+            Swal.fire({
+                title: 'Error',
+                text: 'Error inesperado: ' + error.message,
+                icon: 'error'
+            });
+        }
+    }
+
+    function mostrarCargando(texto = 'Procesando...') {
+        const loading = document.createElement('div');
+        loading.id = 'overlayLoading';
+        loading.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        `;
+        loading.innerHTML = `
+            <div style="text-align:center; color:white">
+                <div class="spinner-border text-light"></div>
+                <p class="mt-2">${texto}</p>
+            </div>
+        `;
+        document.body.appendChild(loading);
+    }
+
+    function ocultarCargando() {
+        const loading = document.getElementById('overlayLoading');
+        if (loading) loading.remove();
+    }
+
 </script>
 
 <style>

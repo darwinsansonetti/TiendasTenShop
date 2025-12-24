@@ -380,6 +380,8 @@ class CpanelController extends Controller
         // 5️⃣ Obtener sucursal activa
         $sucursalId = session('sucursal_id');
 
+        // dd($sucursalId);
+
         // 6️⃣ Llamar al servicio igual que en .NET
         // $balanceSucursal = GeneralHelper::buscarValoresEstadoDeCuentaSucursal(
         //     $filtroFecha,
@@ -476,6 +478,8 @@ class CpanelController extends Controller
 
         // 5️⃣ Obtener sucursal activa
         $sucursalId = session('sucursal_id');
+
+        // dd($sucursalId);
 
         $indices = GeneralHelper::ObtenerIndiceRotacion($filtroFecha, $sucursalId);
 

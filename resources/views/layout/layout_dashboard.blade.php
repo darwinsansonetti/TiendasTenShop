@@ -1,5 +1,7 @@
 @php
     use App\Helpers\FileHelper;
+
+    $db = config('database.connections.' . config('database.default') . '.database');
 @endphp
 
 <!doctype html>
@@ -86,6 +88,7 @@
   <!--begin::Body-->
 
   <body class="layout-fixed sidebar-expand-lg sidebar-open bg-body-tertiary">
+
     <!--begin::App Wrapper-->
     <div class="app-wrapper">
       <!--begin::Header-->
@@ -426,7 +429,17 @@
             <!--end::Brand Text-->
           </a>
           <!--end::Brand Link-->
-        </div>
+        </div>        
+
+        @if(Str::contains($db, 'develop'))
+          <span class="badge bg-warning text-dark"
+                data-bs-toggle="tooltip"
+                data-bs-placement="left"
+                title="Base de datos activa: {{ $db }}">
+              ⚠ DEVELOPER
+          </span>
+        @endif
+        
         <!--end::Sidebar Brand-->
         <!--begin::Sidebar Wrapper-->
         <div class="sidebar-wrapper">
@@ -1388,6 +1401,11 @@
                 }
             });
           });
+
+          var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+          tooltipTriggerList.map(function (tooltipTriggerEl) {
+              return new bootstrap.Tooltip(tooltipTriggerEl)
+          })
       });
 
       // Función para limpiar formulario

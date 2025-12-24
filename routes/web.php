@@ -9,6 +9,7 @@ use App\Http\Controllers\CpanelController;
 use App\Http\Controllers\DivisasController;
 use App\Http\Controllers\MensajesController;
 use App\Http\Controllers\SucursalController;
+use App\Http\Controllers\ProductoController;
 
 /*
 |--------------------------------------------------------------------------
@@ -88,6 +89,9 @@ Route::middleware('auth')->group(function() {
 
     // Comparativa de precios
     Route::get('/cpanel/baja/demanda', [CpanelController::class, 'baja_demanda'])->name('cpanel.baja.ventas');
+
+    // Actualizar PVP de un producto
+    Route::post('/ruta/actualizar-pvp', [ProductoController::class, 'actualizarPVP']);
 });
 
 
