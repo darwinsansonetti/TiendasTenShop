@@ -31,12 +31,33 @@ class AppServiceProvider extends ServiceProvider
         // Tu código existente
         View::composer('layout.layout_dashboard', function ($view) {
             $tasa = GeneralHelper::obtenerTasaCambioDiaria(now());
+
+            // Obtener Tasa Paralelo
+            $valorParalelo = DB::table('Paralelo')
+                ->orderByDesc('id')
+                ->first();
+
+            $paralelo = $valorParalelo ? $valorParalelo->valor : 0;
+
             $listaSucursales = Cache::remember('lista_sucursales', 3600, function() {
                 return GeneralHelper::buscarSucursales(0);
             });
             $user = Auth::user();
 
-            $view->with(compact('tasa', 'listaSucursales', 'user'));
+            $view->with(compact('tasa', 'listaSucursales', 'user', 'paralelo'));
+        });
+
+        // 🚀 IMPORTANTE: También compartir con las vistas que usan el layout
+        View::composer('cpanel.resumen.indice_rotacion', function ($view) {
+            // Reutilizar los mismos datos del layout
+            $tasa = GeneralHelper::obtenerTasaCambioDiaria(now());
+            
+            $valorParalelo = DB::table('Paralelo')
+                ->orderByDesc('id')
+                ->first();
+            $paralelo = $valorParalelo ? $valorParalelo->valor : 0;
+            
+            $view->with(compact('tasa', 'paralelo'));
         });
     }
 

@@ -10,6 +10,7 @@ use App\Helpers\GeneralHelper;
 use App\Helpers\ParametrosFiltroFecha;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class CpanelController extends Controller
 {
@@ -20,6 +21,13 @@ class CpanelController extends Controller
 
         // Obtener Tasa del Día desde Helpers
         $tasa = GeneralHelper::obtenerTasaCambioDiaria(now());
+
+        // Obtener Tasa Paralelo
+        $valorParalelo = DB::table('Paralelo')
+            ->orderByDesc('id')
+            ->first();
+
+        $paralelo = $valorParalelo ? $valorParalelo->valor : 0;
 
         // // 🔹 Usar cache para la tasa diaria
         // $tasa = Cache::remember('tasa_diaria_' . now()->format('Y-m-d'), 3600, function() {
@@ -128,7 +136,8 @@ class CpanelController extends Controller
             'rankingSucursales',
             'graficaSucursalesMeses',
             'graficaProduccionMes',
-            'rankingVendedor'
+            'rankingVendedor',            
+            'paralelo'
         ));
     }
 
@@ -311,7 +320,7 @@ class CpanelController extends Controller
         // dd($totalDivisa);
 
         // Top 10 Productos mas vendidos
-        $topTen = $dtoVenta->getListaItemsTopTenPeriodo();
+        $topTen = $dtoVenta->getListaItemsTopTenPeriodo() ?? [];
 
         // Filtrar cualquier item cuyo Código sea "SALDO"
         $topTen = array_filter($topTen, function($item) {
@@ -489,12 +498,12 @@ class CpanelController extends Controller
         //     . ($fechaFin ? $fechaFin->format('Ymd') : 'null');
 
         // // 🧠 Cache por 5 minutos (ajusta si quieres)
-        // $indices = Cache::remember($cacheKey, 3600, function () use ($filtroFecha) {
-        //     return GeneralHelper::ObtenerIndiceRotacion($filtroFecha);
+        // $indices = Cache::remember($cacheKey, 3600, function () use ($filtroFecha, $sucursalId) {
+        //     return GeneralHelper::ObtenerIndiceRotacion($filtroFecha, $sucursalId);
         // });
 
         // dd($indices);
-        // dd($indices->detalles->first()->producto);
+        // dd($indices->detalles);
 
         session([
             'menu_active' => 'Informes - Resumen',

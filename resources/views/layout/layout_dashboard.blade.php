@@ -9,7 +9,7 @@
   <!--begin::Head-->
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <title>@yield('title', 'TiensasTenShop | Dashboard')</title>
+    <title>@yield('title', 'TiendasTenShop | Dashboard')</title>
     <!--begin::Accessibility Meta Tags-->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
     <meta name="color-scheme" content="light dark" />
@@ -131,15 +131,25 @@
                     <!-- Tasa Actual -->
                     <div class="alert alert-light py-2 mb-3">
                         <div class="text-center">
-                            <div id="tasa-actual-texto" class="h5 mb-1 text-success">
+                            <div id="tasa-actual-texto" class="h5 mb-1 text-success" data-tasa="{{ $tasa && $tasa['DivisaValor'] ? $tasa['DivisaValor']['Valor'] : 0 }}">
                                 @if($tasa && $tasa['DivisaValor'])
                                     {{ number_format($tasa['DivisaValor']['Valor'], 2) }} Bs
                                 @else
                                     0.00 Bs
                                 @endif
                             </div>
-                            <small class="text-muted">1 Dólar Americano</small>
+                            <small class="text-muted">Dólar BCV</small>
                         </div>
+                    </div>
+
+                    <!-- Dólar Paralelo -->
+                    <div class="alert alert-light py-2 mt-2">
+                      <div class="text-center">
+                        <div id="tasa-actual-texto-paralelo" class="h5 mb-1 text-warning" data-tasa="{{ $paralelo ?? 0 }}">
+                            {{ number_format($paralelo ?? 0, 2) }} Bs
+                        </div>
+                        <small class="text-muted">Dólar Paralelo</small>
+                      </div>
                     </div>
 
                     <!-- Formulario -->
@@ -148,7 +158,7 @@
                         @csrf
                         <div class="mb-3">
                             <label for="nueva-tasa" class="form-label small fw-semibold">
-                                Nueva Tasa (Bs por USD)
+                                Ingresa Tasa BCV
                             </label>
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text">1 USD =</span>
@@ -163,19 +173,31 @@
                                       required>
                                 <span class="input-group-text">Bs</span>
                             </div>
-                            <div class="form-text">
-                                @if($tasa && $tasa['DivisaValor'])
-                                    Ingrese el nuevo valor de cambio
-                                @else
-                                    <span class="text-warning">Registre la tasa del día</span>
-                                @endif
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="nueva-tasa-paralelo" class="form-label small fw-semibold">
+                                Ingresa Tasa Paralelo
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">1 USD =</span>
+                                <input type="number" 
+                                      class="form-control" 
+                                      id="nueva-tasa-paralelo" 
+                                      name="valor_paralelo"
+                                      step="0.01" 
+                                      min="0.01" 
+                                      placeholder="0.00"
+                                      value="{{ $paralelo ?? '0.00' }}"
+                                      required>
+                                <span class="input-group-text">Bs</span>
                             </div>
                         </div>
 
                         <div class="d-grid gap-2">
                             <button type="submit" class="btn btn-primary btn-sm">
                                 <i class="bi bi-check-circle me-1"></i>
-                                {{ $tasa && $tasa['DivisaValor'] ? 'Actualizar Tasa' : 'Guardar Tasa' }}
+                                Guardar
                             </button>
                         </div>
                     </form>
@@ -431,7 +453,7 @@
           <!--end::Brand Link-->
         </div>        
 
-        @if(Str::contains($db, 'develop'))
+        @if(Str::contains($db, 'db_a509ee_tenshop2026'))
           <span class="badge bg-warning text-dark"
                 data-bs-toggle="tooltip"
                 data-bs-placement="left"
@@ -1215,12 +1237,14 @@
         e.preventDefault();
 
         const valor = document.getElementById('nueva-tasa').value;
+        const valorParalelo = document.getElementById('nueva-tasa-paralelo').value;
         const loading = document.getElementById('loading-tasa');
 
         loading.style.display = 'block';
 
         let formData = new FormData();
         formData.append("valor", valor);
+        formData.append("valor_paralelo", valorParalelo);
 
         fetch("{{ route('divisas.guardarTasa') }}", {
             method: "POST",
@@ -1235,8 +1259,28 @@
               // Actualizar tasa del dia
                 document.querySelector('#tasa-actual-texto').innerText = parseFloat(valor).toFixed(2) + " Bs";
                 // Actualizar el widget de tasa
-                document.getElementById('widget-tasa-dia').innerText = parseFloat(valor).toFixed(2) + " Bs";
+                //document.getElementById('widget-tasa-dia').innerText = parseFloat(valor).toFixed(2) + " Bs";
+                const widgetTasaDia = document.getElementById('widget-tasa-dia');
+                if (widgetTasaDia) {
+                    widgetTasaDia.innerText = parseFloat(valor).toFixed(2) + " Bs";
+                }
+
+                // Valor de dolar paralelo
+                document.querySelector('#tasa-actual-texto-paralelo').innerText = parseFloat(valorParalelo).toFixed(2) + " Bs";
+                //document.getElementById('widget-tasa-paralelo').innerText = parseFloat(valorParalelo).toFixed(2) + " Bs";
+                const widgetTasaParalelo = document.getElementById('widget-tasa-paralelo');
+                if (widgetTasaParalelo) {
+                    widgetTasaParalelo.innerText = parseFloat(valorParalelo).toFixed(2) + " Bs";
+                }
+                
                 showToast(res.message, "success");
+
+                // 👉 SOLO recargar si está en índice de rotación
+                if (window.location.pathname.includes('indice/rotacion')) {
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 800);
+                }
             } else {
                 showToast("Ocurrió un problema al guardar la tasa", "danger");
             }

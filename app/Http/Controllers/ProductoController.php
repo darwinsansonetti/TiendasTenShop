@@ -61,6 +61,7 @@ class ProductoController extends Controller
             'descripcion' => $producto->Descripcion,
             'pvp_actual' => $productoSucursal->NuevoPvp,
             'pvp_anterior' => $productoSucursal->PvpAnterior,
+            'costo_divisa' => $producto->CostoDivisa, // <--- AGREGAR
             'margen_nuevo_precio' => $producto->CostoDivisa != 0 
                                     ? round((($productoSucursal->NuevoPvp * 100) / $producto->CostoDivisa) - 100, 2) 
                                     : 0,

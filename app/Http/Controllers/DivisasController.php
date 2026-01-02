@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\DivisaValor;
+use Illuminate\Support\Facades\DB;
 
 class DivisasController extends Controller
 {
@@ -11,7 +12,8 @@ class DivisasController extends Controller
     public function guardarTasa(Request $request)
     {
         $request->validate([
-            'valor' => 'required|numeric|min:0.01'
+            'valor'           => 'required|numeric|min:0.01',
+            'valor_paralelo'  => 'required|numeric|min:0.01',
         ]);
 
         // La divisa por defecto (igual que en .NET)
@@ -32,6 +34,24 @@ class DivisasController extends Controller
                 'DivisaId' => $divisaId,
                 'Fecha'    => now(),
                 'Valor'    => $request->valor
+            ]);
+        }
+
+        $paralelo = DB::table('Paralelo')
+            ->whereDate('fecha', now())
+            ->orderByDesc('id')
+            ->first();
+
+        if ($paralelo) {
+            DB::table('Paralelo')
+                ->where('id', $paralelo->id)
+                ->update([
+                    'valor' => $request->valor_paralelo
+                ]);
+        } else {
+            DB::table('Paralelo')->insert([
+                'valor' => $request->valor_paralelo,
+                'fecha' => now()
             ]);
         }
 

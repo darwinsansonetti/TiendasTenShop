@@ -291,6 +291,38 @@
                                 } else {
                                     $estrellas = 1;
                                 }
+
+                                // Valores base
+                                $costo = $detalle->producto['costo_divisa'] ?? 0;
+
+                                $pvpActual = ($detalle->producto['nuevo_pvp'] ?? 0) > 0
+                                    ? ($detalle->producto['nuevo_pvp'] ?? 0)
+                                    : ($detalle->producto['pvp_divisa'] ?? 0);
+
+                                // Utilidad
+                                $utilidad = ($costo > 0 && $pvpActual > 0)
+                                    ? round($pvpActual - $costo, 2)
+                                    : 0;
+
+                                // Margen
+                                $margen = ($costo > 0 && $pvpActual > 0)
+                                    ? round((($pvpActual * 100) / $costo) - 100, 2)
+                                    : 0;
+
+                                // Paralelo
+                                $pvpBase = (($detalle->producto['nuevo_pvp'] ?? 0) > 0)
+                                    ? ($detalle->producto['nuevo_pvp'] ?? 0)
+                                    : ($detalle->producto['pvp_divisa'] ?? 0);
+
+                                // Tasas
+                                $tasaBCV = $tasa['DivisaValor']['Valor'] ?? 0;
+                                $tasaParalelo = $paralelo ?? 0;
+
+                                // Monto en dólares paralelos
+                                $montoParalelo = ($pvpBase > 0 && $tasaBCV > 0 && $tasaParalelo > 0)
+                                    ? round(($pvpBase * $tasaParalelo) / $tasaBCV, 2)
+                                    : 0;
+
                             @endphp
                             <tr class="align-middle" data-id="{{ $detalle->producto['id'] }}" data-rating="{{ $estrellas }}">
                                 <td class="text-center">
@@ -349,8 +381,28 @@
                                 </td>
                                 
                                 <!-- PVP -->
-                                <td class="text-center fw-bold text-success celdaPVP">
-                                    ${{ number_format($detalle->producto['nuevo_pvp'] ?? $detalle->producto['pvp_divisa'] ?? 0, 2) }}
+                                <td class="text-center celdaPVP align-middle">
+                                    <div class="d-flex flex-column">
+                                        <!-- Precio -->
+                                        <div class="fw-bold text-success precioPVP">
+                                            ${{ number_format((($detalle->producto['nuevo_pvp'] ?? 0) > 0) ? ($detalle->producto['nuevo_pvp'] ?? 0) : ($detalle->producto['pvp_divisa'] ?? 0), 2) }}
+                                        </div>
+                                        
+                                        <!-- Utilidad y Margen -->
+                                        <span class="badge badge-utilidad {{ $utilidad >= 0 ? 'bg-success bg-opacity-10 text-success' : 'bg-danger bg-opacity-10 text-danger' }}">
+                                            U: ${{ number_format($utilidad, 2) }}
+                                        </span>
+
+                                        <!-- Margen -->
+                                        <span class="badge badge-margen {{ $margen >= 0 ? 'bg-success bg-opacity-10 text-success' : 'bg-warning bg-opacity-10 text-warning' }}">
+                                            M: {{ number_format($margen, 2) }}%
+                                        </span>
+
+                                        <!-- Paralelo -->
+                                        <span id="paralelo-{{ $detalle->producto['id'] }}">
+                                            P: {{ number_format($montoParalelo, 2) }}$
+                                        </span>
+                                    </div>
                                 </td>
                                 
                                 <!-- Índice Rotación -->
@@ -388,22 +440,31 @@
                                     <div class="btn-group" role="group">
                                         <!-- Botón para actualizar PVP -->
                                         <button type="button" 
-                                                class="btn btn-sm btn-outline-warning ms-1" 
-                                                data-bs-toggle="tooltip" 
-                                                title="Actualizar PVP"
-                                                onclick="abrirModalActualizarPVP({{ $detalle->producto['id'] }}, {{ session('sucursal_id', 0) }}, 
-                                                {{ json_encode([
-                                                    'codigo' => $detalle->producto['codigo'],
-                                                    'descripcion' => $detalle->producto['descripcion'],
-                                                    'pvp_actual' => $detalle->producto['nuevo_pvp'] ?? $detalle->producto['pvp_divisa'] ?? 0,
-                                                    'pvp_anterior' => $detalle->producto['pvp_anterior'] ?? $detalle->producto['pvp_divisa'] ?? 0,
-                                                    'nuevo_pvp' => $detalle->producto['nuevo_pvp'] ?? $detalle->producto['pvp_divisa'] ?? 0,
-                                                    'fecha_nuevo_precio' => $detalle->producto['fecha_nuevo_precio'] ? $detalle->producto['fecha_nuevo_precio']->format('Y-m-d H:i:s') : null,
-                                                    'existencia' => $detalle->producto['existencia'] ?? 0,
-                                                    'costo_divisa' => $detalle->producto['costo_divisa'] ?? 0,
-                                                    'url_foto' => $urlImagen  // ¡Agregar esta línea!
-                                                ]) }})">
-                                            <i class="bi bi-currency-dollar"></i> <!-- Icono de moneda/dólar -->
+                                            class="btn btn-sm btn-outline-warning ms-1" 
+                                            data-bs-toggle="tooltip" 
+                                            title="Actualizar PVP"
+                                            onclick="abrirModalActualizarPVP({{ $detalle->producto['id'] }}, {{ session('sucursal_id', 0) }}, 
+                                            {{ json_encode([
+                                                'codigo' => $detalle->producto['codigo'],
+                                                'descripcion' => $detalle->producto['descripcion'],
+                                                
+                                                // CORREGIDO: Mostrar pvp_divisa si nuevo_pvp es 0
+                                                'pvp_actual' => (floatval($detalle->producto['nuevo_pvp'] ?? 0) > 0) 
+                                                                ? $detalle->producto['nuevo_pvp'] 
+                                                                : ($detalle->producto['pvp_divisa'] ?? 0),
+                                                
+                                                // pvp_anterior: similar lógica si es necesario
+                                                'pvp_anterior' => $detalle->producto['pvp_anterior'] ?? 0,
+                                                
+                                                // nuevo_pvp: mostrar el valor real (aunque sea 0)
+                                                'nuevo_pvp' => $detalle->producto['nuevo_pvp'] ?? 0,
+                                                
+                                                'fecha_nuevo_precio' => $detalle->producto['fecha_nuevo_precio'] ? $detalle->producto['fecha_nuevo_precio']->format('Y-m-d H:i:s') : null,
+                                                'existencia' => $detalle->producto['existencia'] ?? 0,
+                                                'costo_divisa' => $detalle->producto['costo_divisa'] ?? 0,
+                                                'url_foto' => $urlImagen
+                                            ]) }})">
+                                            <i class="bi bi-currency-dollar"></i>
                                         </button>
                                         
                                         <button type="button" 
@@ -496,7 +557,9 @@
                             </div>
                             <div class="col-6">
                                 <p class="mb-1"><strong>PVP Actual:</strong> <span id="productoPVPActual" class="text-success fw-bold"></span></p>
-                                <p class="mb-1"><strong>PVP Anterior:</strong> <span id="productoPVPAnterior" class="text-muted"></span></p>
+                                <p class="mb-1" style="display: none;">
+                                    <strong>PVP Anterior:</strong> <span id="productoPVPAnterior" class="text-muted"></span>
+                                </p>
                                 <p class="mb-1"><strong>Último Cambio:</strong> <span id="productoFechaCambio" class="text-info"></span></p>
                             </div>
                         </div>
@@ -628,8 +691,8 @@
         // Recorrer todas las filas de la tabla, empezando desde la 1 (omitir encabezado)
         for (i = 1; i < tr.length; i++) {
             // Obtener celdas de código (columna 2) y descripción (columna 3)
-            tdCodigo = tr[i].getElementsByTagName("td")[1]; // Índice 1 para código
-            tdDescripcion = tr[i].getElementsByTagName("td")[2]; // Índice 2 para descripción
+            tdCodigo = tr[i].getElementsByTagName("td")[2]; // Índice 1 para código
+            tdDescripcion = tr[i].getElementsByTagName("td")[3]; // Índice 2 para descripción
             
             if (tdCodigo && tdDescripcion) {
                 txtValueCodigo = tdCodigo.textContent || tdCodigo.innerText;
@@ -690,11 +753,6 @@
                 mensajeValidacion.innerText = 'El PVP debe ser mayor a 0';
                 return;
             }
-            
-            if (nuevoPVP === pvpActual) {
-                mensajeValidacion.innerText = 'El nuevo PVP no puede ser igual al actual';
-                return;
-            }
 
             // Si pasa las validaciones, ya no hay mensajes
             mensajeValidacion.innerText = '';
@@ -702,10 +760,10 @@
             // if (!confirm(`¿Está seguro de cambiar el PVP de $${pvpActual.toFixed(2)} a $${nuevoPVP.toFixed(2)}?`)) return;
             Swal.fire({
                 title: '¿Confirmar cambio de precio?',
-                html: `
-                    <p class="mb-1">PVP actual: <b>$${pvpActual.toFixed(2)}</b></p>
-                    <p class="mb-1">Nuevo PVP: <b class="text-success">$${nuevoPVP.toFixed(2)}</b></p>
-                `,
+                // html: `
+                //     <p class="mb-1">PVP actual: <b>$${pvpActual.toFixed(2)}</b></p>
+                //     <p class="mb-1">Nuevo PVP: <b class="text-success">$${nuevoPVP.toFixed(2)}</b></p>
+                // `,
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonText: 'Sí, actualizar',
@@ -723,9 +781,14 @@
                     _token: '{{ csrf_token() }}' // Laravel CSRF
                 };
 
+                console.log(data);
+
                 fetch('{{ url("/ruta/actualizar-pvp") }}', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                    headers: { 
+                        'Content-Type': 'application/json', 
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}' 
+                    },
                     body: JSON.stringify({
                         producto_id: productoActual.id,
                         sucursal_id: sucursalIdActual,
@@ -737,10 +800,46 @@
                     if (res.success) {
                         const data = res.data;
 
+                        const nuevoPvp = parseFloat(data.pvp_actual);
+                        const utilidad = parseFloat(data.utilidad_nuevo_pvp);
+                        const margen = parseFloat(data.margen_nuevo_precio);
+                        
+                        const { bcv, paralelo } = obtenerTasasActuales();
+
                         // Actualizar celda PVP
                         const fila = document.querySelector(`#tablaIndiceRotacion tr[data-id="${data.producto_id}"]`);
                         if (fila) {
-                            fila.querySelector('.celdaPVP').textContent = `$${parseFloat(data.pvp_actual).toFixed(2)}`;
+                            // Precio
+                            fila.querySelector('.precioPVP').textContent = `$${nuevoPvp.toFixed(2)}`;
+
+                            // Utilidad
+                            const badgeUtilidad = fila.querySelector('.badge-utilidad');
+                            if (badgeUtilidad) {
+                                badgeUtilidad.textContent = `U: $${utilidad.toFixed(2)}`;
+                                badgeUtilidad.className = utilidad >= 0
+                                    ? 'badge badge-utilidad bg-success bg-opacity-10 text-success'
+                                    : 'badge badge-utilidad bg-danger bg-opacity-10 text-danger';
+                            }
+
+                            // Margen
+                            const badgeMargen = fila.querySelector('.badge-margen');
+                            if (badgeMargen) {
+                                badgeMargen.textContent = `M: ${margen.toFixed(2)}%`;
+                                badgeMargen.className = margen >= 0
+                                    ? 'badge badge-margen bg-success bg-opacity-10 text-success'
+                                    : 'badge badge-margen bg-warning bg-opacity-10 text-warning';
+                            }
+
+                            let montoParalelo = 0;
+
+                            if (nuevoPvp > 0 && bcv > 0 && paralelo > 0) {
+                                montoParalelo = (nuevoPvp * paralelo) / bcv;
+                            }
+
+                            const paraleloEl = fila.querySelector('#paralelo-' + data.producto_id);
+                            if (paraleloEl) {
+                                paraleloEl.innerText = 'P: ' + montoParalelo.toFixed(2) + '$';
+                            }
                         }
 
                         // Actualizar array global
@@ -750,8 +849,8 @@
                             Codigo: data.codigo,
                             Descripcion: data.descripcion,
                             PvpAnterior: data.pvp_anterior,
-                            NuevoPvp: parseFloat(data.pvp_actual),
-                            CostoDivisa: data.costo_divisa
+                            NuevoPvp: nuevoPvp,
+                            CostoDivisa: parseFloat(data.costo_divisa)
                         };
                         
                         if (index >= 0) {
@@ -771,10 +870,86 @@
                     console.error(err);
                     showToast('Error en la petición', 'danger');
                 });
+
             });
         });
 
+        // ==========================
+        // ORDENAR TABLA POR CLIC EN TH
+        // ==========================
+        (function() {
+            const tabla = document.getElementById('tablaIndiceRotacion');
+            if (!tabla) return;
+
+            const ths = tabla.querySelectorAll('thead th');
+            const tbody = tabla.querySelector('tbody');
+            let ordenAscendente = true; // alterna asc/desc
+
+            ths.forEach((th, index) => {
+                const texto = th.textContent.trim().toLowerCase();
+
+                // Evitar columnas que no queremos ordenar
+                if (texto.includes('accion') || th.querySelector('input[type="checkbox"]') || texto.includes('imagen')) return;
+
+                th.style.cursor = 'pointer';
+
+                th.addEventListener('click', () => {
+                    ordenarTabla(tabla, index, ordenAscendente);
+                    ordenAscendente = !ordenAscendente;
+                });
+            });
+
+            function ordenarTabla(tabla, index, asc = true) {
+                const filas = Array.from(tbody.querySelectorAll('tr'));
+
+                filas.sort((a, b) => {
+                    const tdA = a.children[index];
+                    const tdB = b.children[index];
+
+                    if (!tdA || !tdB) return 0;
+
+                    const textoA = extraerValorCelda(tdA);
+                    const textoB = extraerValorCelda(tdB);
+
+                    const numA = parseFloat(textoA.replace(/[^\d.-]/g, ''));
+                    const numB = parseFloat(textoB.replace(/[^\d.-]/g, ''));
+
+                    if (!isNaN(numA) && !isNaN(numB)) {
+                        return asc ? numA - numB : numB - numA;
+                    } else {
+                        return asc ? textoA.localeCompare(textoB) : textoB.localeCompare(textoA);
+                    }
+                });
+
+                filas.forEach(fila => tbody.appendChild(fila));
+            }
+
+            function extraerValorCelda(td) {
+                // Prioridad: Paralelo > Precio > Badge > Texto
+                const paralelo = td.querySelector('[id^="paralelo-"]');
+                const precio = td.querySelector('.precioPVP');
+                const badge = td.querySelector('.badge');
+
+                if (paralelo) return paralelo.textContent.trim().replace('P:', '').replace('$','').trim();
+                if (precio) return precio.textContent.trim().replace('$','').trim();
+                if (badge) return badge.textContent.trim();
+                return td.textContent.trim();
+            }
+        })();
+
     });
+
+    function obtenerTasasActuales() {
+        const bcv = parseFloat(
+            document.querySelector('#tasa-actual-texto')?.dataset.tasa ?? 0
+        );
+
+        const paralelo = parseFloat(
+            document.querySelector('#tasa-actual-texto-paralelo')?.dataset.tasa ?? 0
+        );
+
+        return { bcv, paralelo };
+    }
     
     function exportarExcel() {
         const tabla = document.getElementById('tablaIndiceRotacion');
@@ -799,7 +974,13 @@
 
             if (!texto.toLowerCase().includes('accion') &&
                 !texto.toLowerCase().includes('acción')) {
+
                 headers.push(texto);
+
+                // 👉 Insertar "Paralelo" justo después de PVP
+                if (texto.toLowerCase().includes('pvp')) {
+                    headers.push('Paralelo');
+                }
             }
         });
 
@@ -813,7 +994,7 @@
 
             const rowData = [];
 
-            // --- Columna A: ID producto ---
+            // --- Columna A: ID producto y Sucursal ---
             const checkbox = fila.querySelector('.checkProductoRotacion');
             const productoId = checkbox ? checkbox.value : '';
             const sucursal = checkbox ? checkbox.dataset.sucursal : '';
@@ -821,9 +1002,20 @@
             rowData.push(productoId);
             rowData.push(sucursal);
 
+            // --- Valor Paralelo desde el DOM ---
+            const paralelo = (() => {
+                const paraleloEl = fila.querySelector('#paralelo-' + productoId);
+                if (!paraleloEl) return '';
+                return parseFloat(
+                    paraleloEl.innerText
+                        .replace('P:', '')
+                        .replace('$', '')
+                        .trim()
+                ) || '';
+            })();
+
             // --- Resto de columnas ---
             fila.querySelectorAll('td').forEach((td, index) => {
-                // Saltar Check (0) e Imagen (1)
                 if (index < 2) return;
 
                 const th = tabla.querySelector(`thead th:nth-child(${index + 1})`);
@@ -860,7 +1052,13 @@
                     if (!isNaN(numero)) texto = numero;
                 }
 
+                // 👉 Agregar valor de la celda
                 rowData.push(texto);
+
+                // 👉 Justo después de PVP, agregar Paralelo
+                if (textoTh.toLowerCase().includes('pvp')) {
+                    rowData.push(paralelo);
+                }
             });
 
             datos.push(rowData);
@@ -886,9 +1084,7 @@
             });
         });
 
-        ws['!cols'] = maxColLengths.map(l => ({
-            wch: Math.min(l, 50)
-        }));
+        ws['!cols'] = maxColLengths.map(l => ({ wch: Math.min(l, 50) }));
 
         XLSX.utils.book_append_sheet(wb, ws, 'Indice Rotacion');
 
@@ -1295,6 +1491,11 @@
         const mensaje = document.getElementById('mensajeValidacion');
         mensaje.textContent = '';
         alerta.classList.add('d-none');
+
+        const fila = document.querySelector(`#tablaIndiceRotacion tr[data-id="${productoId}"]`);
+        // Leer valores dinámicamente desde la fila
+        const pvpActualnew = parseFloat(fila.querySelector('.precioPVP').textContent.replace(/[^\d.-]/g, '')) || 0;
+        document.getElementById('productoPVPActual').textContent = `$${pvpActualnew.toFixed(2)}`;
         
         // Establecer la ruta del formulario
         const form = document.getElementById('formActualizarPVP');
@@ -1306,7 +1507,7 @@
         document.getElementById('productoDescripcion').textContent = datos.descripcion;
         document.getElementById('productoExistencia').textContent = datos.existencia;
         document.getElementById('productoCosto').textContent = `$${parseFloat(datos.costo_divisa).toFixed(2)}`;
-        document.getElementById('productoPVPActual').textContent = `$${parseFloat(datos.pvp_actual).toFixed(2)}`;
+        //document.getElementById('productoPVPActual').textContent = `$${parseFloat(datos.pvp_actual).toFixed(2)}`;
         document.getElementById('productoPVPAnterior').textContent = datos.pvp_anterior ? `$${parseFloat(datos.pvp_anterior).toFixed(2)}` : 'N/A';
         document.getElementById('productoFechaCambio').textContent = datos.fecha_nuevo_precio ? 
             new Date(datos.fecha_nuevo_precio).toLocaleDateString('es-ES') : 'Nunca';
@@ -1463,6 +1664,11 @@
             const texto = th.textContent.trim();
             if (!texto.toLowerCase().includes('accion') && !texto.toLowerCase().includes('acción')) {
                 headers.push(texto);
+
+                // Si es PVP, agregar columna Paralelo justo después
+                if (texto.toLowerCase().includes('pvp')) {
+                    headers.push('Paralelo');
+                }
             }
         });
         datos.push(headers);
@@ -1478,6 +1684,8 @@
 
                 // Columna Sucursal
                 rowData.push(sucursalIdActual);
+
+                const productoId = fila.dataset.id || '';
 
                 fila.querySelectorAll('td').forEach((td, index) => {
                     if (index < 2) return; // Saltar Check e Imagen
@@ -1505,6 +1713,16 @@
                         }
 
                         rowData.push(texto);
+
+                        // Insertar Paralelo justo después de PVP
+                        if (textoTh.toLowerCase().includes('pvp')) {
+                            const paraleloEl = fila.querySelector('#paralelo-' + productoId);
+                            let paralelo = '';
+                            if (paraleloEl) {
+                                paralelo = paraleloEl.innerText.replace('P:', '').replace('$', '').trim();
+                            }
+                            rowData.push(paralelo);
+                        }
                     }
                 });
 
@@ -1514,7 +1732,6 @@
 
         if (datos.length <= 1) {
             showToast('No hay productos seleccionados para exportar', 'warning');
-
             return;
         }
 
@@ -1542,6 +1759,12 @@
     }
 
     function ingresarPorcentaje(sucursalId, _sucursalNombre) {
+
+        if (sucursalId === 0 || sucursalId === '0') {
+            mostrarAlertaSucursalNoSeleccionada();
+            return;
+        }
+
         const tablaPrincipal = document.getElementById('tablaIndiceRotacion');
         if (!tablaPrincipal) return;
 
@@ -1702,6 +1925,8 @@
                 // DEBUG: Ver qué responde el servidor
                 const responseText = await res.text();
                 console.log('Respuesta raw:', responseText);
+                        
+                const { bcv, paralelo } = obtenerTasasActuales();
 
                 try {
                     const data = JSON.parse(responseText);
@@ -1714,7 +1939,39 @@
                         if (filaPrincipal) {
                             const celdaPVP = filaPrincipal.querySelector('.celdaPVP');
                             if (celdaPVP) {
-                                celdaPVP.textContent = `$${parseFloat(data.data.pvp_actual).toFixed(2)}`;
+                                celdaPVP.querySelector('.precioPVP').textContent = `$${parseFloat(data.data.pvp_actual).toFixed(2)}`;
+
+                                // Actualizar badges
+                                const badgeUtilidad = celdaPVP.querySelector('.badge:nth-child(1)');
+                                const badgeMargen = celdaPVP.querySelector('.badge:nth-child(2)');
+
+                                const utilidad = parseFloat(data.data.utilidad_nuevo_pvp);
+                                const margen = parseFloat(data.data.margen_nuevo_precio);
+
+                                if (badgeUtilidad) {
+                                    badgeUtilidad.textContent = `U: $${utilidad.toFixed(2)}`;
+                                    badgeUtilidad.className = utilidad >= 0
+                                        ? 'badge bg-success bg-opacity-10 text-success'
+                                        : 'badge bg-danger bg-opacity-10 text-danger';
+                                }
+
+                                if (badgeMargen) {
+                                    badgeMargen.textContent = `M: ${margen.toFixed(2)}%`;
+                                    badgeMargen.className = margen >= 0
+                                        ? 'badge bg-success bg-opacity-10 text-success'
+                                        : 'badge bg-warning bg-opacity-10 text-warning';
+                                }
+
+                                let montoParalelo = 0;
+
+                                if (nuevoPvp > 0 && bcv > 0 && paralelo > 0) {
+                                    montoParalelo = (nuevoPvp * paralelo) / bcv;
+                                }
+
+                                const paraleloEl = filaPrincipal.querySelector('#paralelo-' + productoId);
+                                if (paraleloEl) {
+                                    paraleloEl.innerText = 'P: ' + montoParalelo.toFixed(2) + '$';
+                                }
                             }
                         }
 

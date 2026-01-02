@@ -98,8 +98,14 @@
         <!--begin::Small Box Widget 2-->
         <div class="small-box text-bg-success">
           <div class="inner">                    
-            <h3>{{ $listaSucursales->where('EsActiva', true)->count() }}</h3>
-            <p>Sucursales</p>
+            <h3 id="widget-tasa-paralelo">
+                @if($paralelo)
+                  {{ number_format($paralelo, 2) }} Bs
+                @else
+                    0.00 Bs
+                @endif
+            </h3>
+            <p>Tasa del Día (Paralelo)</p>
           </div>
           <svg
             class="small-box-icon"
@@ -133,7 +139,7 @@
                   0.00 Bs
               @endif
             </h3>
-            <p>Tasa del Día</p>
+            <p>Tasa del Día (BCV)</p>
           </div>
           <svg
             class="small-box-icon"
