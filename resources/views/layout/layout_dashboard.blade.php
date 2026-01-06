@@ -1276,7 +1276,7 @@
                 showToast(res.message, "success");
 
                 // 👉 SOLO recargar si está en índice de rotación
-                if (window.location.pathname.includes('indice/rotacion')) {
+                if ((window.location.pathname.includes('indice/rotacion')) || (window.location.pathname.includes('baja/demanda'))) {
                     setTimeout(() => {
                         window.location.reload();
                     }, 800);

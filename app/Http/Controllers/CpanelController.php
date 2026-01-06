@@ -534,14 +534,19 @@ class CpanelController extends Controller
             $fechaFin
         );
 
-        $comparacion = GeneralHelper::ObtenerSinVentaSucursales($filtroFecha);
-
         // Asignacion al menu
         session([
             'menu_active' => 'Informes - Resumen',
             'submenu_active' => 'Baja Demanda'
         ]);
 
-        return view('cpanel.resumen.baja_demanda');
+        // 5️⃣ Obtener sucursal activa
+        $sucursalId = session('sucursal_id');
+
+        $indices = GeneralHelper::ObtenerSinVentaSucursales($filtroFecha, $sucursalId);
+
+        // dd($indices->detalles->first());
+
+        return view('cpanel.resumen.baja_demanda', compact('indices'));
     }
 }
