@@ -873,16 +873,34 @@
             }
 
             function extraerValorCelda(td) {
-                // Prioridad: Paralelo > Precio > Badge > Texto
-                const paralelo = td.querySelector('[id^="paralelo-"]');
-                const precio = td.querySelector('.precioPVP');
-                const badge = td.querySelector('.badge');
 
-                if (paralelo) return paralelo.textContent.trim().replace('P:', '').replace('$','').trim();
-                if (precio) return precio.textContent.trim().replace('$','').trim();
-                if (badge) return badge.textContent.trim();
+                // 1️⃣ PRIORIDAD ABSOLUTA: data-order (fechas, valores ocultos)
+                if (td.dataset && td.dataset.order) {
+                    return td.dataset.order;
+                }
+
+                // 2️⃣ Paralelo
+                const paralelo = td.querySelector('[id^="paralelo-"]');
+                if (paralelo) {
+                    return paralelo.textContent.replace('P:', '').replace('$','').trim();
+                }
+
+                // 3️⃣ Precio
+                const precio = td.querySelector('.precioPVP');
+                if (precio) {
+                    return precio.textContent.replace('$','').trim();
+                }
+
+                // 4️⃣ Badge (texto)
+                const badge = td.querySelector('.badge');
+                if (badge) {
+                    return badge.textContent.trim();
+                }
+
+                // 5️⃣ Texto plano
                 return td.textContent.trim();
             }
+
         })();
 
     });

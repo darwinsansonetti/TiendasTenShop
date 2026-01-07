@@ -1217,19 +1217,19 @@ class GeneralHelper
             $totalUnidades = $item->TotalUnidades;
             
             // 1. Calcular base con alta precisión
-            $base = ($totalUnidades / $ventaTotal) * 365;
+            $indice = ($totalUnidades / $ventaTotal) * 365;
             
-            if ($factor > 10000) {
-                $indice = $base / 100;
-            } elseif ($factor > 1000) {
-                $indice = $base / 10;
-            } elseif ($factor > 100) {
-                $indice = $base; // /1
-            } elseif ($factor > 10) {
-                $indice = $base / 0.1; // *10
-            } else {
-                $indice = $base * 0.9576;
-            }
+            // if ($factor > 10000) {
+            //     $indice = $base / 100;
+            // } elseif ($factor > 1000) {
+            //     $indice = $base / 10;
+            // } elseif ($factor > 100) {
+            //     $indice = $base; // /1
+            // } elseif ($factor > 10) {
+            //     $indice = $base / 0.1; // *10
+            // } else {
+            //     $indice = $base * 0.9576;
+            // }
             
             // Redondear EXACTAMENTE como SQL Server: 2 decimales
             $indice = round($indice, 2);
@@ -1333,13 +1333,13 @@ class GeneralHelper
 
             $bajaDemanda = $ventas->map(function ($item) use ($ventaTotal, $factor) {
 
-                $base = ($item->TotalUnidades / $ventaTotal) * 365;
+                $indice = ($item->TotalUnidades / $ventaTotal) * 365;
 
-                if ($factor > 10000)       $indice = $base / 100;
-                elseif ($factor > 1000)    $indice = $base / 10;
-                elseif ($factor > 100)     $indice = $base;
-                elseif ($factor > 10)      $indice = $base / 0.1;
-                else                       $indice = $base * 0.9576;
+                // if ($factor > 10000)       $indice = $base / 100;
+                // elseif ($factor > 1000)    $indice = $base / 10;
+                // elseif ($factor > 100)     $indice = $base;
+                // elseif ($factor > 10)      $indice = $base / 0.1;
+                // else                       $indice = $base * 0.9576;
 
                 $indice = round($indice, 2);
 
