@@ -1,6 +1,6 @@
 @extends('layout.layout_dashboard')
 
-@section('title', 'TiensasTenShop | Comparativa de Precios')
+@section('title', 'TiensasTenShop | Productos con Baja Demanda')
 
 @php
     use App\Helpers\FileHelper;

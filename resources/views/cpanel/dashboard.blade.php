@@ -1,6 +1,6 @@
 @extends('layout.layout_dashboard')
 
-@section('title', 'TiensasTenShop | Dashboard')
+@section('title', 'TiendasTenShop | Dashboard')
 
 @section('content')
 

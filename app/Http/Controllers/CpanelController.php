@@ -548,5 +548,5 @@ class CpanelController extends Controller
         // dd($indices->detalles->first());
 
         return view('cpanel.resumen.baja_demanda', compact('indices'));
-    }
+    } 
 }

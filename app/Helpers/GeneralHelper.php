@@ -646,7 +646,7 @@ class GeneralHelper
                 'MontoBs'         => round($montoDivisa * $tasa, 2),
                 'MontoPagoDivisa' => 0,
                 'MontoPagoBs'     => 0,
-                'Referencia'      => $item->id ? 'ID: ' . $item->Id : null,
+                'Referencia' => $item->id ? 'ID: ' . $item->id : null,
                 'SaldoDivisa'     => 0,
                 'SaldoBs'         => 0,
             ];
@@ -1457,5 +1457,4 @@ class GeneralHelper
 
         return new IndiceDeRotacionDTO($detalles, $fechaInicio, $fechaFin);
     }
-
 }

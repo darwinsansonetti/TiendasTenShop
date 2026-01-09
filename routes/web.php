@@ -11,6 +11,8 @@ use App\Http\Controllers\MensajesController;
 use App\Http\Controllers\SucursalController;
 use App\Http\Controllers\ProductoController;
 
+use App\Http\Controllers\VentasController;
+
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -92,6 +94,16 @@ Route::middleware('auth')->group(function() {
 
     // Actualizar PVP de un producto
     Route::post('/ruta/actualizar-pvp', [ProductoController::class, 'actualizarPVP']);
+
+    // Ventas Diarias
+    Route::get('/cpanel/ventas/diarias', [VentasController::class, 'ventas_diarias'])->name('cpanel.ventas.diarias');
+
+    // Eliminar Venta Diaria
+    Route::post('/ventas-diarias/eliminar', [VentasController::class, 'eliminar_venta'])->name('ventas-diarias.eliminar');
+
+    // Ver Lista de Productos en una Venta Diaria
+    Route::get('/ventas-diarias/detalle/{ventaId}/{sucursalId}', [VentasController::class, 'detalleVenta'])->name('ventas.detalle');
+
 });
 
 

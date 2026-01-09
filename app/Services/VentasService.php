@@ -8,6 +8,7 @@ use App\DTO\VentaDiariaDTO;
 use Carbon\Carbon;
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class VentasService
 {
@@ -108,7 +109,7 @@ class VentasService
 
         foreach ($listaVentas as $ventaDiaria) {
             $ventaDiariaDTO = new VentaDiariaDTO();
-            $ventaDiariaDTO->id = $ventaDiaria->Id;
+            $ventaDiariaDTO->id = $ventaDiaria->ID;
             $ventaDiariaDTO->fecha = $ventaDiaria->Fecha;
             $ventaDiariaDTO->sucursalId = $ventaDiaria->SucursalId;
             $ventaDiariaDTO->cantidad = $ventaDiaria->Cantidad;
@@ -147,13 +148,8 @@ class VentasService
         return $listaDetalleDTO;
     }
 
-    public function buscarTransacciones(
-    int $tipoTransaccion,   // <-- cambiar a int
-    ?int $sucursalId,
-    array $filtroFecha,
-    ?int $proveedorId = null,
-    ?string $estatusTransaccion = null
-    ) {
+    public function buscarTransacciones(int $tipoTransaccion, ?int $sucursalId, array $filtroFecha, ?int $proveedorId = null, ?string $estatusTransaccion = null) 
+    {
         $query = Transaccion::query()
             ->where('Tipo', $tipoTransaccion)
             ->whereBetween('Fecha', [$filtroFecha['fecha_inicio'], $filtroFecha['fecha_fin']]);
@@ -171,5 +167,43 @@ class VentasService
         }
 
         return $query->get();
+    }
+
+    public function borrarVentaDiaria(int $ventaId): bool
+    {
+        return DB::transaction(function () use ($ventaId) {
+
+            // 1️⃣ Obtener la sucursal de la venta
+            $venta = DB::table('Ventas')
+                ->select('SucursalId')
+                ->where('ID', $ventaId)
+                ->first();
+
+            if (!$venta) {
+                return false; // No existe la venta
+            }
+
+            $sucursalId = $venta->SucursalId;
+
+            // 2️⃣ Reponer existencias en ProductoSucursal
+            DB::table('ProductoSucursal as Prod')
+                ->join('VentaProductos as Det', function ($join) use ($ventaId, $sucursalId) {
+                    $join->on('Prod.ProductoId', '=', 'Det.ProductoId')
+                        ->where('Det.VentaId', '=', $ventaId)
+                        ->where('Prod.SucursalId', '=', $sucursalId);
+                })
+                ->update([
+                    'Prod.Existencia' => DB::raw('Prod.Existencia + Det.Cantidad')
+                ]);
+
+            // 3️⃣ Eliminar hijos
+            DB::table('VentaProductos')->where('VentaId', $ventaId)->delete();
+            DB::table('VentasVendedor')->where('VentaId', $ventaId)->delete();
+
+            // 4️⃣ Eliminar venta principal
+            DB::table('Ventas')->where('ID', $ventaId)->delete();
+
+            return true;
+        });
     }
 }

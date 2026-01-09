@@ -91,6 +91,7 @@
 
     <!--begin::App Wrapper-->
     <div class="app-wrapper">
+
       <!--begin::Header-->
       <nav class="app-header navbar navbar-expand bg-body">
         <!--begin::Container-->
@@ -435,6 +436,7 @@
         <!--end::Container-->
       </nav>
       <!--end::Header-->
+
       <!--begin::Sidebar-->
       <aside class="app-sidebar bg-body-secondary shadow" data-bs-theme="dark">
         <!--begin::Sidebar Brand-->
@@ -522,19 +524,19 @@
                   </li>
                 </ul>
               </li>
-              <li class="nav-item">
+              <li class="nav-item {{ session('menu_active') == 'Análisis de Ventas' ? 'menu-open' : '' }}">
                 <a href="#" class="nav-link">
-                  <i class="nav-icon bi bi-speedometer"></i>
+                  <i class="nav-icon bi bi-shop"></i>
                   <p>
-                    Dashboard
+                    Análisis de Ventas
                     <i class="nav-arrow bi bi-chevron-right"></i>
                   </p>
                 </a>
                 <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="./index.html" class="nav-link">
+                    <a href="{{ route('cpanel.ventas.diarias') }}" class="nav-link {{ session('submenu_active') == 'Ventas Diarias' ? 'active' : '' }}">
                       <i class="nav-icon bi bi-circle"></i>
-                      <p>Dashboard v1</p>
+                      <p>Ventas Diarias</p>
                     </a>
                   </li>
                   <li class="nav-item">
