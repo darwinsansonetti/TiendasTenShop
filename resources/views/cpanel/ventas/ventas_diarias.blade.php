@@ -109,7 +109,9 @@
                                 <th width="100" class="text-center">Unidades</th>
                                 <th width="140" class="text-center">Monto Divisa</th>
                                 <th width="140" class="text-center">Monto Bs</th>
-                                <th width="120" class="text-center">Acción</th> <!-- Nueva columna -->
+                                <th width="120" class="text-center">Utilidad $</th> <!-- Nueva columna -->
+                                <th width="120" class="text-center">Margen %</th>   <!-- Nueva columna -->
+                                <th width="120" class="text-center">Acción</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -137,10 +139,18 @@
                                         {{ number_format($item->totalBs, 2, ',', '.') }} Bs
                                     </td>
 
-                                    <!-- Columna Acción -->
+                                    <!-- Nueva columna: Utilidad $ -->
+                                    <td class="text-center text-muted">
+                                        ${{ number_format($item->utilidadDivisaDiario, 2, ',', '.') }}
+                                    </td>
+
+                                    <!-- Nueva columna: Margen % -->
+                                    <td class="text-center text-muted">
+                                        {{ number_format($item->margenDivisaDiario, 2, ',', '.') }} %
+                                    </td>
+
                                     <td class="text-center">
                                         <div class="btn-group" role="group">
-                                            <!-- Botón Ver detalles -->
                                             <button type="button"
                                                     class="btn btn-sm btn-outline-primary"
                                                     title="Ver detalles"
@@ -148,7 +158,6 @@
                                                 <i class="bi bi-eye"></i>
                                             </button>
 
-                                            <!-- Botón Eliminar -->
                                             <button type="button"
                                                     class="btn btn-sm btn-outline-danger"
                                                     title="Eliminar"
@@ -160,6 +169,7 @@
                                 </tr>
                             @endforeach
                         </tbody>
+
                     </table>
                 </div>
             </div>
@@ -393,9 +403,14 @@
                     texto = badge.textContent.trim();
                 }
 
-                // Si es monto o unidades, convertir a número
-                if (textoTh.toLowerCase().includes('unidades') || textoTh.toLowerCase().includes('monto')) {
-                    texto = texto.replace('$', '').replace('Bs', '').replace(/\./g, '').replace(',', '.').trim();
+                // Convertir a número si corresponde
+                if (
+                    textoTh.toLowerCase().includes('unidades') ||
+                    textoTh.toLowerCase().includes('monto') ||
+                    textoTh.toLowerCase().includes('utilidad') ||   // NUEVO
+                    textoTh.toLowerCase().includes('margen')       // NUEVO
+                ) {
+                    texto = texto.replace('$', '').replace('Bs', '').replace('%', '').replace(/\./g, '').replace(',', '.').trim();
                     const numero = parseFloat(texto);
                     texto = isNaN(numero) ? texto : numero;
                 }
@@ -491,6 +506,19 @@
                 const badge = td.querySelector('.badge');
                 if (badge) texto = badge.textContent.trim();
 
+                // Formatear números de montos, utilidades y margen
+                if (
+                    textoTh.toLowerCase().includes('unidades') ||
+                    textoTh.toLowerCase().includes('monto') ||
+                    textoTh.toLowerCase().includes('utilidad') ||
+                    textoTh.toLowerCase().includes('margen')
+                ) {
+                    // Limpiar texto
+                    texto = texto.replace('$', '').replace('Bs', '').replace('%', '').replace(/\./g, '').replace(',', '.').trim();
+                    const numero = parseFloat(texto);
+                    texto = isNaN(numero) ? '' : numero.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                }
+
                 filaData.push(texto);
             });
 
@@ -523,7 +551,18 @@
             alternateRowStyles: {
                 fillColor: [245, 245, 245]
             },
-            margin: { top: 35 }
+            margin: { top: 35 },
+            columnStyles: headers.reduce((acc, header, index) => {
+                if (
+                    header.toLowerCase().includes('unidades') ||
+                    header.toLowerCase().includes('monto') ||
+                    header.toLowerCase().includes('utilidad') ||
+                    header.toLowerCase().includes('margen')
+                ) {
+                    acc[index] = { halign: 'right' }; // números alineados a la derecha
+                }
+                return acc;
+            }, {})
         });
 
         // =========================
@@ -549,8 +588,8 @@
         // Mostrar indicador de carga
         // showToast('⌛ Cargando detalles de la venta...', 'info', 3000);
 
-       alert(id);
-       alert(sucursal);
+    //    alert(id);
+    //    alert(sucursal);
         
         fetch(`{{ url('/ventas-diarias/detalle') }}/${id}/${sucursal}`)
         .then(async response => {

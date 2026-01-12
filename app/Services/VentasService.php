@@ -121,7 +121,6 @@ class VentasService
             $ventaDiariaDTO->proveedorId = $ventaDiaria->ProveedorId;
             $ventaDiariaDTO->tasaDeCambio = $ventaDiaria->TasaDeCambio ?? 1;
 
-            // ✅ AQUÍ ES DONDE VA
             $ventaDiariaDTO->nombreSucursal = optional($ventaDiaria->sucursal)->Nombre ?? 'Sin sucursal';
 
             // 5️⃣ Incluir gastos si aplica
@@ -142,8 +141,15 @@ class VentasService
                 }
             }
 
+            // 🔹 **Asignar Utilidad y Margen diario**
+            $ventaDiariaDTO->utilidadDivisaDiario = $ventaDiariaDTO->getUtilidadDivisaDiario();
+            $ventaDiariaDTO->utilidadBsDiario    = $ventaDiariaDTO->getUtilidadBsDiario();
+            $ventaDiariaDTO->margenDivisaDiario  = $ventaDiariaDTO->getMargenDivisaDiario();
+            //$ventaDiariaDTO->margenBsDiario      = $ventaDiariaDTO->getMargenBsDiario(); // opcional
+
             $listaDetalleDTO[] = $ventaDiariaDTO;
         }
+
 
         return $listaDetalleDTO;
     }

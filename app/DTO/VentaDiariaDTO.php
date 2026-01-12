@@ -67,6 +67,18 @@ class VentaDiariaDTO
         return ($this->totalDivisa ?? 0) - ($this->getCostoTotalDivisaDiario() ?? 0);
     }
 
+    public function getMargenDivisaDiario(): float
+    {
+        $costo = $this->getCostoTotalDivisaDiario(); // usa tu método existente para obtener costo en divisa
+        $venta = $this->getMontoDivisaDiario();      // usa tu método existente para obtener venta en divisa
+
+        if ($costo <= 0) {
+            return 0;
+        }
+
+        return round((($venta * 100) / $costo) - 100, 2);
+    }
+
     public function getCostoBsDiario(): float
     {
         if (!empty($this->listadoProductosVentaDiaria)) {
