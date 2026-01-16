@@ -1,6 +1,6 @@
 @extends('layout.layout_dashboard')
 
-@section('title', 'TiensasTenShop | Ventas Diarias')
+@section('title', 'TiendasTenShop | Ventas Diarias')
 
 @php
     use App\Helpers\FileHelper;

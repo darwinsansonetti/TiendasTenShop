@@ -540,9 +540,9 @@
                     </a>
                   </li>
                   <li class="nav-item">
-                    <a href="./index2.html" class="nav-link">
+                    <a href="{{ route('cpanel.cargar.ventas.diarias') }}" class="nav-link {{ session('submenu_active') == 'Cargar Venta Diaria' ? 'active' : '' }}">
                       <i class="nav-icon bi bi-circle"></i>
-                      <p>Dashboard v2</p>
+                      <p>Cargar Ventas Diarias</p>
                     </a>
                   </li>
                   <li class="nav-item">
@@ -1273,6 +1273,12 @@
                 const widgetTasaParalelo = document.getElementById('widget-tasa-paralelo');
                 if (widgetTasaParalelo) {
                     widgetTasaParalelo.innerText = parseFloat(valorParalelo).toFixed(2) + " Bs";
+                }
+
+                // Valor de dolar BCV en el input de la Carga de Ventas Diarias
+                const inputTasaCargaVentasDiarias = document.getElementById('exchangeRate');
+                if (inputTasaCargaVentasDiarias) {
+                    inputTasaCargaVentasDiarias.value = parseFloat(valor).toFixed(2);
                 }
                 
                 showToast(res.message, "success");

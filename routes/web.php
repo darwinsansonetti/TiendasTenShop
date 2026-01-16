@@ -104,6 +104,12 @@ Route::middleware('auth')->group(function() {
     // Ver Lista de Productos en una Venta Diaria
     Route::get('/ventas-diarias/detalle/{ventaId}/{sucursalId}', [VentasController::class, 'detalleVenta'])->name('ventas.detalle');
 
+    // Cargar Ventas Diarias
+    Route::get('/cpanel/cargar/ventas/diarias', [VentasController::class, 'cargar_ventas_diarias'])->name('cpanel.cargar.ventas.diarias');
+
+    // Guardar registros de las ventas diarias y ventas de los vendedores
+    Route::post('/ventas/store', [VentasController::class, 'store'])->name('ventas.store');
+
 });
 
 

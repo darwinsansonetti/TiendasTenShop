@@ -47,12 +47,12 @@ class CpanelController extends Controller
             ? ($listaSucursales->firstWhere('ID', $sucursalId)->Nombre ?? "")
             : "Todas las sucursales";
 
-        //$productos = GeneralHelper::obtenerProductos(2);
+        $productos = GeneralHelper::obtenerProductos(2);
 
-        // 🔹 Cache productos
-        $productos = Cache::remember('productos_2', 3600, function() {
-            return GeneralHelper::obtenerProductos(2);
-        });
+        // // 🔹 Cache productos
+        // $productos = Cache::remember('productos_2', 3600, function() {
+        //     return GeneralHelper::obtenerProductos(2);
+        // });
 
         // 🚀 Aquí: usar fechas del request si existen
         $fechaInicio = $request->input('fecha_inicio') 
@@ -72,22 +72,22 @@ class CpanelController extends Controller
             $fechaFin
         );
 
-        // // Obtener ranking según el filtro de fechas
-        // $rankingSucursales = GeneralHelper::ObtenerRankingSucursales($filtroFecha);
+        // Obtener ranking según el filtro de fechas
+        $rankingSucursales = GeneralHelper::ObtenerRankingSucursales($filtroFecha);
 
-        // 🔹 Ranking Sucursales cacheado por fechas
-        $rankingSucursalesKey = 'ranking_sucursales_' . md5($fechaInicio . '_' . $fechaFin);
-        $rankingSucursales = Cache::remember($rankingSucursalesKey, 10800, function() use ($filtroFecha) {
-            return GeneralHelper::ObtenerRankingSucursales($filtroFecha);
-        });
+        // // 🔹 Ranking Sucursales cacheado por fechas
+        // $rankingSucursalesKey = 'ranking_sucursales_' . md5($fechaInicio . '_' . $fechaFin);
+        // $rankingSucursales = Cache::remember($rankingSucursalesKey, 10800, function() use ($filtroFecha) {
+        //     return GeneralHelper::ObtenerRankingSucursales($filtroFecha);
+        // });
         
-        // // Obtener las ventas diarias totalizadas de los 7 meses desde
-        // $graficaSucursalesMeses = GeneralHelper::ObtenerGraficaSucursales();
+        // Obtener las ventas diarias totalizadas de los 7 meses desde
+        $graficaSucursalesMeses = GeneralHelper::ObtenerGraficaSucursales();
 
-        // 🔹 Gráfica Sucursales (últimos 7 meses) cacheada
-        $graficaSucursalesMeses = Cache::remember('grafica_sucursales_7meses', 10800, function() {
-            return GeneralHelper::ObtenerGraficaSucursales();
-        });
+        // // 🔹 Gráfica Sucursales (últimos 7 meses) cacheada
+        // $graficaSucursalesMeses = Cache::remember('grafica_sucursales_7meses', 10800, function() {
+        //     return GeneralHelper::ObtenerGraficaSucursales();
+        // });
 
         // Filtro del mes (si la vista envía 'mes' y 'anio')
         $filtroMesAnio = [
@@ -95,23 +95,23 @@ class CpanelController extends Controller
             'anio' => $request->input('anio') ? intval($request->input('anio')) : now()->year
         ];
 
-        // // Obtener ranking de tiendas segun su produccion en dolares en un mes especifico
-        // $graficaProduccionMes = GeneralHelper::ObtenerProduccionSucursales($filtroMesAnio);
+        // Obtener ranking de tiendas segun su produccion en dolares en un mes especifico
+        $graficaProduccionMes = GeneralHelper::ObtenerProduccionSucursales($filtroMesAnio);
 
-        // 🔹 Ranking de producción mensual cacheado
-        $graficaProduccionMesKey = 'produccion_mes_' . $filtroMesAnio['mes'] . '_' . $filtroMesAnio['anio'];
-        $graficaProduccionMes = Cache::remember($graficaProduccionMesKey, 10800, function() use ($filtroMesAnio) {
-            return GeneralHelper::ObtenerProduccionSucursales($filtroMesAnio);
-        });
+        // // 🔹 Ranking de producción mensual cacheado
+        // $graficaProduccionMesKey = 'produccion_mes_' . $filtroMesAnio['mes'] . '_' . $filtroMesAnio['anio'];
+        // $graficaProduccionMes = Cache::remember($graficaProduccionMesKey, 10800, function() use ($filtroMesAnio) {
+        //     return GeneralHelper::ObtenerProduccionSucursales($filtroMesAnio);
+        // });
 
-        // // Obtener ranking de vendedores
-        // $rankingVendedor = GeneralHelper::ObtenerRankingVendedores($filtroFecha);
+        // Obtener ranking de vendedores
+        $rankingVendedor = GeneralHelper::ObtenerRankingVendedores($filtroFecha);
 
-        // 🔹 Ranking de vendedores cacheado por fechas
-        $rankingVendedorKey = 'ranking_vendedores_' . md5($fechaInicio . '_' . $fechaFin);
-        $rankingVendedor = Cache::remember($rankingVendedorKey, 10800, function() use ($filtroFecha) {
-            return GeneralHelper::ObtenerRankingVendedores($filtroFecha);
-        });
+        // // 🔹 Ranking de vendedores cacheado por fechas
+        // $rankingVendedorKey = 'ranking_vendedores_' . md5($fechaInicio . '_' . $fechaFin);
+        // $rankingVendedor = Cache::remember($rankingVendedorKey, 10800, function() use ($filtroFecha) {
+        //     return GeneralHelper::ObtenerRankingVendedores($filtroFecha);
+        // });
 
         //dd($rankingVendedor);
 
