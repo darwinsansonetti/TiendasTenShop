@@ -34,13 +34,13 @@ class CpanelController extends Controller
         //     return GeneralHelper::obtenerTasaCambioDiaria(now());
         // });
 
-        // // Obtener lista de sucursales
-        // $listaSucursales = GeneralHelper::buscarSucursales(0);
+        // Obtener lista de sucursales
+        $listaSucursales = GeneralHelper::buscarSucursales(1);
 
-        // 🔹 Cache para la lista de sucursales
-        $listaSucursales = Cache::remember('lista_sucursales', 3600, function() {
-            return GeneralHelper::buscarSucursales(0);
-        });
+        // // 🔹 Cache para la lista de sucursales
+        // $listaSucursales = Cache::remember('lista_sucursales', 3600, function() {
+        //     return GeneralHelper::buscarSucursales(0);
+        // });
 
         $sucursalId = session('sucursal_id', 0);
         $sucursalNombre = $sucursalId != 0 

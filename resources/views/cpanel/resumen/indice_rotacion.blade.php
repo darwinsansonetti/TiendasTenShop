@@ -2070,6 +2070,11 @@
         if (loading) loading.remove();
     }
 
+    function verDetalleProducto(id) {
+        var ruta = '{{ url("/") }}' + '/productos/' + id;
+        window.location.href = ruta;
+    }
+
 </script>
 
 <style>

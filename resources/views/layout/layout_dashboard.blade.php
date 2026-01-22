@@ -540,15 +540,15 @@
                     </a>
                   </li>
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.cargar.ventas.diarias') }}" class="nav-link {{ session('submenu_active') == 'Cargar Venta Diaria' ? 'active' : '' }}">
+                    <a href="{{ route('cpanel.ventas.producto') }}" class="nav-link {{ session('submenu_active') == 'Ventas por producto' ? 'active' : '' }}">
                       <i class="nav-icon bi bi-circle"></i>
-                      <p>Cargar Ventas Diarias</p>
+                      <p>Ventas por producto</p>
                     </a>
                   </li>
                   <li class="nav-item">
-                    <a href="./index3.html" class="nav-link">
+                    <a href="{{ route('cpanel.cargar.ventas.diarias') }}" class="nav-link {{ session('submenu_active') == 'Cargar Venta Diaria' ? 'active' : '' }}">
                       <i class="nav-icon bi bi-circle"></i>
-                      <p>Dashboard v3</p>
+                      <p>Cargar Ventas Diarias</p>
                     </a>
                   </li>
                 </ul>

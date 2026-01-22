@@ -214,12 +214,24 @@ class VentasController extends Controller
                     $prodId = $producto->Id ?? $producto->ID;
                     $prodDesc = $producto->Descripcion ?? $producto->descripcion ?? '';
                     $prodCodigo = $producto->Codigo ?? $producto->codigo ?? '';
+                    $prodUrlFoto = $producto->UrlFoto ?? '';
+                    $fechaActualizacion = $producto->FechaActualizacion ?? $producto->FechaCreacion;
+
+                    // Calcular días desde FechaActualizacion hasta hoy
+                    if ($fechaActualizacion) {
+                        $fechaActualizacionCarbon = Carbon::parse($fechaActualizacion);
+                        $diasDesdeActualizacion = $fechaActualizacionCarbon->diffInDays(Carbon::now());
+                    } else {
+                        $diasDesdeActualizacion = null;
+                    }
                     
                     // Datos del producto
                     $item['producto'] = [
                         'Id' => intval($prodId),
                         'Codigo' => $prodCodigo,
                         'Descripcion' => $prodDesc,
+                        'UrlFoto' => $prodUrlFoto,
+                        'DiasDesdeActualizacion' => $diasDesdeActualizacion,
                         'CostoBs' => floatval($producto->CostoBs ?? $producto->costoBs ?? 0),
                         'CostoDivisa' => floatval($producto->CostoDivisa ?? $producto->costoDivisa ?? 0),
                         'Existencia' => intval($producto->Existencia ?? $producto->existencia ?? 0),
@@ -270,9 +282,29 @@ class VentasController extends Controller
                 return $item;
             });
 
-            return response()->json([
-                'ok' => true,
-                'data' => $respuesta
+            // return response()->json([
+            //     'ok' => true,
+            //     'data' => $respuesta
+            // ]);
+
+            $totalItems = $respuesta->count();
+
+            $totalDivisa = $respuesta->sum('monto_divisa');
+            $totalUtilidad = $respuesta->sum('utilidad_divisa');
+
+            // margen promedio
+            $promedioMargen = $totalDivisa > 0
+                ? round(($totalUtilidad * 100) / $totalDivisa, 2)
+                : 0;
+
+            return view('cpanel.ventas.detalles_ventas_diarias', [
+                'venta' => $venta,
+                'detalles' => $respuesta,
+                'sucursalId' => $sucursalId,
+                'totalItems' => $totalItems,
+                'totalDivisa' => $totalDivisa,
+                'totalUtilidad' => $totalUtilidad,
+                'promedioMargen' => $promedioMargen,
             ]);
 
         } catch (\Throwable $e) {
@@ -1233,5 +1265,50 @@ class VentasController extends Controller
             \Log::error("Error en convertidor: " . $e->getMessage());
             throw $e;
         }
+    }
+
+    // Ventas por producto
+    public function ventas_producto(Request $request)
+    {
+        $fechaInicio = $request->input('fecha_inicio')
+            ? Carbon::parse($request->input('fecha_inicio'))->startOfDay()
+            : null;
+
+        $fechaFin = $request->input('fecha_fin')
+            ? Carbon::parse($request->input('fecha_fin'))->startOfDay()
+            : null;
+
+        $filtroFecha = new ParametrosFiltroFecha(
+            null,
+            null,
+            null,
+            false,
+            $fechaInicio,
+            $fechaFin
+        );
+
+        // Menú activo
+        session([
+            'menu_active' => 'Análisis de Ventas',
+            'submenu_active' => 'Ventas por producto'
+        ]);
+
+        // Sucursal activa
+        $sucursalId = session('sucursal_id');
+
+        if ($sucursalId && $sucursalId != 0) {
+            $ventasDTO = VentasHelper::GenerarDatosdeVentasParaEscritorio($filtroFecha, $sucursalId);
+        } else {
+            $ventasDTO = null;
+        }
+
+        // dd($ventasDTO);
+        // dd($ventasDTO['ProductosAgrupados']->first());
+
+        return view('cpanel.ventas.ventas_producto', [
+            'ventas' => $ventasDTO,
+            'fechaInicio' => $filtroFecha->fechaInicio, 
+            'fechaFin' => $filtroFecha->fechaFin,
+        ]);
     }
 }

@@ -193,6 +193,8 @@
                                 );
                                 $descripcion = $item['Descripcion'] ?? 'Sin descripción';
                                 $descripcionCorta = strlen($descripcion) > 40 ? substr($descripcion, 0, 40) . '...' : $descripcion;
+                                
+                                $productoId = $item['Id'];
                             @endphp
 
                             <div class="d-flex border-top py-2 px-1 align-items-center">
@@ -206,19 +208,21 @@
                                         data-description="{{ $descripcion }}">
                                 </div>
                                 <div class="flex-grow-1" style="min-width: 0;">
-                                    <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <span class="fw-semibold text-truncate" style="max-width: 80%;" title="{{ $descripcion }}">
-                                            {{ $descripcion }}
-                                        </span>
-                                        <span class="badge bg-warning text-dark flex-shrink-0" style="font-size: 0.75rem;">
-                                            {{ $item['Cantidad'] ?? 0 }}
-                                        </span>
-                                    </div>
-                                    <div>
-                                        <span class="badge bg-light text-dark border">
-                                            <i class="fas fa-barcode me-1"></i>{{ $item['Codigo'] ?? 'N/A' }}
-                                        </span>
-                                    </div>
+                                    <a href="javascript:void(0);" onclick="verDetalleProducto({{ $productoId }})" class="text-decoration-none">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <span class="fw-semibold text-truncate" style="max-width: 80%;" title="{{ $descripcion }}">
+                                                {{ $descripcion }}
+                                            </span>
+                                            <span class="badge bg-warning text-dark flex-shrink-0" style="font-size: 0.75rem;">
+                                                {{ $item['Cantidad'] ?? 0 }}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span class="badge bg-light text-dark border">
+                                                <i class="fas fa-barcode me-1"></i>{{ $item['Codigo'] ?? 'N/A' }}
+                                            </span>
+                                        </div>
+                                    </a>
                                 </div>
                             </div>
                         @empty
@@ -256,6 +260,8 @@
                                 );
                                 $descripcion = $item['Descripcion'] ?? 'Sin descripción';
                                 $descripcionCorta = strlen($descripcion) > 40 ? substr($descripcion, 0, 40) . '...' : $descripcion;
+                                
+                                $productoId = $item['ProductoId'];
                             @endphp
 
                             <div class="d-flex border-top py-2 px-1 align-items-center">
@@ -268,17 +274,19 @@
                                         data-description="{{ $descripcion }}">
                                 </div>
                                 <div class="flex-grow-1" style="min-width: 0;">
-                                    <div class="d-flex justify-content-between align-items-start mb-1">
-                                        <span class="fw-semibold text-truncate" style="max-width: 70%;" title="{{ $descripcion }}">
-                                            {{ $descripcionCorta }}
-                                        </span>
-                                        <span class="badge bg-warning text-dark flex-shrink-0" style="font-size: 0.75rem;">
-                                            ${{ number_format($item['UtilidadDivisa'], 2, ',', '.') }}
-                                        </span>
-                                    </div>
-                                    <div>
-                                        <span class="badge bg-light text-dark border"><i class="fas fa-barcode me-1"></i>{{ $item['Codigo'] ?? 'N/A' }}</span>
-                                    </div>
+                                    <a href="javascript:void(0);" onclick="verDetalleProducto({{ $productoId }})" class="text-decoration-none">
+                                        <div class="d-flex justify-content-between align-items-start mb-1">
+                                            <span class="fw-semibold text-truncate" style="max-width: 70%;" title="{{ $descripcion }}">
+                                                {{ $descripcionCorta }}
+                                            </span>
+                                            <span class="badge bg-warning text-dark flex-shrink-0" style="font-size: 0.75rem;">
+                                                ${{ number_format($item['UtilidadDivisa'], 2, ',', '.') }}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span class="badge bg-light text-dark border"><i class="fas fa-barcode me-1"></i>{{ $item['Codigo'] ?? 'N/A' }}</span>
+                                        </div>
+                                    </a>
                                 </div>
                             </div>
                         @empty
@@ -577,6 +585,11 @@
             closeZoom();
         }
     });
+
+    function verDetalleProducto(id) {
+        var ruta = '{{ url("/") }}' + '/productos/' + id;
+        window.location.href = ruta;
+    }
 
 </script>
 

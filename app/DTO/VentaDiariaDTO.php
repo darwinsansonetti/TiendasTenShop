@@ -25,6 +25,63 @@ class VentaDiariaDTO
 
     public $nombreSucursal;
 
+    public $listaItemsTopTenDiario = [];
+    public $montoDivisaTopTenDiario = [];
+    public $montoTopTenDiario = [];
+    public $ranking = 0;
+    public $sucursal;
+
+
+    public function getPromedioProductosPorFactura(): float {
+        $count = count($this->listadoProductosVentaDiaria);
+        if($count > 0){
+            $totalProductos = array_sum(array_column($this->listadoProductosVentaDiaria,'cantidad'));
+            return round($totalProductos / $count, 2);
+        }
+        return 0;
+    }
+
+    public function getPromedioMontoPorFactura(): float {
+        $count = count($this->listadoProductosVentaDiaria);
+        if($count > 0){
+            $totalMonto = array_sum(array_column($this->listadoProductosVentaDiaria,'precioVenta'));
+            return round($totalMonto / $count,2);
+        }
+        return 0;
+    }
+
+
+    public function getMargenDiarioDivisaPromedio(): float {
+        if (!empty($this->listadoProductosVentaDiaria)) {
+            $productosConCosto = array_filter($this->listadoProductosVentaDiaria, fn($p)=> isset($p['costoDivisa']) && $p['costoDivisa']>0);
+            if(count($productosConCosto) > 0){
+                $sumaMargen = array_sum(array_map(fn($p)=> $p['margen'] ?? 0, $productosConCosto));
+                return round($sumaMargen / count($productosConCosto), 2);
+            }
+        }
+        if($this->getCostoTotalDivisaDiario() > 0){
+            return round((($this->getMontoDivisaDiario()*100)/$this->getCostoTotalDivisaDiario())-100, 2);
+        }
+        return 0;
+    }
+
+    public function calcularTopTen() {
+        if (!empty($this->listadoProductosVentaDiaria)) {
+            $productos = $this->listadoProductosVentaDiaria;
+
+            // Top 10 por cantidad
+            usort($productos, fn($a,$b)=> $b['cantidad'] <=> $a['cantidad']);
+            $this->listaItemsTopTenDiario = array_slice($productos, 0, 10);
+
+            // Top 10 por monto divisa
+            usort($productos, fn($a,$b)=> $b['montoDivisa'] <=> $a['montoDivisa']);
+            $this->montoDivisaTopTenDiario = array_slice($productos, 0, 10);
+
+            // Top 10 por precioVenta
+            usort($productos, fn($a,$b)=> $b['precioVenta'] <=> $a['precioVenta']);
+            $this->montoTopTenDiario = array_slice($productos, 0, 10);
+        }
+    }
 
     // Calculados
     public function getUnidadesVendidas(): int

@@ -1,6 +1,6 @@
 @extends('layout.layout_dashboard')
 
-@section('title', 'TiendasTenShop | Ventas Diarias')
+@section('title', 'TiendasTenShop | Ventas por producto')
 
 @php
     use App\Helpers\FileHelper;
@@ -14,11 +14,11 @@
   <div class="container-fluid">
     <!--begin::Row-->
     <div class="row">
-      <div class="col-sm-6"><h3 class="mb-0">Ventas Diarias</h3></div>
+      <div class="col-sm-6"><h3 class="mb-0">Ventas por producto</h3></div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
           <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Ventas Diarias</li>
+          <li class="breadcrumb-item active" aria-current="page">Ventas por producto</li>
         </ol>
       </div>
     </div>
@@ -40,7 +40,7 @@
                 </h5>
             </div>
             <div class="card-body">
-                <form action="{{ route('cpanel.ventas.diarias') }}" method="GET" id="filtroForm">
+                <form action="{{ route('cpanel.ventas.producto') }}" method="GET" id="filtroForm">
                     @csrf
                     <div class="row g-3">
                         <div class="col-md-4">
@@ -88,7 +88,7 @@
                 <div class="row g-2">
                     <div class="col-12 text-end">
                         <div class="btn-group">
-                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="pdfTablaVentasDiarias()">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="pdfTablaVentasProducto()">
                                 <i class="fas fa-print me-1"></i>PDF
                             </button>
                             <button type="button" class="btn btn-outline-secondary btn-sm" onclick="exportarExcel()">
@@ -101,93 +101,238 @@
 
             <div class="card-body p-0">
                 <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
-                    <table class="table table-hover mb-0" id="tablaIndiceRotacion">
-                        <thead class="table-light">
+                    <table class="table table-hover mb-0" id="tablaProductosAgrupados">
+                        <thead class="table-light sticky-top">
                             <tr>
-                                <th width="100">Fecha</th>
-                                <th width="140">Sucursal</th>
-                                <th width="100" class="text-center">Unidades</th>
-                                <th width="140" class="text-center">Monto Divisa</th>
-                                <th width="140" class="text-center">Monto Bs</th>
-                                <th width="120" class="text-center">Utilidad $</th> <!-- Nueva columna -->
-                                <th width="120" class="text-center">Margen %</th>   <!-- Nueva columna -->
-                                <th width="120" class="text-center">Acción</th>
+                                <th width="60" class="text-center">Imagen</th>
+                                <th width="100" class="text-center">Producto</th>
+                                <th>Descripción</th>
+                                <th width="150" class="text-center">Cantidad</th>
+                                <th width="120" class="text-center">Costo ($)</th>
+                                <th width="120" class="text-end">PVP ($)</th>
+                                <th width="120" class="text-end">Total ($)</th>
+                                <th width="120" class="text-end">Margen %</th>
+                                <th width="120" class="text-end">Utilidad ($)</th>
+                                <th width="80" class="text-center">Acción</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach($ventas['listaVentasDiarias'] as $item)
-                                <tr id="fila-{{ $item->id }}" class="align-middle">
+                            @php
+                                $totalCosto = 0;
+                                $totalVentas = 0;
+                                $totalUtilidad = 0;
+                            @endphp
+                            
+                            @foreach($ventas['ProductosAgrupados'] as $productoId => $producto)
+                                @php
+                                    $productoInfo = $producto['Producto'];
+                                    $cantidad = $producto['CantidadTotal'] ?? 0;
+                                    $montoTotal = $producto['MontoTotal'] ?? 0;
+                                    $costoTotal = $producto['CostoTotalDivisa'] ?? 0;
+                                    $pvpUnitario = $cantidad > 0 ? $montoTotal / $cantidad : 0;
+                                    $costoUnitario = $cantidad > 0 ? $costoTotal / $cantidad : 0;
+                                    $utilidad = $producto['UtilidadProducto'] ?? 0;
+                                    $margen = $producto['MargenProducto'] ?? 0;
+                                    $porcentaje = $producto['PorcentajeParticipacion'] ?? 0;
+                                    
+                                    // Acumular totales
+                                    $totalCosto += $costoTotal;
+                                    $totalVentas += $montoTotal;
+                                    $totalUtilidad += $utilidad;
+
+                                    $urlImagen = FileHelper::getOrDownloadFile(
+                                        'images/items/thumbs/',
+                                        $productoInfo->UrlFoto ?? '',
+                                        'assets/img/adminlte/img/produc_default.jfif'
+                                    );
+                                    
+                                    $descripcion = $productoInfo->Descripcion ?? 'Sin descripción';
+                                    $codigo = $productoInfo->Codigo ?? 'N/A';
+                                    $referencia = $productoInfo->Referencia ?? 'N/A';
+                                    $existencia = $productoInfo->Existencia ?? 0;
+                                    
+                                    // Determinar color del margen
+                                    if ($margen >= 100) {
+                                        $margenColor = 'bg-success';
+                                        $margenIcon = 'fas fa-rocket';
+                                    } elseif ($margen >= 50) {
+                                        $margenColor = 'bg-info';
+                                        $margenIcon = 'fas fa-chart-line';
+                                    } elseif ($margen >= 0) {
+                                        $margenColor = 'bg-primary';
+                                        $margenIcon = 'fas fa-arrow-up';
+                                    } else {
+                                        $margenColor = 'bg-danger';
+                                        $margenIcon = 'fas fa-arrow-down';
+                                    }
+                                @endphp
+                                
+                                <tr class="align-middle">
+                                    <!-- Columna Imagen -->
+                                    <td class="text-center">
+                                        <div class="position-relative">
+                                            <img src="{{ $urlImagen }}" 
+                                                alt="{{ $descripcion }}"
+                                                class="img-thumbnail rounded img-zoomable" 
+                                                style="width: 50px; height: 50px; object-fit: cover; cursor: zoom-in;"
+                                                data-full-image="{{ $urlImagen }}"
+                                                data-description="{{ $descripcion }}"
+                                                title="{{ $descripcion }}"
+                                                onerror="this.onerror=null; this.src='{{ asset('assets/img/adminlte/img/produc_default.jfif') }}';">
+                                        </div>
+                                    </td>               
+
+                                    <!-- Columna Código / Referencia (combinada) -->
                                     <td>
-                                        <span class="badge bg-light text-dark">
-                                            {{ $item->fecha->format('d/m/Y') }}
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-dark text-white mb-1" 
+                                                data-bs-toggle="tooltip" 
+                                                data-bs-title="Código del producto">
+                                                {{ $codigo }}
+                                            </span>
+                                            @if($referencia && $referencia != 'N/A' && $referencia != $codigo)
+                                                <small class="text-muted" 
+                                                    data-bs-toggle="tooltip" 
+                                                    data-bs-title="Referencia del fabricante">
+                                                    <i class="fas fa-barcode me-1"></i>Ref. {{ $referencia }}
+                                                </small>
+                                            @endif
+                                        </div>
+                                    </td>
+                                    
+                                    <!-- Columna Descripción -->
+                                    <td>
+                                        <div>
+                                            <strong class="d-block mb-1" 
+                                                    data-bs-toggle="tooltip" 
+                                                    data-bs-title="{{ $descripcion }}">
+                                                {{ $descripcion }}
+                                            </strong>
+                                        </div>
+                                    </td>
+                                    
+                                    <!-- Columna Cantidad -->
+                                    <td class="text-center">
+                                        <span class="badge bg-primary rounded-pill px-2 py-1"
+                                            data-bs-toggle="tooltip" 
+                                            data-bs-title="{{ number_format($cantidad) }} unidades vendidas">
+                                            {{ number_format($cantidad) }}
                                         </span>
                                     </td>
-
-                                    <td class="fw-bold">
-                                        {{ $item->nombreSucursal }}
-                                    </td>
-
-                                    <td class="text-center fw-bold text-primary">
-                                        {{ $item->cantidad }}
-                                    </td>
-
-                                    <td class="text-center text-success">
-                                        ${{ number_format($item->totalDivisa, 2, ',', '.') }}
-                                    </td>
-
-                                    <td class="text-center text-muted">
-                                        {{ number_format($item->totalBs, 2, ',', '.') }} Bs
-                                    </td>
-
-                                    <!-- Nueva columna: Utilidad $ -->
-                                    <td class="text-center text-muted">
-                                        ${{ number_format($item->utilidadDivisaDiario, 2, ',', '.') }}
-                                    </td>
-
-                                    <!-- Nueva columna: Margen % -->
-                                    <td class="text-center text-muted">
-                                        {{ number_format($item->margenDivisaDiario, 2, ',', '.') }} %
-                                    </td>
-
+                                    
+                                    <!-- Columna Costo -->
                                     <td class="text-center">
-                                        <div class="btn-group" role="group">
-                                            <a href="{{ route('ventas.detalle', [$item->id ?? 0, $item->sucursalId ?? 0]) }}"
-                                                class="btn btn-sm btn-outline-primary"
-                                                title="Ver detalles">
-                                                    <i class="bi bi-eye"></i>
-                                            </a>
-                                            <button type="button"
-                                                    class="btn btn-sm btn-outline-danger"
-                                                    title="Eliminar"
-                                                    onclick="eliminarVenta({{ $item->id ?? '0' }})">
-                                                <i class="bi bi-trash"></i>
-                                            </button>
+                                        <div class="d-flex flex-column">
+                                            <strong>${{ number_format($costoUnitario, 2, ',', '.') }}</strong>
                                         </div>
+                                    </td>
+                                    
+                                    <!-- Columna PVP -->
+                                    <td class="text-end">
+                                        <strong class="text-success fs-6"
+                                                data-bs-toggle="tooltip" 
+                                                data-bs-title="Precio de venta por unidad">
+                                            ${{ number_format($pvpUnitario, 2, ',', '.') }}
+                                        </strong>
+                                    </td>
+                                    
+                                    <!-- Columna Total -->
+                                    <td class="text-end">
+                                        <div>
+                                            <strong class="text-primary fs-6"
+                                                    data-bs-toggle="tooltip" 
+                                                    data-bs-title="Total ventas de este producto">
+                                                ${{ number_format($montoTotal, 2, ',', '.') }}
+                                            </strong>
+                                        </div>
+                                    </td>
+                                    
+                                    <!-- Columna Margen -->
+                                    <td class="text-end">
+                                        <span class="badge {{ $margenColor }} text-white px-2 py-1" 
+                                            data-bs-toggle="tooltip" 
+                                            data-bs-title="Margen de ganancia">
+                                            <i class="{{ $margenIcon }} me-1"></i>
+                                            {{ number_format($margen, 1, ',', '.') }}%
+                                        </span>
+                                    </td>
+                                    
+                                    <!-- Columna Utilidad -->
+                                    <td class="text-end">
+                                        <span class="badge {{ $utilidad >= 0 ? 'bg-success' : 'bg-danger' }} text-white px-2 py-1"
+                                            data-bs-toggle="tooltip" 
+                                            data-bs-title="Utilidad generada">
+                                            ${{ number_format($utilidad, 2, ',', '.') }}
+                                        </span>
+                                    </td>
+                                    
+                                    <!-- Columna Acción -->
+                                    <td class="text-center">
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-primary"
+                                                title="Ver detalles"
+                                                onclick="verDetalleProducto({{ $productoId ?? '0' }})">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
                                     </td>
                                 </tr>
                             @endforeach
                         </tbody>
-
+                        <tfoot class="table-light">
+                            <tr class="fw-bold">
+                                <td colspan="3" class="text-end">TOTALES:</td>
+                                <td class="text-center">
+                                    <span class="badge bg-primary px-3 py-2">
+                                        {{ number_format($ventas['TotalProductosVendidos'] ?? 0) }}
+                                    </span>
+                                </td>
+                                <td class="text-end">
+                                    <div class="d-flex flex-column align-items-end">
+                                        <small class="text-muted">Total Costo:</small>
+                                        <span class="text-dark fs-6">${{ number_format($totalCosto, 2, ',', '.') }}</span>
+                                    </div>
+                                </td>
+                                <td class="text-end">-</td>
+                                <td class="text-end">
+                                    <span class="text-primary fs-6">
+                                        ${{ number_format($totalVentas, 2, ',', '.') }}
+                                    </span>
+                                </td>
+                                <td class="text-end">
+                                    <span class="badge {{ ($ventas['MargenProductos'] ?? 0) >= 0 ? 'bg-success' : 'bg-danger' }} text-white px-3 py-2">
+                                        {{ number_format($ventas['MargenProductos'] ?? 0, 2, ',', '.') }}%
+                                    </span>
+                                </td>
+                                <td class="text-end">
+                                    <span class="text-success fs-6">
+                                        ${{ number_format($totalUtilidad, 2, ',', '.') }}
+                                    </span>
+                                </td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>
+            
             <div class="card-footer">
                 <div class="d-flex justify-content-between align-items-center">
-
+                    <div class="text-muted">
+                        <i class="fas fa-cube me-1"></i>
+                        {{ $ventas['TotalProductosUnicos'] ?? 0 }} productos únicos
+                    </div>
+                    
                     <div class="fw-bold text-success">
-                        Total período: ${{ number_format($ventas['MontoDivisaTotalPeriodo'], 2, ',', '.') }}
+                        <i class="fas fa-chart-line me-1"></i>
+                        Ventas Totales: ${{ number_format($ventas['TotalVentasProductosDivisa'] ?? 0, 2, ',', '.') }}
                     </div>
-
+                    
                     <div class="fw-bold text-primary">
-                        Utilidad: {{ $ventas['UtilidadNetaPeriodoDsp'] }}
+                        <i class="fas fa-percentage me-1"></i>
+                        Margen Global: {{ $ventas['MargenProductos'] ?? 0 }}%
                     </div>
-
-                    <div class="fw-bold text-dark">
-                        Margen: {{ $ventas['MargenNetoPeriodoDsp'] }}%
-                    </div>
-
                 </div>
-            </div>    
+            </div>  
         </div>
         
         @else
@@ -200,13 +345,22 @@
                     </div>
                     <h3 class="empty-state-title mt-3">No hay datos para mostrar</h3>
                     <p class="empty-state-subtitle">
-                        No se encontraron registros para el período seleccionado.
+                        No se encontraron registros para el período seleccionado o la sucursal.
                     </p>
                 </div>
             </div>
         </div>
         @endif
         
+    </div>
+</div>
+
+<!-- Modal/Overlay para la imagen en zoom -->
+<div id="imageZoomOverlay" class="image-zoom-overlay" style="display: none;">
+    <div class="image-zoom-container">
+        <span class="image-zoom-close" onclick="closeZoom()">&times;</span>
+        <img id="zoomedImage" src="" alt="">
+        <div id="imageDescription" class="image-description"></div>
     </div>
 </div>
 
@@ -256,7 +410,7 @@
         // ORDENAR TABLA POR CLIC EN TH
         // ==========================
         (function() {
-            const tabla = document.getElementById('tablaIndiceRotacion');
+            const tabla = document.getElementById('tablaProductosAgrupados');
             if (!tabla) return;
 
             const ths = tabla.querySelectorAll('thead th');
@@ -335,6 +489,41 @@
 
     });
 
+    // Abrir zoom al hacer clic
+    document.querySelectorAll('.img-zoomable').forEach(img => {
+        img.addEventListener('click', function() {
+            const fullImage = this.getAttribute('data-full-image');
+            const description = this.getAttribute('data-description');
+            
+            document.getElementById('zoomedImage').src = fullImage;
+            document.getElementById('imageDescription').textContent = description;
+            document.getElementById('imageZoomOverlay').style.display = 'flex';
+            
+            // Prevenir scroll del body
+            document.body.style.overflow = 'hidden';
+        });
+    });
+
+    // Cerrar zoom
+    function closeZoom() {
+        document.getElementById('imageZoomOverlay').style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
+
+    // Cerrar con Escape
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeZoom();
+        }
+    });
+
+    // Cerrar al hacer clic fuera de la imagen
+    document.getElementById('imageZoomOverlay').addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeZoom();
+        }
+    });
+
     function obtenerTasasActuales() {
         const bcv = parseFloat(
             document.querySelector('#tasa-actual-texto')?.dataset.tasa ?? 0
@@ -348,7 +537,7 @@
     }
     
     function exportarExcel() {
-        const tabla = document.getElementById('tablaIndiceRotacion');
+        const tabla = document.getElementById('tablaProductosAgrupados');
 
         if (!tabla) {
             alert('No se encontró la tabla para exportar');
@@ -362,12 +551,18 @@
         // =========================
         const headers = [];
         tabla.querySelectorAll('thead th').forEach((th) => {
-            const texto = th.textContent.trim();
+            const texto = th.textContent.trim().toLowerCase();
 
-            // Ignorar columna Acción
-            if (!texto.toLowerCase().includes('accion') && !texto.toLowerCase().includes('acción')) {
-                headers.push(texto);
+            // Ignorar columnas
+            if (
+                texto.includes('imagen') ||
+                texto.includes('acción') ||
+                texto.includes('accion')
+            ) {
+                return;
             }
+
+            headers.push(th.textContent.trim());
         });
         datos.push(headers);
 
@@ -383,32 +578,38 @@
                 const th = tabla.querySelector(`thead th:nth-child(${index + 1})`);
                 if (!th) return;
 
-                const textoTh = th.textContent.trim();
+                const textoTh = th.textContent.trim().toLowerCase();
 
-                // Ignorar columna Acción
-                if (textoTh.toLowerCase().includes('accion') || textoTh.toLowerCase().includes('acción')) {
+                // Saltar columnas de imagen y acción
+                if (
+                    textoTh.includes('imagen') ||
+                    textoTh.includes('acción') ||
+                    textoTh.includes('accion')
+                ) {
                     return;
                 }
 
-                let texto = td.textContent
-                    .trim()
-                    .replace(/\n/g, ' ')
-                    .replace(/\s+/g, ' ');
+                let texto = td.textContent.trim();
 
-                // Si hay badge, usar su contenido
+                // Si hay badge se usa el texto interno del badge
                 const badge = td.querySelector('.badge');
                 if (badge) {
                     texto = badge.textContent.trim();
                 }
 
-                // Convertir a número si corresponde
+                // normalizar varios formatos
+                texto = texto.replace(/\n/g, ' ').replace(/\s+/g, ' ');
+
+                // Convertir a número si aplica
                 if (
-                    textoTh.toLowerCase().includes('unidades') ||
-                    textoTh.toLowerCase().includes('monto') ||
-                    textoTh.toLowerCase().includes('utilidad') ||   // NUEVO
-                    textoTh.toLowerCase().includes('margen')       // NUEVO
+                    textoTh.includes('cantidad') ||
+                    textoTh.includes('costo') ||
+                    textoTh.includes('pvp') ||
+                    textoTh.includes('total') ||
+                    textoTh.includes('margen') ||
+                    textoTh.includes('utilidad')
                 ) {
-                    texto = texto.replace('$', '').replace('Bs', '').replace('%', '').replace(/\./g, '').replace(',', '.').trim();
+                    texto = texto.replace('$', '').replace('%', '').replace(/\./g, '').replace(',', '.').trim();
                     const numero = parseFloat(texto);
                     texto = isNaN(numero) ? texto : numero;
                 }
@@ -440,10 +641,10 @@
         });
         ws['!cols'] = maxColLengths.map(l => ({ wch: Math.min(l, 50) }));
 
-        XLSX.utils.book_append_sheet(wb, ws, 'Ventas Diarias');
+        XLSX.utils.book_append_sheet(wb, ws, 'Productos Vendidos');
 
         const fecha = new Date().toISOString().split('T')[0];
-        XLSX.writeFile(wb, `Ventas_Diarias_${fecha}.xlsx`);
+        XLSX.writeFile(wb, `VentasPorProducto_${fecha}.xlsx`);
     }
     
     // Función para ordenar tabla (opcional)
@@ -452,9 +653,9 @@
     }
     
     // Función principal para generar PDF de Ventas Diarias
-    function pdfTablaVentasDiarias() {
-        const tabla = document.getElementById('tablaIndiceRotacion');
-        
+    function pdfTablaVentasProducto() {
+        const tabla = document.getElementById('tablaProductosAgrupados');
+
         if (!tabla) {
             alert('No se encontró la tabla para exportar');
             return;
@@ -463,8 +664,7 @@
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('landscape');
 
-        // Título del documento
-        const titulo = 'Ventas Diarias - ' + new Date().toLocaleDateString('es-ES');
+        const titulo = 'Productos Vendidos - ' + new Date().toLocaleDateString('es-ES');
         doc.setFontSize(16);
         doc.text(titulo, 14, 15);
 
@@ -472,49 +672,73 @@
         // ENCABEZADOS
         // =========================
         const headers = [];
-        tabla.querySelectorAll('thead th').forEach(th => {
-            const texto = th.textContent.trim();
-            if (!texto.toLowerCase().includes('accion') && !texto.toLowerCase().includes('acción')) {
-                headers.push(texto);
+        tabla.querySelectorAll('thead th').forEach((th) => {
+            const texto = th.textContent.trim().toLowerCase();
+
+            if (
+                texto.includes('imagen') ||
+                texto.includes('acción') ||
+                texto.includes('accion')
+            ) {
+                return;
             }
+
+            headers.push(th.textContent.trim());
         });
 
         // =========================
-        // DATOS DE FILAS
+        // FILAS
         // =========================
         const datos = [];
-        tabla.querySelectorAll('tbody tr').forEach(fila => {
+        tabla.querySelectorAll('tbody tr').forEach((fila) => {
             if (fila.style.display === 'none') return;
 
             const filaData = [];
+
             fila.querySelectorAll('td').forEach((td, index) => {
                 const th = tabla.querySelector(`thead th:nth-child(${index + 1})`);
                 if (!th) return;
-                const textoTh = th.textContent.trim();
 
-                // Ignorar columna Acción
-                if (textoTh.toLowerCase().includes('accion') || textoTh.toLowerCase().includes('acción')) return;
+                const textoTh = th.textContent.trim().toLowerCase();
 
-                let texto = td.textContent
-                    .trim()
+                if (
+                    textoTh.includes('imagen') ||
+                    textoTh.includes('acción') ||
+                    textoTh.includes('accion')
+                ) {
+                    return;
+                }
+
+                let texto = td.textContent.trim()
                     .replace(/\n/g, ' ')
                     .replace(/\s+/g, ' ');
 
-                // Si hay badge (fecha o cantidad), tomar su texto
+                // Si hay badge, usar el texto del badge
                 const badge = td.querySelector('.badge');
                 if (badge) texto = badge.textContent.trim();
 
-                // Formatear números de montos, utilidades y margen
+                // Normalizar números
                 if (
-                    textoTh.toLowerCase().includes('unidades') ||
-                    textoTh.toLowerCase().includes('monto') ||
-                    textoTh.toLowerCase().includes('utilidad') ||
-                    textoTh.toLowerCase().includes('margen')
+                    textoTh.includes('cantidad') ||
+                    textoTh.includes('costo') ||
+                    textoTh.includes('pvp') ||
+                    textoTh.includes('total') ||
+                    textoTh.includes('utilidad') ||
+                    textoTh.includes('margen')
                 ) {
-                    // Limpiar texto
-                    texto = texto.replace('$', '').replace('Bs', '').replace('%', '').replace(/\./g, '').replace(',', '.').trim();
-                    const numero = parseFloat(texto);
-                    texto = isNaN(numero) ? '' : numero.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    let value = texto.replace('$', '').replace('%', '').replace(/\./g, '').replace(',', '.').trim();
+                    let numero = parseFloat(value);
+
+                    if (!isNaN(numero)) {
+                        // Formato final según tipo
+                        if (textoTh.includes('margen')) {
+                            texto = numero.toFixed(1) + '%';
+                        } else if (textoTh.includes('cantidad')) {
+                            texto = numero.toFixed(0);
+                        } else {
+                            texto = numero.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        }
+                    }
                 }
 
                 filaData.push(texto);
@@ -551,20 +775,18 @@
             },
             margin: { top: 35 },
             columnStyles: headers.reduce((acc, header, index) => {
-                if (
-                    header.toLowerCase().includes('unidades') ||
-                    header.toLowerCase().includes('monto') ||
-                    header.toLowerCase().includes('utilidad') ||
-                    header.toLowerCase().includes('margen')
-                ) {
-                    acc[index] = { halign: 'right' }; // números alineados a la derecha
+                const h = header.toLowerCase();
+                if (h.includes('costo') || h.includes('pvp') || h.includes('total') || h.includes('utilidad') || h.includes('margen')) {
+                    acc[index] = { halign: 'right' };
+                } else if (h.includes('cantidad')) {
+                    acc[index] = { halign: 'center' };
                 }
                 return acc;
             }, {})
         });
 
         // =========================
-        // PIE DE PÁGINA
+        // FOOTER
         // =========================
         const totalPaginas = doc.internal.getNumberOfPages();
         for (let i = 1; i <= totalPaginas; i++) {
@@ -574,46 +796,13 @@
             doc.text(`Generado: ${new Date().toLocaleString('es-ES')}`, 14, doc.internal.pageSize.height - 10);
         }
 
-        // =========================
-        // DESCARGAR PDF
-        // =========================
         const fecha = new Date().toISOString().split('T')[0];
-        doc.save(`Ventas_Diarias_${fecha}.pdf`);
+        doc.save(`Productos_Vendidos_${fecha}.pdf`);
     }
 
-    function verDetalleVenta(id, sucursal) {
-        
-        fetch(`{{ url('/ventas-diarias/detalle') }}/${id}/${sucursal}`)
-        .then(async response => {
-            
-            const text = await response.text();
-            
-            if (!response.ok) {
-                try {
-                    const errorData = JSON.parse(text);
-                    throw new Error(errorData.msg || `Error ${response.status}: ${errorData.message || 'Error del servidor'}`);
-                } catch {
-                    throw new Error(`Error ${response.status}: ${text.substring(0, 200)}`);
-                }
-            }
-            
-            return JSON.parse(text);
-        })
-        .then(res => {
-            
-            if (res.ok && res.data) {
-                
-                // Mostrar en modal con tabla
-                mostrarDetallesVentaModal(res.data);
-                
-                //showToast(`${res.data.length} productos cargados`, 'success');
-            } else {
-                showToast(res.msg || 'Error al cargar detalles', 'danger');
-            }
-        })
-        .catch((err) => {
-            showToast('❌ Error: ' + err.message, 'danger');
-        });
+    function verDetalleProducto(id) {
+        var ruta = '{{ url("/") }}' + '/productos/' + id;
+        window.location.href = ruta;
     }
 
     // Función para mostrar detalles en un modal con Bootstrap
@@ -919,7 +1108,7 @@
         // Descargar PDF
         const fechaArchivo = new Date().toISOString().split('T')[0];
         doc.save(`Detalle_Venta_${nombreSucursal}_${fechaArchivo}.pdf`);
-}
+    }
 
     // Si no tienes Bootstrap, aquí hay una versión alternativa más simple:
     function mostrarDetallesVentaSimple(detalles) {
@@ -1063,109 +1252,65 @@
         document.body.insertAdjacentHTML('beforeend', modalHtml);
     }
 
-    function eliminarVenta(id) {
-        if(!confirm('¿Eliminar esta venta?')) return;
-
-        // Crear FormData en lugar de JSON
-        const formData = new FormData();
-        formData.append('venta_id', id);
-        formData.append('_token', '{{ csrf_token() }}'); // Si no usas el header
-
-        fetch('{{ url("/ventas-diarias/eliminar") }}', {
-            method: 'POST',
-            headers: { 
-                // Removemos 'Content-Type': 'application/json'
-                // El navegador lo establecerá automáticamente con el boundary correcto
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRF-TOKEN': '{{ csrf_token() }}' // Mantenemos el header
-            },
-            body: formData // Usamos FormData en lugar de JSON.stringify
-        })
-        .then(r => {
-            if (!r.ok) {
-                // Si la respuesta no es OK, intentar leer como texto primero
-                return r.text().then(text => {
-                    throw new Error(`HTTP ${r.status}: ${text.substring(0, 200)}`);
-                });
-            }
-            return r.json();
-        })
-        .then(resp => {
-            if (resp.ok) {
-                const fila = document.querySelector(`#fila-${id}`);
-                if (fila) fila.remove();
-                showToast('Venta eliminada correctamente', 'success');
-
-                const tbody = document.querySelector('#tablaIndiceRotacion tbody');
-                if (tbody.children.length === 0) {
-                    tbody.innerHTML = `
-                        <tr>
-                            <td colspan="6" class="text-center text-muted py-3">
-                                No hay ventas registradas
-                            </td>
-                        </tr>`;
-                }
-            } else {
-                console.error('Error del servidor:', resp);
-                showToast(resp.message || 'Error eliminando venta', 'danger');
-            }
-        })
-        .catch(err => {
-            console.error('Error completo:', err);
-            showToast('Error eliminando venta: ' + err.message, 'danger');
-        });
-    }
-
 </script>
 
 <style>
-    .avatar-sm {
-        width: 40px;
-        height: 40px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    
-    .avatar-title {
-        width: 100%;
-        height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.2rem;
-    }
-    
-    .empty-state {
-        max-width: 500px;
-        margin: 0 auto;
-    }
-    
-    .empty-state-icon {
-        margin-bottom: 1rem;
-        opacity: 0.5;
-    }
-    
+    /* Mejoras para la tabla */
     .table th {
         white-space: nowrap;
+        font-size: 0.9rem;
     }
     
-    .badge.bg-opacity-10 {
-        background-color: rgba(var(--bs-primary-rgb), 0.1);
+    .table td {
+        vertical-align: middle;
     }
     
-    @media print {
-        .card-header, .card-footer, .btn-group, .app-content-header, .breadcrumb {
-            display: none !important;
+    .product-description {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .avatar-sm img {
+        transition: transform 0.2s;
+    }
+    
+    .avatar-sm img:hover {
+        transform: scale(1.1);
+    }
+    
+    .btn-icon {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+    }
+    
+    .btn-icon:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    
+    /* Mejora para badges en el footer */
+    tfoot .badge {
+        font-size: 0.9rem;
+    }
+    
+    /* Responsive */
+    @media (max-width: 1400px) {
+        .product-description {
+            max-width: 300px;
         }
-        
-        .card {
-            border: none !important;
-            box-shadow: none !important;
-        }
-        
-        .table {
-            font-size: 11px;
+    }
+    
+    @media (max-width: 1200px) {
+        .product-description {
+            max-width: 250px;
         }
     }
 
@@ -1323,37 +1468,6 @@
         .img-zoomable {
             cursor: default !important;
         }
-    }
-
-    /* Estilos para el modal de actualización */
-    #modalActualizarPVP .modal-header {
-        background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
-    }
-
-    #resumenCambio {
-        background-color: #f8f9fa;
-        border-left: 4px solid #007bff;
-    }
-
-    .input-group-text {
-        background-color: #e9ecef;
-        font-weight: bold;
-    }
-
-    .form-control-lg {
-        font-size: 1.25rem;
-        font-weight: bold;
-    }
-
-    .badge.bg-light {
-        border: 1px solid #dee2e6;
-    }
-
-    /* Estilo para el botón de actualizar */
-    .btn-outline-warning:hover {
-        background-color: #ffc107;
-        border-color: #ffc107;
-        color: #000;
     }
 </style>
 @endsection

@@ -5,11 +5,13 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\ProductoSucursal;
 use App\Models\Producto;
+use App\Models\ProductosSucursalView;
 
 use App\DTO\ProductoDTO;
 use App\DTO\SucursalDTO;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Storage;
+use App\Helpers\GeneralHelper;
 
 use Illuminate\Support\Facades\DB;
 
@@ -74,4 +76,41 @@ class ProductoController extends Controller
             'data' => $resultado
         ]);
     }
+
+    // Ver detalle del producto
+    public function show($id)
+    {
+        // Buscar el producto en la tabla Productos
+        $producto = Producto::findOrFail($id);
+
+        // Buscar las sucursales
+        $listaSucursales = GeneralHelper::buscarSucursales(1);
+
+        // Si es 'todas las sucursales', recorrer la lista de sucursales y buscar los productos
+        foreach ($listaSucursales as $sucursal) {
+            // Buscar el producto en la sucursal específica
+            $productoSucursalItem = ProductosSucursalView::where('ID', $id)
+                                                        ->where('SucursalId', $sucursal->ID)
+                                                        ->where('Estatus', 1)
+                                                        ->first();
+
+            // Solo agregar si el producto está disponible en esa sucursal
+            if ($productoSucursalItem) {
+                // Obtener el nombre de la sucursal desde la tabla Sucursales
+                $sucursalNombre = \App\Models\Sucursal::where('ID', $sucursal->ID)->value('Nombre');
+
+                // Agregar a la lista con nombre de sucursal
+                $productoSucursal[] = [
+                    'producto' => $productoSucursalItem, 
+                    'sucursal_nombre' => $sucursalNombre
+                ];
+            }
+        }
+
+        // dd($productoSucursal);
+
+        // Pasamos tanto la información del producto como la información de sucursales
+        return view('cpanel.productos.detalle', compact('producto', 'productoSucursal'));
+    }
+
 }

@@ -19,6 +19,35 @@ class ProductoDTO
     public string $UrlFoto;
     public int $Tipo; // Equivalente a tdcmp en .NET
 
+    public string $CodigoBarra = '0';
+    public string $Referencia = 'N/A';
+    public int $SucursalId;
+    public float $CostoBs;
+    public float $PvpBs;
+    public ?Carbon $FechaActualizacion;
+    public ?Carbon $FechaCreacion;
+    public bool $EsCambioPrecio = false;
+    public bool $EsProveedorAsignado = false;
+    public bool $EsSeleccionado = false;
+    public int $Estatus; 
+
+
+
+    public function getCodigoBarra(): string
+    {
+        return $this->CodigoBarra ?? '0';
+    }
+
+    public function getReferencia(): string
+    {
+        return $this->Referencia ?? 'N/A';
+    }
+
+    public function getNombreCompleto(): string
+    {
+        return "{$this->Codigo}-{$this->Descripcion}";
+    }
+
     // Campos calculados
     public function getMargen(): float
     {

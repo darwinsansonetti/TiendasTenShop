@@ -39,9 +39,12 @@ class AppServiceProvider extends ServiceProvider
 
             $paralelo = $valorParalelo ? $valorParalelo->valor : 0;
 
-            $listaSucursales = Cache::remember('lista_sucursales', 3600, function() {
-                return GeneralHelper::buscarSucursales(0);
-            });
+            // $listaSucursales = Cache::remember('lista_sucursales', 3600, function() {
+            //     return GeneralHelper::buscarSucursales(0);
+            // });
+
+            $listaSucursales = GeneralHelper::buscarSucursales(1);
+
             $user = Auth::user();
 
             $view->with(compact('tasa', 'listaSucursales', 'user', 'paralelo'));

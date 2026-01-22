@@ -110,6 +110,11 @@ Route::middleware('auth')->group(function() {
     // Guardar registros de las ventas diarias y ventas de los vendedores
     Route::post('/ventas/store', [VentasController::class, 'store'])->name('ventas.store');
 
+    // Ventas por producto
+    Route::get('/cpanel/ventas/producto', [VentasController::class, 'ventas_producto'])->name('cpanel.ventas.producto');
+
+    // Producto detalle
+    Route::get('/productos/{id}', [ProductoController::class, 'show'])->name('productos.show');
 });
 
 
