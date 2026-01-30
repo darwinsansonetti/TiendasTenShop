@@ -10,6 +10,7 @@ use App\Http\Controllers\DivisasController;
 use App\Http\Controllers\MensajesController;
 use App\Http\Controllers\SucursalController;
 use App\Http\Controllers\ProductoController;
+use App\Http\Controllers\CuadreController;
 
 use App\Http\Controllers\VentasController;
 
@@ -46,7 +47,7 @@ Route::get('/dashboard', function () {
 
 
 // Consultar tasa del dia
-Route::get('/divisa/tasa/{fecha}', [DivisaController::class, 'obtenerTasaCambioDiaria']);
+Route::get('/divisa/tasa/{fecha}', [DivisasController::class, 'obtenerTasaCambioDiaria']);
 
 // Recuperar password
 Route::post('/auth/recover-password', [AuthController::class, 'recoverPassword']);
@@ -115,6 +116,12 @@ Route::middleware('auth')->group(function() {
 
     // Producto detalle
     Route::get('/productos/{id}', [ProductoController::class, 'show'])->name('productos.show');
+
+    // Resumen Diario (Cuadre de caja)
+    Route::get('/cpanel/cuadre/resumen', [CuadreController::class, 'resumen_diario'])->name('cpanel.cuadre.resumen_diario');
+
+    // Detalles del Cierre Diario
+    Route::get('/cierre/detalle/{cierreDiario}', [CuadreController::class, 'detalle'])->name('cierre.detalle');
 });
 
 

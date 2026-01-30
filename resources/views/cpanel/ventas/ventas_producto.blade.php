@@ -384,6 +384,11 @@
     // Definir el array global al inicio de tu script
     let productosActualizados = [];
 
+    // Muestra un toast si no hay ventas
+    @if(is_null($ventas))
+        showToast('Seleccione una sucursal', 'danger');
+    @endif
+
     // Inicializar tooltips
     document.addEventListener('DOMContentLoaded', function() {
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))

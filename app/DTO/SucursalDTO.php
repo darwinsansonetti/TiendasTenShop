@@ -17,12 +17,13 @@ class SucursalDTO
     /**
      * Constructor opcional para inicializar con un array de datos.
      */
-    public function __construct(array $data = [])
+    public function __construct(array $data)
     {
-        foreach ($data as $key => $value) {
-            if (property_exists($this, $key)) {
-                $this->$key = $value;
-            }
-        }
+        $this->Id = $data['ID'] ?? null;
+        $this->Nombre = $data['Nombre'] ?? null;
+
+        $this->FechaCarga = !empty($data['FechaCarga'])
+            ? Carbon::parse($data['FechaCarga'])
+            : null;
     }
 }

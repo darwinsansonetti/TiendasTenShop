@@ -9,6 +9,7 @@ use App\Models\DivisaValor;
 use App\Models\Mensaje;
 use App\Models\Producto;
 use App\Models\VentaProducto;
+use App\Models\CierreDiario;
 
 use App\Helpers\ParametrosFiltroFecha;
 
@@ -30,7 +31,14 @@ use App\DTO\ComparacionSinVentaDTO;
 use App\DTO\ComparacionSinVentaDetallesDTO;
 use App\DTO\ProductoDTO;
 use App\DTO\VentaDiariaDTO;
+use App\DTO\CierreDiarioDTO;
+use App\DTO\CierreDiarioPeriodoDTO;
+use App\DTO\DivisaValorDTO;
+use App\DTO\PagoPuntoDeVentaDTO;
+use App\DTO\SucursalDTO;
 use App\DTO\VentasPeriodoDTO;
+use App\Enums\EnumCierreDiario;
+use App\Enums\EnumTipoCierre;
 use Illuminate\Support\Facades\Log;
 
 use Illuminate\Support\Facades\Auth;
@@ -304,4 +312,148 @@ class VentasHelper
         
         return $ventasPeriodoArray;
     }
+
+    public static function buscarListadoAuditoriasNew(ParametrosFiltroFecha $filtroFecha, int $sucursalId)
+    {
+        $query = CierreDiario::with([
+                'pagosPuntoDeVenta',
+                'sucursal',
+                'divisaValor'
+            ])
+            ->when($sucursalId > 0, fn($q) => $q->where('SucursalId', $sucursalId))
+            ->whereBetween('Fecha', [$filtroFecha->fechaInicio, $filtroFecha->fechaFin])
+            ->where('Tipo', 1);
+
+        $cierres = $query->get();
+
+        foreach ($cierres as $cierre) {
+
+            // Total punto de venta
+            $totalPDV = $cierre->pagosPuntoDeVenta->sum('Monto');
+            $cierre->PuntoDeVentaBs = number_format($totalPDV, 2, '.', '');
+
+            // Valor de la divisa
+            $divisaValor = $cierre->divisaValor->Valor ?? 1;
+            $cierre->DivisaValor = number_format($divisaValor, 2, '.', '');
+
+            // Conversión a divisa y formateo como string
+            $cierre->EfectivoBsaDivisa      = $divisaValor > 0 ? number_format($cierre->EfectivoBs / $divisaValor, 2, '.', '') : '0.00';
+            $cierre->PagoMovilBsaDivisa     = $divisaValor > 0 ? number_format($cierre->PagoMovilBs / $divisaValor, 2, '.', '') : '0.00';
+            $cierre->TransferenciaBsaDivisa = $divisaValor > 0 ? number_format($cierre->TransferenciaBs / $divisaValor, 2, '.', '') : '0.00';
+            $cierre->PuntoDeVentaBsaDivisa  = $divisaValor > 0 ? number_format($totalPDV / $divisaValor, 2, '.', '') : '0.00';
+
+            $cierre->SucursalNombre = $cierre->sucursal->Nombre ?? 'Sin Sucursal';
+        }
+
+        return $cierres;
+    }
+
+    public static function buscarListadoAuditorias(?CierreDiarioPeriodoDTO $cierreDiario, ParametrosFiltroFecha $filtroFecha, int $sucursalId)
+    {
+
+        $cierreDiario = self::buscarCierresAuditorias($filtroFecha, $sucursalId);
+
+        if (!$cierreDiario) {
+            $cierreDiario = new CierreDiarioPeriodoDTO();
+            $cierreDiario->ListadoCierresDiarios = [];
+        } elseif (!$cierreDiario->ListadoCierresDiarios) {
+            $cierreDiario->ListadoCierresDiarios = [];
+        }
+
+        return $cierreDiario;
+    }
+
+    private static function buscarCierresAuditorias(ParametrosFiltroFecha $filtroFecha, int $sucursalId)
+    {
+
+        return self::buscarPeriodoCierreDiario($sucursalId, $filtroFecha, EnumTipoCierre::Auditoria);
+    }
+
+    private static function buscarPeriodoCierreDiario(int $sucursalId, ParametrosFiltroFecha $filtroFecha, EnumTipoCierre $tipoCierre)
+    {
+        $cierreDiarioPeriodoDTO = new CierreDiarioPeriodoDTO();
+
+        $listaCierre = self::buscarListaCierreDiario($sucursalId, $filtroFecha, $tipoCierre);
+
+        if ($listaCierre) {
+            $cierreDiarioPeriodoDTO->ListadoCierresDiarios = $listaCierre;
+        }
+
+        $cierreDiarioPeriodoDTO->FechaInicio = $filtroFecha->fechaInicio;
+        $cierreDiarioPeriodoDTO->FechaFin = $filtroFecha->fechaFin;
+
+        return $cierreDiarioPeriodoDTO;
+    }
+
+    private static function buscarListaCierreDiario(int $sucursalId, ParametrosFiltroFecha $filtroFecha, EnumTipoCierre $tipoCierre, EnumCierreDiario $estatus = EnumCierreDiario::Todos)
+    {
+        $query = CierreDiario::with(['pagosPuntoDeVenta', 'sucursal'])
+            ->when($sucursalId > 0, fn($q) => $q->where('SucursalId', $sucursalId))
+            ->whereBetween('Fecha', [$filtroFecha->fechaInicio, $filtroFecha->fechaFin])
+            ->where('Tipo', $tipoCierre->value);
+
+        if ($estatus !== EnumCierreDiario::Todos) {
+            $query->where('Estatus', $estatus->value);
+        }
+
+        $listaCierreModel = $query->get();
+
+        return self::construirListaCierreDiario($listaCierreModel);
+    }
+
+
+    private static function construirListaCierreDiario($listaCierreModel)
+    {
+        $listaCierreDTO = [];
+
+        foreach ($listaCierreModel as $item) {
+            $dto = new CierreDiarioDTO();
+
+            // Campos base
+            $dto->CierreDiarioId = $item->CierreDiarioId;
+            $dto->Fecha = $item->Fecha;
+            $dto->SucursalId = $item->SucursalId;
+
+            // Sucursal (DTO)
+            $dto->Sucursal = $item->sucursal 
+                            ? new SucursalDTO($item->sucursal->toArray()) 
+                            : null;
+
+            // Pagos PDV
+            $dto->PagosPuntoDeVenta = $item->pagosPuntoDeVenta
+                ->map(fn($p) => new PagoPuntoDeVentaDTO($p))
+                ->toArray();
+
+            // Montos Bs
+            $dto->EfectivoBs = $item->EfectivoBs;
+            $dto->TransferenciaBs = $item->TransferenciaBs;
+            $dto->PagoMovilBs = $item->PagoMovilBs;
+            $dto->EgresoBs = $item->EgresoBs;
+
+            // Montos divisas
+            $dto->EfectivoDivisas = $item->EfectivoDivisas;
+            $dto->PuntoDeVentaDivisas = $item->PuntoDeVentaDivisas;
+            $dto->TransferenciaDivisas = $item->TransferenciaDivisas;
+            $dto->ZelleDivisas = $item->ZelleDivisas;
+            $dto->EgresoDivisas = $item->EgresoDivisas;
+
+            // Divisa
+            $dto->DivisaValor = $item->divisaValor
+                ? new DivisaValorDTO($item->divisaValor)
+                : null;
+
+            // Venta
+            $dto->VentaSistema = $item->VentaSistema;
+
+            // Transacciones (gastos)
+            $dto->GastosCierreDiario = $item->transacciones
+                ->map(fn($t) => new TransaccionDTO($t))
+                ->toArray();
+
+            $listaCierreDTO[] = $dto;
+        }
+
+        return $listaCierreDTO;
+    }
+
 }

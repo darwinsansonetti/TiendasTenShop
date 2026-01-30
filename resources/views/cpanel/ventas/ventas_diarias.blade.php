@@ -151,7 +151,7 @@
 
                                     <td class="text-center">
                                         <div class="btn-group" role="group">
-                                            <a href="{{ route('ventas.detalle', [$item->id ?? 0, $item->sucursalId ?? 0]) }}"
+                                            <a href="{{ route('ventas.detalle', [$item->id ?? 0, $item->sucursalId ?? 0]) }}?margen={{ $item->margenDivisaDiario ?? 0 }}"
                                                 class="btn btn-sm btn-outline-primary"
                                                 title="Ver detalles">
                                                     <i class="bi bi-eye"></i>

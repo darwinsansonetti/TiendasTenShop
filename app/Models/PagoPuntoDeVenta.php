@@ -31,6 +31,10 @@ class PagoPuntoDeVenta extends Model
 
     public function puntoDeVenta(): BelongsTo
     {
-        return $this->belongsTo(PuntoDeVenta::class, 'PuntoDeVentaId');
+        return $this->belongsTo(
+            PuntoDeVenta::class,
+            'PuntoDeVentaId',      // FK en PagosPuntoDeVenta
+            'PuntoDeVentaId'       // PK en PuntosDeVenta
+        );
     }
 }

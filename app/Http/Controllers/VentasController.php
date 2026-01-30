@@ -101,6 +101,8 @@ class VentasController extends Controller
 
     public function detalleVenta($ventaId, $sucursalId)
     {
+        $margenPromedio = request()->query('margen', 0);
+    
         try {
             // 1️⃣ Obtener la venta - USAR 'ID' en mayúsculas
             $venta = DB::table('Ventas')
@@ -215,7 +217,8 @@ class VentasController extends Controller
                     $prodDesc = $producto->Descripcion ?? $producto->descripcion ?? '';
                     $prodCodigo = $producto->Codigo ?? $producto->codigo ?? '';
                     $prodUrlFoto = $producto->UrlFoto ?? '';
-                    $fechaActualizacion = $producto->FechaActualizacion ?? $producto->FechaCreacion;
+                    // $fechaActualizacion = $producto->FechaActualizacion ?? $producto->FechaCreacion;
+                    $fechaActualizacion = $producto->FechaCreacion;
 
                     // Calcular días desde FechaActualizacion hasta hoy
                     if ($fechaActualizacion) {
@@ -304,7 +307,7 @@ class VentasController extends Controller
                 'totalItems' => $totalItems,
                 'totalDivisa' => $totalDivisa,
                 'totalUtilidad' => $totalUtilidad,
-                'promedioMargen' => $promedioMargen,
+                'promedioMargen' => $margenPromedio,
             ]);
 
         } catch (\Throwable $e) {

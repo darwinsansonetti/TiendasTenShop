@@ -105,9 +105,9 @@
                               Fecha de ingreso:
                           </span>
                           <span class="spec-value fw-medium">
-                            @if($producto->FechaCreacion || $producto->FechaActualizacion)
+                            @if($producto->FechaCreacion)
                                 @php
-                                    $fechaReferencia = $producto->FechaActualizacion ?? $producto->FechaCreacion;
+                                    $fechaReferencia = $producto->FechaCreacion;
                                     $FechaCreacion = \Carbon\Carbon::parse($fechaReferencia);
                                     $diasTranscurridos = $FechaCreacion->diffInDays(now());
                                     

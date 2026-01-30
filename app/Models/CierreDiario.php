@@ -44,6 +44,7 @@ class CierreDiario extends Model
         'Tipo',
         'VentaSistema',
         'ZelleDivisas',
+        'CasheaBs',
         'Observacion'
     ];
 
@@ -73,7 +74,8 @@ class CierreDiario extends Model
         'TransferenciaDivisas' => 'decimal:2',
         'Tipo' => 'integer',
         'VentaSistema' => 'decimal:2',
-        'ZelleDivisas' => 'decimal:2'
+        'ZelleDivisas' => 'decimal:2',
+        'CasheaBs' => 'decimal:2'
     ];
 
     public $timestamps = false;
@@ -91,5 +93,10 @@ class CierreDiario extends Model
     public function pagosPuntoDeVenta(): HasMany
     {
         return $this->hasMany(PagoPuntoDeVenta::class, 'CierreDiarioId');
+    }
+
+    public function divisaValor(): BelongsTo
+    {
+        return $this->belongsTo(DivisaValor::class, 'DivisaValorId');
     }
 }

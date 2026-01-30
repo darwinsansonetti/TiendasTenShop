@@ -1,6 +1,6 @@
 @extends('layout.layout_dashboard')
 
-@section('title', 'TiendasTenShop | Ventas por producto')
+@section('title', 'TiendasTenShop | Detalles de la Ventas')
 
 @php
     use App\Helpers\FileHelper;
@@ -117,6 +117,8 @@
                                     $margenClass = ($d['margen'] ?? 0) >= 0 ? 'bg-success' : 'bg-danger';
 
                                     $productoId = $producto['Id'];
+
+                                    $diasTranscurridos = $producto['DiasDesdeActualizacion'];
                                 @endphp
 
                                 <tr>
@@ -151,7 +153,7 @@
                                     </td>
 
                                     <td class="text-center">
-                                        {{ $producto['DiasDesdeActualizacion'] }} dias
+                                        {{ $diasTranscurridos }} dias
                                     </td>
 
                                     <td class="text-center {{ ($d['utilidad_divisa'] ?? 0) >= 0 ? 'text-success' : 'text-danger' }}">
