@@ -122,6 +122,29 @@ Route::middleware('auth')->group(function() {
 
     // Detalles del Cierre Diario
     Route::get('/cierre/detalle/{cierreDiario}', [CuadreController::class, 'detalle'])->name('cierre.detalle');
+
+    // Registrar Cierre Diario
+    Route::get('/cpanel/registrar/cierre', [CuadreController::class, 'listar_registro_cierre'])->name('cpanel.cuadre.registrar_cierre');
+
+    // Verificar estatus Cierre Diario
+    Route::post('/cuadre/verificar', [CuadreController::class, 'verificarCierre'])->name('cpanel.cuadre.verificar');
+
+    // Crear Cierre Diario
+    Route::get('/cpanel/cierre/diario', [CuadreController::class, 'crear'])->name('cpanel.cuadre.crear');
+
+    // Ruta para actualizar cierre diario
+    Route::post('/cierres-diarios/{cierre}/actualizar', [CuadreController::class, 'actualizar'])->name('cierres-diarios.actualizar');
+
+    // Editar Cierre Diario Pendiente
+    Route::get('/cierre/editar/{cierreDiario}', [CuadreController::class, 'editar'])->name('cierre.editar');
+
+    // Gastos Diarios    
+    Route::prefix('gastos-diarios')->group(function () {
+        Route::post('/guardar', [CuadreController::class, 'guardar_gasto'])->name('gastos-diarios.guardar');
+        Route::get('/listar/{cierreId}', [CuadreController::class, 'listar_gastos'])->name('gastos-diarios.listar');
+        Route::delete('/eliminar/{gasto}', [CuadreController::class, 'eliminar_gasto'])->name('gastos-diarios.eliminar');
+    });
+
 });
 
 

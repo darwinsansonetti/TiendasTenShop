@@ -57,7 +57,8 @@ class GeneralHelper
 
         if ($valor) {
             $divisaDTO['DivisaValor'] = [
-                'Id' => $valor->Id,
+                // 'Id' => $valor->Id,
+                'ID' => $valor->ID,
                 'Fecha' => $valor->Fecha,
                 'Valor' => $valor->Valor
             ];

@@ -10,23 +10,28 @@ use App\Models\Mensaje;
 use App\Models\Producto;
 use App\Models\VentaProducto;
 use App\Models\CierreDiario;
-
-use App\Helpers\ParametrosFiltroFecha;
-
+use App\Models\AspNetUser;
+use App\Models\Usuario;
 use App\Models\VentaDiariaTotalizada;
 use App\Models\VentaVendedoresTotalizada;
-use App\Models\Usuario;
+use App\Models\PuntoDeVenta;
+use App\Models\PagoPuntoDeVenta;
+use App\Models\Proveedor;
+use App\Models\TransaccionCierreDiario;
+use App\Models\Transaccion;
+
+use App\Helpers\ParametrosFiltroFecha;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 use App\Services\VentasService;
 
+use App\Helpers\GeneralHelper;
+
 use App\DTO\ComparacionSucursalesDTO;
 use App\DTO\ComparacionSucursalesDetalleDTO;
-
 use App\DTO\IndiceDeRotacionDTO;
 use App\DTO\IndiceDeRotacionDetallesDTO;
-
 use App\DTO\ComparacionSinVentaDTO;
 use App\DTO\ComparacionSinVentaDetallesDTO;
 use App\DTO\ProductoDTO;
@@ -35,12 +40,14 @@ use App\DTO\CierreDiarioDTO;
 use App\DTO\CierreDiarioPeriodoDTO;
 use App\DTO\DivisaValorDTO;
 use App\DTO\PagoPuntoDeVentaDTO;
+use App\DTO\PuntoDeVentaDTO;
 use App\DTO\SucursalDTO;
 use App\DTO\VentasPeriodoDTO;
+
 use App\Enums\EnumCierreDiario;
 use App\Enums\EnumTipoCierre;
-use Illuminate\Support\Facades\Log;
 
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 
 class VentasHelper
@@ -242,10 +249,7 @@ class VentasHelper
         
         return $ventasPeriodoArray;
     }
-
-    /**
-     * Calcular estadísticas para productos agrupados
-     */
+    
     private static function calcularEstadisticasProductos(array $ventasPeriodoArray): array
     {
         $productosAgrupados = $ventasPeriodoArray['ProductosAgrupados'] ?? collect();
@@ -313,16 +317,29 @@ class VentasHelper
         return $ventasPeriodoArray;
     }
 
-    public static function buscarListadoAuditoriasNew(ParametrosFiltroFecha $filtroFecha, int $sucursalId)
+    public static function buscarListadoAuditoriasNew(ParametrosFiltroFecha $filtroFecha, int $sucursalId, int $tipoEstatus)
     {
-        $query = CierreDiario::with([
-                'pagosPuntoDeVenta',
-                'sucursal',
-                'divisaValor'
-            ])
-            ->when($sucursalId > 0, fn($q) => $q->where('SucursalId', $sucursalId))
-            ->whereBetween('Fecha', [$filtroFecha->fechaInicio, $filtroFecha->fechaFin])
-            ->where('Tipo', 1);
+        if($tipoEstatus == 1){
+            $query = CierreDiario::with([
+                    'pagosPuntoDeVenta',
+                    'sucursal',
+                    'divisaValor'
+                ])
+                ->when($sucursalId > 0, fn($q) => $q->where('SucursalId', $sucursalId))
+                ->whereBetween('Fecha', [$filtroFecha->fechaInicio, $filtroFecha->fechaFin])
+                ->where('Estatus', $tipoEstatus)
+                ->where('Tipo', 1);
+        }else{
+            $query = CierreDiario::with([
+                    'pagosPuntoDeVenta',
+                    'sucursal',
+                    'divisaValor'
+                ])
+                ->when($sucursalId > 0, fn($q) => $q->where('SucursalId', $sucursalId))
+                ->whereBetween('Fecha', [$filtroFecha->fechaInicio, $filtroFecha->fechaFin])
+                ->where('Estatus', ">" , 1)
+                ->where('Tipo', 1);
+        }
 
         $cierres = $query->get();
 
@@ -401,7 +418,6 @@ class VentasHelper
         return self::construirListaCierreDiario($listaCierreModel);
     }
 
-
     private static function construirListaCierreDiario($listaCierreModel)
     {
         $listaCierreDTO = [];
@@ -454,6 +470,303 @@ class VentasHelper
         }
 
         return $listaCierreDTO;
+    }
+
+    public static function generarCierreDiario($sucursalId)
+    {
+        try {
+            $cierreDiarioDTO = new CierreDiarioDTO();
+            $cierreDiarioDTO->Fecha = Carbon::now();
+            $cierreDiarioDTO->SucursalId = (int) $sucursalId;
+            $cierreDiarioDTO->Tipo = 1; // Tipo: Cierre Diario
+            $cierreDiarioDTO->Estatus = 0; // Estatus: Nuevo
+            $cierreDiarioDTO->EsEditable = true;
+            $cierreDiarioDTO->Fecha = now();
+
+            // Obtener tasa de cambio
+            $tasa = GeneralHelper::obtenerTasaCambioDiaria(now());
+
+            if (!isset($tasa['DivisaValor'])) {
+                throw new \Exception('No se encontró tasa de cambio para hoy');
+            }
+
+            $divisaValorDTO = new DivisaValorDTO();
+            $divisaValorDTO->Id = (int) $tasa['DivisaValor']['ID'];
+            $divisaValorDTO->DivisaId = (int) ($tasa['DivisaValor']['ID'] ?? 1); // Asume DivisaId si existe
+            $divisaValorDTO->Valor = (float) $tasa['DivisaValor']['Valor'];
+            $divisaValorDTO->Fecha = Carbon::parse($tasa['DivisaValor']['Fecha'] ?? now());
+
+            // $cierreDiarioDTO->DivisaValor = (float) $tasa['DivisaValor']['Valor']; // Convertir a float
+            $cierreDiarioDTO->DivisaValor = $divisaValorDTO;
+            $cierreDiarioDTO->DivisaValorId = $divisaValorDTO->DivisaId;
+
+            // Guardar el Cierre Diario
+            $cierreDiarioDTO = self::guardarCierreDiario($cierreDiarioDTO);
+
+            // Generar la lista de pagos de puntos de venta
+            // $cierreDiarioDTO->PagosPuntoDeVenta = self::generarListaPagosPDV(
+            //     $cierreDiarioDTO->SucursalId, 
+            //     $cierreDiarioDTO->CierreDiarioId
+            // );
+
+            $cierreDiarioDTO->PagosPuntoDeVenta = self::generarListaPagosPDV($cierreDiarioDTO->SucursalId, $cierreDiarioDTO->CierreDiarioId);
+
+            // Ahora asignar el CierreDiarioId a cada pago PDV
+            if ($cierreDiarioDTO->PagosPuntoDeVenta) {
+                foreach ($cierreDiarioDTO->PagosPuntoDeVenta as $pagoPDV) {
+                    $pagoPDV->CierreDiarioId = $cierreDiarioDTO->CierreDiarioId;
+                }
+            }
+
+            return $cierreDiarioDTO;
+
+        } catch (\Exception $e) {
+            \Log::error('Error en generarCierreDiario: ' . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    public static function guardarCierreDiario(CierreDiarioDTO $cierreDiarioDTO)
+    {
+
+        // Buscar si ya existe el CierreDiario
+        $cierreCajaModel = CierreDiario::find($cierreDiarioDTO->CierreDiarioId);
+
+        if (!$cierreCajaModel) {
+            // Si no se encuentra, creamos un nuevo modelo
+            $cierreCajaModel = new CierreDiario();
+        }
+
+        // Mapear todos los campos del CierreDiarioDTO al modelo CierreDiario
+        $cierreCajaModel->Fecha = $cierreDiarioDTO->Fecha;
+        $cierreCajaModel->SucursalId = $cierreDiarioDTO->SucursalId;
+        // $cierreCajaModel->divisa_valor = $cierreDiarioDTO->DivisaValor;  // DivisaValor se puede mapear directamente
+        $cierreCajaModel->DivisaValorId = $cierreDiarioDTO->DivisaValorId;
+
+        // Mapeo de campos adicionales
+        $cierreCajaModel->MontoBaseGeneral = $cierreDiarioDTO->MontoBaseGeneral;
+        $cierreCajaModel->MontoBaseExento = $cierreDiarioDTO->MontoBaseExento;
+        $cierreCajaModel->ImpuestoGeneral = $cierreDiarioDTO->ImpuestoGeneral;
+        $cierreCajaModel->MontoBaseGeneralDevoluciones = $cierreDiarioDTO->MontoBaseGeneralDevoluciones;
+        $cierreCajaModel->MontoImpuestoGeneralDevoluciones = $cierreDiarioDTO->MontoImpuestoGeneralDevoluciones;
+        $cierreCajaModel->MontoBaseExentoDevoluciones = $cierreDiarioDTO->MontoBaseExentoDevoluciones;
+        $cierreCajaModel->MontoBaseGeneralAuditado = $cierreDiarioDTO->MontoBaseGeneralAuditado;
+        $cierreCajaModel->MontoBaseExentoAuditado = $cierreDiarioDTO->MontoBaseExentoAuditado;
+        $cierreCajaModel->ImpuestoGeneralAuditado = $cierreDiarioDTO->ImpuestoGeneralAuditado;
+        $cierreCajaModel->MontoBaseGeneralDevolucionesAuditado = $cierreDiarioDTO->MontoBaseGeneralDevolucionesAuditado;
+        $cierreCajaModel->MontoImpuestoGeneralDevolucionesAuditado = $cierreDiarioDTO->MontoImpuestoGeneralDevolucionesAuditado;
+        $cierreCajaModel->MontoBaseExentoDevolucionesAuditado = $cierreDiarioDTO->MontoBaseExentoDevolucionesAuditado;
+        $cierreCajaModel->Estatus = $cierreDiarioDTO->Estatus;
+        $cierreCajaModel->EfectivoBs = $cierreDiarioDTO->EfectivoBs ?? 0.00;
+        $cierreCajaModel->TransferenciaBs = $cierreDiarioDTO->TransferenciaBs ?? 0.00;
+        $cierreCajaModel->Observacion = $cierreDiarioDTO->Observacion;
+        $cierreCajaModel->PagoMovilBs = $cierreDiarioDTO->PagoMovilBs ?? 0.00;
+        $cierreCajaModel->EgresoBs = $cierreDiarioDTO->EgresoBs ?? 0.00;
+        $cierreCajaModel->EfectivoDivisas = $cierreDiarioDTO->EfectivoDivisas ?? 0;
+        $cierreCajaModel->PuntoDeVentaDivisas = $cierreDiarioDTO->PuntoDeVentaDivisas ?? 0;
+        $cierreCajaModel->TransferenciaDivisas = $cierreDiarioDTO->TransferenciaDivisas ?? 0;
+        $cierreCajaModel->ZelleDivisas = $cierreDiarioDTO->ZelleDivisas ?? 0;
+        $cierreCajaModel->EgresoDivisas = $cierreDiarioDTO->EgresoDivisas ?? 0;
+        $cierreCajaModel->Tipo = $cierreDiarioDTO->Tipo;
+        $cierreCajaModel->VentaSistema = $cierreDiarioDTO->VentaSistema ?? 0.00;
+
+        // Guardar el modelo en la base de datos
+        $cierreCajaModel->save();
+
+        $cierreDiarioDTO->CierreDiarioId = $cierreCajaModel->CierreDiarioId;
+
+        return $cierreDiarioDTO;
+    }
+
+    public static function generarListaPagosPDV($sucursalId, $CierreDiarioId)
+    {
+        try {
+            \Log::info('Generando lista pagos PDV para sucursal:', ['sucursal_id' => $sucursalId]);
+
+            // Obtener los puntos de venta activos para la sucursal
+            $puntosDeVenta = PuntoDeVenta::with(['banco', 'sucursal'])
+                ->where('EsActivo', true)
+                ->where('SucursalId', $sucursalId)
+                ->get();
+
+            \Log::info('Puntos de venta encontrados:', [
+                'cantidad' => $puntosDeVenta->count()
+            ]);
+
+            $pagosPDV = [];
+
+            foreach ($puntosDeVenta as $puntoDeVenta) {
+                // Mapear el punto de venta a DTO (similar a _mapper.Map en .NET)
+                $puntoDeVentaDTO = self::mapearPuntoDeVentaADTO($puntoDeVenta);
+                
+                // Crear un PagoPuntoDeVentaDTO vacío con el punto de venta
+                // En .NET: new PagoPuntoDeVentaDTO(item)
+                $pagoDTO = new PagoPuntoDeVentaDTO();
+                $pagoDTO->PuntoDeVenta = $puntoDeVentaDTO;
+                $pagoDTO->PagoPuntoDeVentaId = 0; // Nuevo, no existe aún
+                $pagoDTO->Monto = 0; // Inicialmente cero
+                $pagoDTO->CierreDiarioId = $sucursalId; // Se asignará después
+                
+                $pagosPDV[] = $pagoDTO;
+
+                $pagoPunto = new PagoPuntoDeVenta();
+                $pagoPunto->Monto = 0;
+                $pagoPunto->CierreDiarioId = $CierreDiarioId;
+                $pagoPunto->PuntoDeVentaId = $puntoDeVenta->PuntoDeVentaId;
+
+                // Guardar el modelo en la base de datos
+                $pagoPunto->save();
+            }
+
+            \Log::info('Pagos PDV generados:', ['cantidad' => count($pagosPDV)]);
+            return $pagosPDV;
+
+        } catch (\Exception $e) {
+            \Log::error('Error en generarListaPagosPDV: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Método equivalente a _mapper.Map<PuntoDeVentaDTO>(item) en .NET
+     */
+    private static function mapearPuntoDeVentaADTO($puntoDeVenta): PuntoDeVentaDTO
+    {
+        $dto = new PuntoDeVentaDTO();
+        
+        // Mapear propiedades básicas
+        $dto->PuntoDeVentaId = $puntoDeVenta->PuntoDeVentaId;
+        $dto->Codigo = (string) ($puntoDeVenta->Codigo ?? '');
+        $dto->Descripcion = (string) ($puntoDeVenta->Descripcion ?? '');
+        $dto->SucursalId = $puntoDeVenta->SucursalId;
+        $dto->Serial = (string) ($puntoDeVenta->Serial ?? '');
+        $dto->EsActivo = (bool) ($puntoDeVenta->EsActivo ?? false);
+        
+        // Mapear relaciones (si existen)
+        if ($puntoDeVenta->banco) {
+            $dto->Banco = (string) ($puntoDeVenta->banco->Nombre ?? '');
+            $dto->BancoId = $puntoDeVenta->BancoId;
+        }
+        
+        if ($puntoDeVenta->sucursal) {
+            $dto->Sucursal = self::mapearSucursalADTO($puntoDeVenta->sucursal);
+        }
+        
+        return $dto;
+    }
+
+    /**
+     * Método para mapear Sucursal a DTO
+     */
+    private static function mapearSucursalADTO($sucursal): SucursalDTO
+    {
+        // Si no hay sucursal, retornar DTO vacío
+        if (!$sucursal) {
+            return new SucursalDTO([]); // Pasar array vacío
+        }
+        
+        // Crear array con los datos de la sucursal
+        $data = [
+            'ID' => $sucursal->ID ?? $sucursal->Id ?? null,
+            'Nombre' => $sucursal->Nombre ?? '',
+            'Direccion' => $sucursal->Direccion ?? null,
+            'SerialImpresora' => $sucursal->SerialImpresora ?? null,
+            'EsActiva' => (bool) ($sucursal->EsActiva ?? $sucursal->EsActivo ?? true),
+            'Tipo' => $sucursal->Tipo ?? 0,
+            'FechaCarga' => $sucursal->FechaCarga ?? null
+        ];
+        
+        return new SucursalDTO($data);
+    }
+
+    // Buscar Proveedot
+    public static function BuscarProveedor($proveedorId, $_enumDetalles)
+    {
+        $_proveedor = Proveedor::find($proveedorId);
+
+        if (!$_proveedor)
+        {
+            switch ($_enumDetalles)
+            {
+                case 0:
+                    break;
+                // case EnumDetalleBusquedaProveedores.IncluirCabeceraFacturas:
+
+                //     _proveedor.Facturas = await _context.Facturas.Where(d => d.ProveedorId == id).ToListAsync();
+
+                //     break;
+                // case EnumDetalleBusquedaProveedores.IncluirDetalleFacturas:
+
+                //     _proveedor.Facturas = await _context.Facturas.Where(d => d.ProveedorId == id).ToListAsync();
+
+                //     foreach (var item in _proveedor.Facturas)
+                //     {
+                //         item.FacturaDetalles = await _context.FacturaDetalles.Where(d => d.FacturaId == item.Id).ToListAsync();
+                //     }
+                //     break;
+                default:
+                    break;
+            }
+        }
+
+        if (!$_proveedor)
+        {
+            // ProveedorDTO proveedorDTO = _mapper.Map<ProveedorDTO>(_proveedor);
+            // return proveedorDTO;
+        }
+
+        return null;
+    }
+
+    public static function guardarGastosDiariosSucursal(CierreDiario $cierre, array $data, bool $esEdicion = false) 
+    {
+        $numeroOperacion = $esEdicion
+            ? $data['numero_operacion'] ?? null
+            : now()->format('YmdHi') . '-' . $cierre->SucursalId;
+
+        // 1️⃣ Guardar la transacción
+        $transaccion = Transaccion::create([
+            'Descripcion' => $data['descripcion'],
+            'Fecha' => $cierre->Fecha,
+            'FormaDePago' => $data['forma_pago'],
+            'MontoAbonado' => $data['monto_bsf'] ?? 0,
+            'MontoDivisaAbonado' => $data['monto_usd'] ?? 0,
+            'Observacion' => $data['observacion_gasto'] ?? null,
+            'Tipo' => 3,  // Gasto de Caja
+            'Estatus' => 2, // Pagado
+            'NumeroOperacion' => $numeroOperacion,
+            'SucursalId' => $cierre->SucursalId
+        ]);
+
+        // 2️⃣ Asociar la transacción al cierre diario (equivalente a GuardarGastosCierreDiario)
+        TransaccionCierreDiario::create([
+            'CierreDiarioId' => $cierre->CierreDiarioId,
+            'TransaccionId' => $transaccion->ID
+        ]);
+
+        return $transaccion;
+    }
+
+    // Gastos de un Cierre
+    public static function obtenerGastosPorCierre(int $cierreDiarioId): array
+    {
+        $gastos = TransaccionCierreDiario::where('CierreDiarioId', $cierreDiarioId)
+            ->with('transaccion')
+            ->get()
+            ->map(function ($item) {
+                $t = $item->transaccion;
+                return [
+                    'id' => $t->ID,
+                    'descripcion' => $t->Descripcion,
+                    'monto_usd' => (float) $t->MontoDivisaAbonado,
+                    'monto_bsf' => (float) $t->MontoAbonado,
+                    'forma_pago' => $t->FormaDePago,
+                    'observacion' => $t->Observacion,
+                ];
+            })
+            ->toArray();
+
+        return $gastos;
     }
 
 }

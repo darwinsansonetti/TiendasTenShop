@@ -50,7 +50,7 @@
         <div class="col-6 col-md-3">
           <div class="spec-item border rounded p-2 text-center bg-light">
             <span class="spec-label d-block text-muted fw-medium">
-              <i class="fas fa-dollar-sign me-1"></i>Total Ventas (Ingreso - Egreso $)
+              <i class="fas fa-dollar-sign me-1"></i>Total Ventas (Ingreso - Egreso Usd)
             </span>
             <span class="spec-value fw-bold d-block mt-1">
               ${{ number_format($totalGeneralDivisa, 2, ',', '.') }}
@@ -61,7 +61,7 @@
         <div class="col-6 col-md-3">
           <div class="spec-item border rounded p-2 text-center bg-light">
             <span class="spec-label d-block text-muted fw-medium">
-              <i class="fas fa-barcode me-1"></i>Total Egresos (Bs)
+              <i class="fas fa-barcode me-1"></i>Total Egresos (Bsf)
             </span>
             <span class="spec-value fw-bold d-block mt-1">
               {{ number_format($cierreDiario->EgresoBs, 2, ',', '.') }} Bs
@@ -72,7 +72,7 @@
         <div class="col-6 col-md-3">
           <div class="spec-item border rounded p-2 text-center bg-light">
             <span class="spec-label d-block text-muted fw-medium">
-              <i class="fas fa-money-bill-wave me-1"></i>Total Ventas (Ingreso - Egreso Bs)
+              <i class="fas fa-money-bill-wave me-1"></i>Total Ventas (Ingreso - Egreso Bsf)
             </span>
             <span class="spec-value fw-bold d-block mt-1">
               {{ number_format($totalBs, 2, ',', '.') }} Bs
@@ -83,7 +83,7 @@
         <div class="col-6 col-md-3">
           <div class="spec-item border rounded p-2 text-center bg-light">
             <span class="spec-label d-block text-muted fw-medium">
-              <i class="fas fa-cash-register me-1"></i>Ventas en Sistema (Bs)
+              <i class="fas fa-cash-register me-1"></i>Ventas en Sistema (Bsf)
             </span>
             <span class="spec-value fw-bold d-block mt-1">
               {{ number_format($cierreDiario->VentaSistema, 2, ',', '.') }} Bs
@@ -148,7 +148,7 @@
                                         <span>Efectivo</span>
                                     </div>
                                     <div class="info-value fw-semibold">
-                                        {{ number_format($cierreDiario->EfectivoBs, 2, ',', '.') }} Bs
+                                        {{ number_format($cierreDiario->EfectivoBs, 2, ',', '.') }} Bsf
                                     </div>
                                 </div>
 
@@ -158,7 +158,7 @@
                                         <span>Pagos Moviles</span>
                                     </div>
                                     <div class="info-value fw-semibold">
-                                        {{ number_format($cierreDiario->PagoMovilBs, 2, ',', '.') }} Bs
+                                        {{ number_format($cierreDiario->PagoMovilBs, 2, ',', '.') }} Bsf
                                     </div>
                                 </div>
 
@@ -168,7 +168,7 @@
                                         <span>Transferencias</span>
                                     </div>
                                     <div class="info-value fw-semibold">
-                                        {{ number_format($cierreDiario->TransferenciaBs, 2, ',', '.') }} Bs
+                                        {{ number_format($cierreDiario->TransferenciaBs, 2, ',', '.') }} Bsf
                                     </div>
                                 </div>
 
@@ -179,7 +179,18 @@
                                         <span>Punto de venta</span>
                                     </div>
                                     <div class="info-value fw-semibold">
-                                        {{ number_format($cierreDiario->PuntoDeVentaBs, 2, ',', '.') }} Bs
+                                        {{ number_format($cierreDiario->PuntoDeVentaBs, 2, ',', '.') }} Bsf
+                                    </div>
+                                </div>
+
+                                <!-- Cashea -->
+                                <div class="info-item d-flex align-items-center justify-content-between py-2">
+                                    <div class="info-label d-flex align-items-center gap-2 text-muted">
+                                        <i class="fas fa-credit-card text-dark"></i>
+                                        <span>Cashea</span>
+                                    </div>
+                                    <div class="info-value fw-semibold">
+                                        {{ number_format($cierreDiario->CasheaBs, 2, ',', '.') }} Bsf
                                     </div>
                                 </div>
 
@@ -190,7 +201,7 @@
                                         <span>Subtotal</span>
                                     </div>
                                     <div class="info-value fw-bold text-primary">
-                                        {{ number_format($totalIngresoBs, 2, ',', '.') }} Bs
+                                        {{ number_format($totalIngresoBs, 2, ',', '.') }} Bsf
                                     </div>
                                 </div>
 
@@ -201,7 +212,7 @@
                                         <span>Egresos</span>
                                     </div>
                                     <div class="info-value fw-semibold text-danger">
-                                        - {{ number_format($cierreDiario->EgresoBs, 2, ',', '.') }} Bs
+                                        - {{ number_format($cierreDiario->EgresoBs, 2, ',', '.') }} Bsf
                                     </div>
                                 </div>
 
@@ -212,7 +223,7 @@
                                         <span>Total</span>
                                     </div>
                                     <div class="info-value fs-5 fw-bold text-success">
-                                        {{ number_format($totalBs, 2, ',', '.') }} Bs
+                                        {{ number_format($totalBs, 2, ',', '.') }} Bsf
                                     </div>
                                 </div>
                             </div>
@@ -226,14 +237,14 @@
                                     <span>Equivalentes en Divisa</span>
 
                                     <span class="badge bg-light text-dark border">
-                                        Tasa del día: <strong>{{ number_format($cierreDiario->DivisaValor, 2) }} Bs</strong>
+                                        Tasa del día: <strong>{{ number_format($cierreDiario->DivisaValor, 2) }} Bsf</strong>
                                     </span>
                                 </h6>
                                 
                                 <div class="info-item d-flex align-items-center justify-content-between py-2">
                                     <div class="info-label d-flex align-items-center gap-2 text-muted">
                                         <i class="fas fa-exchange-alt text-info"></i>
-                                        <span>Efectivo (Bs → $)</span>
+                                        <span>Efectivo (Bsf → Usd)</span>
                                     </div>
                                     <div class="info-value fw-semibold">
                                         ${{ number_format($cierreDiario->EfectivoBs / $cierreDiario->DivisaValor, 2, ',', '.') }}
@@ -243,7 +254,7 @@
                                 <div class="info-item d-flex align-items-center justify-content-between py-2">
                                     <div class="info-label d-flex align-items-center gap-2 text-muted">
                                         <i class="fas fa-mobile-alt text-primary"></i>
-                                        <span>Pago Móvil (Bs → $)</span>
+                                        <span>Pago Móvil (Bsf → Usd)</span>
                                     </div>
                                     <div class="info-value fw-semibold">
                                         ${{ number_format($cierreDiario->PagoMovilBs / $cierreDiario->DivisaValor, 2, ',', '.') }}
@@ -253,7 +264,7 @@
                                 <div class="info-item d-flex align-items-center justify-content-between py-2">
                                     <div class="info-label d-flex align-items-center gap-2 text-muted">
                                         <i class="fas fa-university text-secondary"></i>
-                                        <span>Transferencias (Bs → $)</span>
+                                        <span>Transferencias (Bsf → Usd)</span>
                                     </div>
                                     <div class="info-value fw-semibold">
                                         ${{ number_format($cierreDiario->TransferenciaBs / $cierreDiario->DivisaValor, 2, ',', '.') }}
@@ -263,10 +274,20 @@
                                 <div class="info-item d-flex align-items-center justify-content-between py-2">
                                     <div class="info-label d-flex align-items-center gap-2 text-muted">
                                         <i class="fas fa-credit-card text-dark"></i>
-                                        <span>Punto de Venta (Bs → $)</span>
+                                        <span>Punto de Venta (Bsf → Usd)</span>
                                     </div>
                                     <div class="info-value fw-semibold">
                                         ${{ number_format($cierreDiario->PuntoDeVentaBs / $cierreDiario->DivisaValor, 2, ',', '.') }}
+                                    </div>
+                                </div>
+
+                                <div class="info-item d-flex align-items-center justify-content-between py-2">
+                                    <div class="info-label d-flex align-items-center gap-2 text-muted">
+                                        <i class="fas fa-credit-card text-dark"></i>
+                                        <span>Cashea (Bsf → Usd)</span>
+                                    </div>
+                                    <div class="info-value fw-semibold">
+                                        ${{ number_format($cierreDiario->CasheaBs / $cierreDiario->DivisaValor, 2, ',', '.') }}
                                     </div>
                                 </div>
 
@@ -274,7 +295,7 @@
                                 <div class="info-item d-flex align-items-center justify-content-between py-2 border-top mt-2">
                                     <div class="info-label d-flex align-items-center gap-2 fw-semibold">
                                         <i class="fas fa-calculator text-primary"></i>
-                                        <span>Subtotal (Bs → $)</span>
+                                        <span>Subtotal (Bsf → Usd)</span>
                                     </div>
                                     <div class="info-value fw-bold text-primary">
                                         ${{ number_format($totalIngresoBs / $cierreDiario->DivisaValor, 2, ',', '.') }}
@@ -285,7 +306,7 @@
                                 <div class="info-item d-flex align-items-center justify-content-between py-2">
                                     <div class="info-label d-flex align-items-center gap-2 text-danger">
                                         <i class="fas fa-arrow-down"></i>
-                                        <span>Egresos (Bs → $)</span>
+                                        <span>Egresos (Bsf → Usd)</span>
                                     </div>
                                     <div class="info-value fw-semibold text-danger">
                                         - ${{ number_format($cierreDiario->EgresoBs / $cierreDiario->DivisaValor, 2, ',', '.') }}
@@ -296,7 +317,7 @@
                                 <div class="info-item d-flex align-items-center justify-content-between py-3 border-top mt-2">
                                     <div class="info-label d-flex align-items-center gap-2 fs-6 fw-bold">
                                         <i class="fas fa-wallet text-success"></i>
-                                        <span>Total (Bs → $)</span>
+                                        <span>Total (Bsf → Usd)</span>
                                     </div>
                                     <div class="info-value fs-5 fw-bold text-success">
                                         ${{ number_format($totalIngresoBs / $cierreDiario->DivisaValor, 2, ',', '.') }}
@@ -325,16 +346,29 @@
                                 </h6>
 
                                 @foreach($cierreDiario->pagosPuntoDeVenta as $PagoPunto)
-                                
-                                  <div class="info-item d-flex align-items-center justify-content-between py-2">
-                                      <div class="info-label d-flex align-items-center gap-2 text-muted">
-                                          <i class="fas fa-exchange-alt text-info"></i>
-                                          <span>{{ $PagoPunto->puntoDeVenta->banco->Nombre }} ({{ $PagoPunto->puntoDeVenta->Descripcion }})</span>
-                                      </div>
-                                      <div class="info-value fw-semibold">
-                                          {{ number_format($PagoPunto->Monto, 2, ',', '.') }} Bs
-                                      </div>
-                                  </div>
+                                                                   
+                                    <div class="info-item d-flex align-items-center justify-content-between py-2">
+                                        <div class="info-label d-flex align-items-center gap-2 text-muted">
+
+                                            <!-- LOGO DEL BANCO -->
+                                            <img
+                                                src="{{ asset('assets/img/bancos/' . $PagoPunto->puntoDeVenta->banco->Logo) }}"
+                                                alt="{{ $PagoPunto->puntoDeVenta->banco->Nombre }}"
+                                                class="bank-logo-md"
+                                            >
+
+                                            <span>
+                                                {{ $PagoPunto->puntoDeVenta->banco->Nombre }}
+                                                <small class="text-muted">
+                                                    ({{ $PagoPunto->puntoDeVenta->Descripcion }})
+                                                </small>
+                                            </span>
+                                        </div>
+
+                                        <div class="info-value fw-semibold">
+                                            {{ number_format($PagoPunto->Monto, 2, ',', '.') }} Bsf
+                                        </div>
+                                    </div>
 
                                 @endforeach
 
@@ -345,7 +379,7 @@
                                         <span>Total</span>
                                     </div>
                                     <div class="info-value fs-5 fw-bold text-success">
-                                        {{ number_format($cierreDiario->pagosPuntoDeVenta->sum('Monto'), 2, ',', '.') }} Bs
+                                        {{ number_format($cierreDiario->pagosPuntoDeVenta->sum('Monto'), 2, ',', '.') }} Bsf
                                     </div>
                                 </div>
                             </div>
@@ -420,6 +454,42 @@
               
             </div>
 
+            
+            @if($cierreDiario->CasheaBs > 0)
+            <div class="card-body p-2">
+                
+              <!-- BLOQUE CON BORDE -->
+              <div class="card border rounded-3 shadow-sm mb-4">
+                  <div class="card-body">
+                    <div class="row">
+                        <!-- Columna izquierda: Información principal -->
+                        <div class="col-md-12">
+                            <div class="mb-4">
+                                <h6 class="text-primary border-bottom pb-2 mb-3 d-flex align-items-center" style="min-height: 31px;">
+                                    <i class="fas fa-dollar-sign me-2"></i>
+                                    Ventas por Cashea
+                                </h6>
+                                
+                                
+                                <div class="info-item d-flex align-items-center justify-content-between py-2">
+                                    <div class="info-label d-flex align-items-center gap-2 text-muted">
+                                        <i class="fas fa-exchange-alt text-info"></i>
+                                        <span>Cashea</span>
+                                    </div>
+                                    <div class="info-value fw-semibold">
+                                        ${{ number_format($cierreDiario->CasheaBs, 2, ',', '.') }}
+                                    </div>
+                                </div>
+                                
+                            </div>
+                        </div>
+                    </div>
+                  </div>
+              </div>
+              
+            </div>
+            @endif
+
         </div>
     </div>
   </div>
@@ -445,7 +515,7 @@
                           
                           <div class="list-group list-group-flush">
                               <div class="list-group-item d-flex justify-content-between align-items-center border-0 py-3">
-                                  <span>Equivalencia de Ventas en Bolivares (Bs → $)</span>
+                                  <span>Equivalencia de Ventas en Bolivares (Bsf → Usd)</span>
                                   <span class="fw-semibold">${{ number_format($totalIngresoBs / $cierreDiario->DivisaValor, 2, ',', '.') }}</span>
                               </div>
                               
@@ -465,7 +535,7 @@
                               </div>
                               
                               <div class="list-group-item d-flex justify-content-between align-items-center border-0 py-3">
-                                  <span>- Ventas en Sistema (Bs → $)</span>
+                                  <span>- Ventas en Sistema (Bsf → Usd)</span>
                                   <span class="fw-semibold text-danger">- ${{ number_format($cierreDiario->VentaSistema / $cierreDiario->DivisaValor, 2, ',', '.') }}</span>
                               </div>
                           </div>
@@ -571,6 +641,30 @@
 </script>
 
 <style>
+.bank-logo {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+    border-radius: 4px;
+}
+
+.bank-logo-md {
+    width: 40px;
+    height: 32px;
+    object-fit: contain;
+    border-radius: 6px;
+}
+
+.bank-logo-lg {
+    width: 48px;
+    height: 38px;
+    object-fit: contain;
+    padding: 4px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+}
+
 .product-card {
     background: #fff;
     border-radius: 12px;

@@ -20,9 +20,9 @@ class TransaccionDTO
     /** @var TransaccionDTO[] */
     public array $AbonoVentas = [];
 
-    public string $Tipo = ''; // EnumTipoTransaccion
-    public string $FormaDePago = ''; // EnumFormaPago
-    public string $Estatus = ''; // EnumTransaccion
+    public int $Tipo = 0; // EnumTipoTransaccion
+    public int $FormaDePago = 0; // EnumFormaPago
+    public int $Estatus = 0; // EnumTransaccion
 
     public ?SucursalDTO $Sucursal = null;
     public ?SucursalDTO $SucursalOrigen = null;

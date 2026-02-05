@@ -14,7 +14,8 @@ class Banco extends Model
     protected $fillable = [
         'ID',
         'Nombre',
-        'EsActivo'
+        'EsActivo',
+        'Logo'
     ];
 
     protected $casts = [

@@ -45,6 +45,7 @@ class CierreDiario extends Model
         'VentaSistema',
         'ZelleDivisas',
         'CasheaBs',
+        'CasheaPagado',
         'Observacion'
     ];
 

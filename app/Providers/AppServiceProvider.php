@@ -82,6 +82,14 @@ class AppServiceProvider extends ServiceProvider
             $tasa = GeneralHelper::obtenerTasaCambioDiaria(now());
             
             $view->with(compact('tasa'));
+        });      
+
+        // 🚀 IMPORTANTE: También compartir con las vistas que usan el layout
+        View::composer('cpanel.cuadre.listado_cierre_diario', function ($view) {
+            // Reutilizar los mismos datos del layout
+            $tasa = GeneralHelper::obtenerTasaCambioDiaria(now());
+            
+            $view->with(compact('tasa'));
         });
     }
 

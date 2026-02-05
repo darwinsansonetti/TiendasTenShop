@@ -1,6 +1,6 @@
 @extends('layout.layout_dashboard')
 
-@section('title', 'TiendasTenShop | Resumen Diario')
+@section('title', 'TiendasTenShop | Listado Cierre Diario')
 
 @php
     use App\Helpers\FileHelper;
@@ -14,11 +14,11 @@
   <div class="container-fluid">
     <!--begin::Row-->
     <div class="row">
-      <div class="col-sm-6"><h3 class="mb-0">Resumen Diario</h3></div>
+      <div class="col-sm-6"><h3 class="mb-0">Cierres Diarios (PENDIENTES)</h3></div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
           <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Resumen Diario</li>
+          <li class="breadcrumb-item active" aria-current="page">Listado Cierre Diario</li>
         </ol>
       </div>
     </div>
@@ -30,64 +30,12 @@
 
 <!--begin::App Content-->
 <div class="app-content">
-    <div class="container-fluid">   
-         
-        <!--begin::Row-->
-        <div class="card card-success card-outline mb-4">
-            <div class="card-body">
-                
-                <div class="row g-3">
-                    
-                    <div class="col-md-3">
-                        <div class="border rounded p-3 text-center metric-card">
-                            <small class="text-muted">Total Divisa</small>
-                            <h4 class="mb-0">
-                                ${{ number_format($totalGeneralDivisa, 2, ',', '.') }}
-                            </h4>
-                        </div>
-                    </div>
-
-                    <div class="col-md-3">
-                        <div class="border rounded p-3 text-center metric-card">
-                            <small class="text-muted">Total Bs</small>
-                            <h4 class="mb-0">
-                                {{ number_format($totalBs, 2, ',', '.') }} Bs
-                            </h4>
-                        </div>
-                    </div>
-
-                    <div class="col-md-3">
-                        <div class="border rounded p-3 text-center metric-card">
-                            <small class="text-muted">Ventas en Sistema</small>
-                            <h4 class="mb-0">
-                                {{ number_format($totalSistemaBs, 2, ',', '.') }} Bs
-                            </h4>
-                        </div>
-                    </div>
-
-                    <div class="col-md-3">
-                        <div class="border rounded p-3 text-center metric-card">
-                            <small class="text-muted">Diferencia (No incluye Usd)</small>
-                            <h4 class="mb-0 
-                                @if ($diferencia > 0) text-success 
-                                @elseif ($diferencia < 0) text-danger 
-                                @else text-muted @endif">
-                                {{ number_format($diferencia, 2, ',', '.') }} Bs
-                            </h4>
-                        </div>
-                    </div>
-
-                </div>
-
-            </div>
-        </div>
-
-        <!--end::Row-->
+    <div class="container-fluid">  
         
         <!-- Card de filtros -->
         <div class="card card-primary card-outline mb-4">
             <div class="card-body">
-                <form action="{{ route('cpanel.cuadre.resumen_diario') }}" method="GET" id="filtroForm">
+                <form action="{{ route('cpanel.cuadre.registrar_cierre') }}" method="GET" id="filtroForm">
                     @csrf
                     <div class="row g-3">
                         <div class="col-md-4">
@@ -132,19 +80,36 @@
         <!-- Card de tabla -->
         <div class="card">
             <div class="card-header">
-                <div class="row g-2">
-                    <div class="col-12 text-end">
+                <div class="row g-2 align-items-center">
+                    
+                    <!-- IZQUIERDA: Nuevo Cierre -->
+                    <div class="col-12 col-md-6 text-start">
+                        <a href="javascript:void(0)" class="btn btn-primary btn-sm" onclick="confirmarNuevoCierre()">
+                            <i class="fa fa-plus me-1"></i>
+                            Nuevo
+                        </a>
+                    </div>
+
+                    <!-- DERECHA: Exportar -->
+                    <div class="col-12 col-md-6 text-end">
                         <div class="btn-group">
-                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="pdfTablaVentasDiarias()">
+                            <button type="button"
+                                    class="btn btn-outline-secondary btn-sm"
+                                    onclick="pdfTablaVentasDiarias()">
                                 <i class="fas fa-print me-1"></i>PDF
                             </button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="exportarExcel()">
+
+                            <button type="button"
+                                    class="btn btn-outline-secondary btn-sm"
+                                    onclick="exportarExcel()">
                                 <i class="fas fa-file-excel me-1"></i>Excel
                             </button>
                         </div>
                     </div>
+
                 </div>
             </div>
+
 
             <div class="card-body p-0">
                 <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
@@ -152,13 +117,12 @@
                         <thead class="table-light">
                             <tr>
                                 <th width="120" class="text-center">Fecha</th>
-                                <th width="120" class="text-center">Egreso $</th>
+                                <th width="240">Sucursal</th>
                                 <th width="140" class="text-center">Total $</th>
-                                <th width="120" class="text-center">Egreso Bs</th>
                                 <th width="120" class="text-center">Total Bs</th>
                                 <th width="100" class="text-center">Tasa Bs</th> 
                                 <th width="140" class="text-center">Venta Sistema Bs</th> 
-                                <th width="140" class="text-center">Diferencia Bs</th> 
+                                <th width="140" class="text-center">Estatus</th> 
                                 <th width="120" class="text-center">Acción</th>
                             </tr>
                         </thead>
@@ -173,13 +137,8 @@
                                     </td>
 
                                     <!-- Egreso Divisa -->
-                                    <td class="fw-bold text-center text-warning">
-                                        {{ number_format((float)$item->EgresoDivisas, 2, ',', '.') }}
-                                    </td>
-
-                                    <!-- Total Divisa (EfectivoDivisas - EgresoDivisas) -->
-                                    <td class="text-center fw-bold text-primary">
-                                        {{ number_format((float)$item->EfectivoDivisas - (float)$item->EgresoDivisas, 2, ',', '.') }}
+                                    <td class="fw-bold">
+                                        {{ $item->SucursalNombre }}
                                     </td>
 
                                     <!-- Egreso Bs -->
@@ -206,17 +165,16 @@
                                     </td>
 
                                     <!-- Diferencia (Total Bs - VentaSistema) -->
-                                    <td class="text-center fw-bold {{ (((float)$item->EfectivoBs + (float)$item->PagoMovilBs + (float)$item->TransferenciaBs + (float)$item->PuntoDeVentaBs) - (float)$item->EgresoBs) - (float)$item->VentaSistema > 0 ? 'text-success' : 'text-danger' }}">
-                                        {{ number_format(
-                                            (((float)$item->EfectivoBs + (float)$item->PagoMovilBs + (float)$item->TransferenciaBs + (float)$item->PuntoDeVentaBs) - (float)$item->EgresoBs) - (float)$item->VentaSistema,
-                                            2, ',', '.'
-                                        ) }} Bs
+                                    <td class="text-center">
+                                        <span class="badge bg-light text-success">
+                                            Pendiente
+                                        </span>
                                     </td>
 
                                     <!-- Acción -->
                                     <td class="text-center">
                                         <div class="btn-group" role="group">
-                                            <a href="{{ route('cierre.detalle', $item->CierreDiarioId) }}"
+                                            <a href="{{ route('cierre.editar', $item->CierreDiarioId) }}"
                                                 class="btn btn-sm btn-outline-primary"
                                                 title="Ver detalles">
                                                 <i class="bi bi-eye"></i>
@@ -271,12 +229,12 @@
 <script>
     document.addEventListener("DOMContentLoaded", function() {
 
-        // Verificar si hay alguna sucursal seleccionada
-        const sucursalId = {{ session('sucursal_id', 0) }};
+        // // Verificar si hay alguna sucursal seleccionada
+        // const sucursalId = {{ session('sucursal_id', 0) }};
 
-        if (sucursalId === 0) {
-            showToast('Seleccione una Sucursal', 'danger');
-        }
+        // if (sucursalId === 0) {
+        //     showToast('Seleccione una Sucursal', 'danger');
+        // }
 
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
         var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
@@ -604,6 +562,95 @@
         const fecha = new Date().toISOString().split('T')[0];
         doc.save(`CierreDiario_${fecha}.pdf`);
     }
+
+    // function confirmarNuevoCierre() {
+    //     // Verificar si hay alguna sucursal seleccionada
+    //     const sucursalId = {{ session('sucursal_id', 0) }};
+    //     const sucursalNombre = '{{ session('sucursal_nombre') }}';
+    //     const tasaBCV = {{ $tasa['DivisaValor']['Valor'] ?? 0 }};
+
+    //     if (sucursalId === 0) {
+    //         showToast('Seleccione una Sucursal para crear su cierre diario', 'danger');
+    //     }else{
+    //         if(tasaBCV === 0){
+    //             showToast('Debe indicar la Tasa del dia antes de Crear el nuevo Cierre Diario', 'danger');
+    //         }else{
+    //             Swal.fire({
+    //                 title: `¿Seguro de crear el Cierre Diario para la sucursal ${sucursalNombre}?`,
+    //                 text: 'Se iniciará un nuevo cierre diario.',
+    //                 icon: 'warning',
+    //                 showCancelButton: true,
+    //                 confirmButtonColor: '#0d6efd',
+    //                 cancelButtonColor: '#6c757d',
+    //                 confirmButtonText: 'Sí, continuar',
+    //                 cancelButtonText: 'Cancelar'
+    //             }).then((result) => {
+    //                 if (result.isConfirmed) {
+    //                     window.location.href = "{{ route('cpanel.cuadre.crear') }}";
+    //                 }
+    //             });
+    //         }
+    //     }
+    // }
+
+    function confirmarNuevoCierre() {
+        const sucursalId = {{ session('sucursal_id', 0) }};
+        const sucursalNombre = '{{ session('sucursal_nombre') }}';
+        const tasaBCV = {{ $tasa['DivisaValor']['Valor'] ?? 0 }};
+
+        if (sucursalId === 0) {
+            showToast('Seleccione una Sucursal para crear su cierre diario', 'danger');
+            return;
+        }
+        
+        if (tasaBCV === 0) {
+            showToast('Debe indicar la Tasa del día antes de Crear el nuevo Cierre Diario', 'danger');
+            return;
+        }
+
+        Swal.fire({
+            title: `¿Seguro de crear el Cierre Diario para la sucursal ${sucursalNombre}?`,
+            text: 'Se iniciará un nuevo cierre diario.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#0d6efd',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, continuar',
+            cancelButtonText: 'Cancelar',
+            showLoaderOnConfirm: true,
+            preConfirm: async () => {
+                try {
+                    const response = await fetch("{{ route('cpanel.cuadre.verificar') }}", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                        },
+                        body: JSON.stringify({ sucursal_id: sucursalId })
+                    });
+                    
+                    if (!response.ok) throw new Error('Error en la conexión');
+                    
+                    const data = await response.json();
+                    
+                    if (data.existe) {
+                        throw new Error(data.mensaje);
+                    }
+                    
+                    return data;
+                } catch (error) {
+                    Swal.showValidationMessage(error.message);
+                    return false;
+                }
+            },
+            allowOutsideClick: () => !Swal.isLoading()
+        }).then((result) => {
+            if (result.isConfirmed && result.value) {
+                window.location.href = "{{ route('cpanel.cuadre.crear') }}";
+            }
+        });
+    }
+
 </script>
 
 <style>

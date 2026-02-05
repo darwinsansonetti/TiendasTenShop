@@ -569,6 +569,14 @@
                     </a>
                   </li>
                 </ul>
+                <ul class="nav nav-treeview">
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.cuadre.registrar_cierre') }}" class="nav-link {{ session('submenu_active') == 'Registrar Cierre' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-circle"></i>
+                      <p>Registrar Cierre</p>
+                    </a>
+                  </li>
+                </ul>
               </li>
               <li class="nav-item">
                 <a href="#" class="nav-link">
@@ -1295,7 +1303,7 @@
                 showToast(res.message, "success");
 
                 // 👉 SOLO recargar si está en índice de rotación
-                if ((window.location.pathname.includes('indice/rotacion')) || (window.location.pathname.includes('baja/demanda'))) {
+                if ((window.location.pathname.includes('indice/rotacion')) || (window.location.pathname.includes('baja/demanda')) || (window.location.pathname.includes('registrar/cierre'))) {
                     setTimeout(() => {
                         window.location.reload();
                     }, 800);
