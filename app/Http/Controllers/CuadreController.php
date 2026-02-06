@@ -87,12 +87,14 @@ class CuadreController extends Controller
         $totalTransferencias = $cierreDiario->sum('TransferenciaBs');
         $totalSistemaBs = $cierreDiario->sum('VentaSistema');
         $totalEgresosBs = $cierreDiario->sum('EgresoBs');
+        $totalBiopago = $cierreDiario->sum('Biopago');
         $totalEgresosDivisa = $cierreDiario->sum('EgresoDivisas');
 
         $totalIngresoBs = $totalEfectivoBs
                     + $totalPagoMovil
                     + $totalPuntoVenta
-                    + $totalTransferencias;
+                    + $totalTransferencias
+                    + $totalBiopago;
 
         $totalBs = $totalIngresoBs - $totalEgresosBs;
         $totalGeneralDivisa = $totalDivisa - $totalEgresosDivisa;
@@ -111,6 +113,7 @@ class CuadreController extends Controller
             'totalPagoMovil' => $totalPagoMovil,
             'totalPuntoVenta' => $totalPuntoVenta,
             'totalTransferencias' => $totalTransferencias,
+            'totalBiopago' => $totalBiopago,
             'totalSistemaBs' => $totalSistemaBs,
             'totalBs' => $totalBs,
             'totalGeneralDivisa' => $totalGeneralDivisa,
@@ -143,6 +146,8 @@ class CuadreController extends Controller
         $cierreDiario->PagoMovilBsaDivisa = $divisaValor > 0 ? number_format($cierreDiario->PagoMovilBs / $divisaValor, 2, '.', '') : '0.00';
         $cierreDiario->TransferenciaBsaDivisa = $divisaValor > 0 ? number_format($cierreDiario->TransferenciaBs / $divisaValor, 2, '.', '') : '0.00';
         $cierreDiario->PuntoDeVentaBsaDivisa = $divisaValor > 0 ? number_format($totalPDV / $divisaValor, 2, '.', '') : '0.00';
+        $cierreDiario->CasheaBsaDivisa = $divisaValor > 0 ? number_format($cierreDiario->CasheaBs / $divisaValor, 2, '.', '') : '0.00';
+        $cierreDiario->BiopagoBsaDivisa = $divisaValor > 0 ? number_format($cierreDiario->Biopago / $divisaValor, 2, '.', '') : '0.00';
 
         // Agregar el nombre de la sucursal
         $cierreDiario->SucursalNombre = $cierreDiario->sucursal->Nombre ?? 'Sin Sucursal';
@@ -156,12 +161,14 @@ class CuadreController extends Controller
         $totalEgresosDivisa = $cierreDiario->EgresoDivisas;
         $totalSistemaBs = $cierreDiario->VentaSistema;
         $totalCasheaBs = $cierreDiario->CasheaBs;
+        $totalBiopagoBs = $cierreDiario->Biopago;
 
         $totalIngresoBs = $totalEfectivoBs
                     + $totalPagoMovil
                     + $totalPuntoVenta
                     + $totalTransferencias
-                    + $totalCasheaBs;
+                    + $totalCasheaBs
+                    + $totalBiopagoBs;
 
         $totalBs = $totalIngresoBs - $totalEgresosBs;
         $totalGeneralDivisa = $totalDivisa - $totalEgresosDivisa;
@@ -183,6 +190,7 @@ class CuadreController extends Controller
             'totalPuntoVenta' => $totalPuntoVenta,
             'totalTransferencias' => $totalTransferencias,
             'totalCasheaBs' => $totalCasheaBs,
+            'totalBiopagoBs' => $totalBiopagoBs,
             'totalIngresoBs' => $totalIngresoBs,
             'totalBs' => $totalBs,
             'totalGeneralDivisa' => $totalGeneralDivisa,
@@ -474,6 +482,7 @@ class CuadreController extends Controller
             'efectivo_divisas' => 'required|numeric|min:0',
             'zelle_divisas' => 'required|numeric|min:0',
             'cashea_bs' => 'required|numeric|min:0',
+            'biopago_bs' => 'required|numeric|min:0',
             'observacion' => 'nullable|string|max:500',
             'puntos_venta' => 'nullable|array',
             
@@ -518,6 +527,7 @@ class CuadreController extends Controller
                 'EfectivoDivisas' => $request->efectivo_divisas,
                 'ZelleDivisas' => $request->zelle_divisas,
                 'CasheaBs' => $request->cashea_bs,
+                'Biopago' => $request->biopago_bs,
                 'Observacion' => $request->observacion,
                 'Estatus' => 1,
             ];

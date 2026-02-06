@@ -194,6 +194,17 @@
                                     </div>
                                 </div>
 
+                                <!-- Biopago -->
+                                <div class="info-item d-flex align-items-center justify-content-between py-2">
+                                    <div class="info-label d-flex align-items-center gap-2 text-muted">
+                                        <i class="fas fa-credit-card text-dark"></i>
+                                        <span>Biopago</span>
+                                    </div>
+                                    <div class="info-value fw-semibold">
+                                        {{ number_format($cierreDiario->Biopago, 2, ',', '.') }} Bsf
+                                    </div>
+                                </div>
+
                                 <!-- SUBTOTAL -->
                                 <div class="info-item d-flex align-items-center justify-content-between py-2 border-top mt-2">
                                     <div class="info-label d-flex align-items-center gap-2 fw-semibold">
@@ -288,6 +299,16 @@
                                     </div>
                                     <div class="info-value fw-semibold">
                                         ${{ number_format($cierreDiario->CasheaBs / $cierreDiario->DivisaValor, 2, ',', '.') }}
+                                    </div>
+                                </div>
+
+                                <div class="info-item d-flex align-items-center justify-content-between py-2">
+                                    <div class="info-label d-flex align-items-center gap-2 text-muted">
+                                        <i class="fas fa-credit-card text-dark"></i>
+                                        <span>Biopago (Bsf → Usd)</span>
+                                    </div>
+                                    <div class="info-value fw-semibold">
+                                        ${{ number_format($cierreDiario->Biopago / $cierreDiario->DivisaValor, 2, ',', '.') }}
                                     </div>
                                 </div>
 
@@ -454,7 +475,6 @@
               
             </div>
 
-            
             @if($cierreDiario->CasheaBs > 0)
             <div class="card-body p-2">
                 
@@ -473,11 +493,54 @@
                                 
                                 <div class="info-item d-flex align-items-center justify-content-between py-2">
                                     <div class="info-label d-flex align-items-center gap-2 text-muted">
-                                        <i class="fas fa-exchange-alt text-info"></i>
+                                        <!-- LOGO Cashea -->
+                                        <img
+                                            src="{{ asset('assets/img/bancos/cashea.png') }}"
+                                            class="bank-logo-md"
+                                        >
                                         <span>Cashea</span>
                                     </div>
                                     <div class="info-value fw-semibold">
-                                        ${{ number_format($cierreDiario->CasheaBs, 2, ',', '.') }}
+                                        {{ number_format($cierreDiario->CasheaBs, 2, ',', '.') }} Bsf
+                                    </div>
+                                </div>
+                                
+                            </div>
+                        </div>
+                    </div>
+                  </div>
+              </div>
+              
+            </div>
+            @endif
+
+            @if($cierreDiario->Biopago > 0)
+            <div class="card-body p-2">
+                
+              <!-- BLOQUE CON BORDE -->
+              <div class="card border rounded-3 shadow-sm mb-4">
+                  <div class="card-body">
+                    <div class="row">
+                        <!-- Columna izquierda: Información principal -->
+                        <div class="col-md-12">
+                            <div class="mb-4">
+                                <h6 class="text-primary border-bottom pb-2 mb-3 d-flex align-items-center" style="min-height: 31px;">
+                                    <i class="fas fa-dollar-sign me-2"></i>
+                                    Ventas por Biopago
+                                </h6>
+                                
+                                
+                                <div class="info-item d-flex align-items-center justify-content-between py-2">
+                                    <div class="info-label d-flex align-items-center gap-2 text-muted">
+                                        <!-- LOGO Biopago -->
+                                        <img
+                                            src="{{ asset('assets/img/bancos/biopago.png') }}"
+                                            class="bank-logo-md"
+                                        >
+                                        <span>Biopago</span>
+                                    </div>
+                                    <div class="info-value fw-semibold">
+                                        {{ number_format($cierreDiario->Biopago, 2, ',', '.') }} Bsf
                                     </div>
                                 </div>
                                 

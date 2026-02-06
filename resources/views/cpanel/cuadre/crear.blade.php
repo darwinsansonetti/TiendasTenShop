@@ -130,6 +130,17 @@
                                                         value="{{ number_format($datosVista['cierre']->CasheaBs, 2, ',', '.') }}">
                                                 </div>
                                             </div>
+
+                                            <!-- Biopago -->
+                                            <div class="mb-3">
+                                                <label class="form-label small text-muted mb-1">Biopago (Bs)</label>
+                                                <div class="input-group">
+                                                    <span class="input-group-text">Bs </span>
+                                                    <input type="text" class="form-control amount-input" 
+                                                        name="biopago_bs"
+                                                        value="{{ number_format($datosVista['cierre']->Biopago, 2, ',', '.') }}">
+                                                </div>
+                                            </div>
                                             
                                             <!-- Zelle -->
                                             <div class="mb-3">
@@ -669,6 +680,7 @@
             const transferenciaBs = parseNumber(document.querySelector('input[name="transferencia_bs"]').value) || 0;
             const pagoMovilBs = parseNumber(document.querySelector('input[name="pago_movil_bs"]').value) || 0;
             const casheaBs = parseNumber(document.querySelector('input[name="cashea_bs"]').value) || 0;
+            const biopagoBs = parseNumber(document.querySelector('input[name="biopago_bs"]').value) || 0;
             
             // ========== PUNTOS DE VENTA ==========
             let totalPuntosVenta = 0;
@@ -681,7 +693,7 @@
             const subtotalBs = efectivoBs + transferenciaBs + pagoMovilBs + totalPuntosVenta;
             
             // Total Ventas Bs (con Cashea)
-            const totalVentasBs = subtotalBs + casheaBs;
+            const totalVentasBs = subtotalBs + casheaBs + biopagoBs;
             document.getElementById('total_ventas_bs').value = formatNumber(totalVentasBs);
             
             // ========== VENTAS EN DIVISAS ==========
@@ -1199,35 +1211,62 @@
         
         console.log('Sistema de Cierre Diario cargado correctamente');
     });
+
+    // Funciones auxiliares para resaltar errores
+    function highlightErrorEnd(element) {
+        element.classList.add('is-invalid');
+        element.classList.remove('is-valid');
+        
+        // Agregar feedback visual si no existe
+        if (!element.nextElementSibling || !element.nextElementSibling.classList.contains('invalid-feedback')) {
+            const feedback = document.createElement('div');
+            feedback.className = 'invalid-feedback';
+            feedback.textContent = 'Por favor, corrige este campo';
+            element.parentNode.appendChild(feedback);
+        }
+    }
     
     // Evento para el botón Finalizar
     document.getElementById('btn-finalizar').addEventListener('click', async function() {
-        // Mostrar confirmación
-        const confirmacion = await Swal.fire({
-            title: '¿Finalizar Cierre?',
-            text: 'Esta acción marcará el cierre como completado. ¿Deseas continuar?',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#3085d6',
-            cancelButtonColor: '#d33',
-            confirmButtonText: 'Sí, finalizar',
-            cancelButtonText: 'Cancelar'
-        });
-        
-        if (confirmacion.isConfirmed) {
-            // 1. Crear un flag global para indicar que es finalizar
-            window.esFinalizar = true;
-            
-            // 2. Crear y disparar un evento submit personalizado
-            const form = document.getElementById('form-cierre-diario');
-            const submitEvent = new Event('submit', {
-                bubbles: true,
-                cancelable: true
-            });
-            
-            // 3. Disparar el evento (esto ejecutará tu event listener existente)
-            form.dispatchEvent(submitEvent);
-        }
+
+        const ventasSistema = document.querySelector('input[name="venta_sistema"]').value;
+        const ventasingresadas = document.getElementById('total_ventas_bs').value;
+
+        if (!ventasSistema || parseFloat(ventasSistema) <= 0) {
+            showToast('Monto invalido para las Ventas en Sistema', 'success');
+            highlightErrorEnd(document.querySelector('input[name="venta_sistema"]'));
+        }else{
+            if (!ventasingresadas || parseFloat(ventasingresadas) <= 0) {
+                showToast('Debe ingresar ventas por algun metodo de pago.', 'success');
+            }else{
+                // Mostrar confirmación
+                const confirmacion = await Swal.fire({
+                    title: '¿Finalizar Cierre?',
+                    text: 'Esta acción marcará el cierre como completado. ¿Deseas continuar?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#3085d6',
+                    cancelButtonColor: '#d33',
+                    confirmButtonText: 'Sí, finalizar',
+                    cancelButtonText: 'Cancelar'
+                });
+                
+                if (confirmacion.isConfirmed) {
+                    // 1. Crear un flag global para indicar que es finalizar
+                    window.esFinalizar = true;
+                    
+                    // 2. Crear y disparar un evento submit personalizado
+                    const form = document.getElementById('form-cierre-diario');
+                    const submitEvent = new Event('submit', {
+                        bubbles: true,
+                        cancelable: true
+                    });
+                    
+                    // 3. Disparar el evento (esto ejecutará tu event listener existente)
+                    form.dispatchEvent(submitEvent);
+                }
+            }    
+        }        
     });
 
 

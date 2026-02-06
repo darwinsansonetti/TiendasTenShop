@@ -44,6 +44,7 @@ class CierreDiario extends Model
         'Tipo',
         'VentaSistema',
         'ZelleDivisas',
+        'Biopago',
         'CasheaBs',
         'CasheaPagado',
         'Observacion'
@@ -76,7 +77,8 @@ class CierreDiario extends Model
         'Tipo' => 'integer',
         'VentaSistema' => 'decimal:2',
         'ZelleDivisas' => 'decimal:2',
-        'CasheaBs' => 'decimal:2'
+        'CasheaBs' => 'decimal:2',
+        'Biopago' => 'decimal:2'
     ];
 
     public $timestamps = false;

@@ -190,7 +190,7 @@
                                     <!-- Total Bs (EfectivoBs + PagoMovilBs + TransferenciaBs + PuntoDeVentaBs - EgresoBs) -->
                                     <td class="text-center fw-bold text-success">
                                         {{ number_format(
-                                            ((float)$item->EfectivoBs + (float)$item->PagoMovilBs + (float)$item->TransferenciaBs + (float)$item->PuntoDeVentaBs + (float)$item->CasheaBs) - (float)$item->EgresoBs,
+                                            ((float)$item->EfectivoBs + (float)$item->PagoMovilBs + (float)$item->TransferenciaBs + (float)$item->PuntoDeVentaBs + (float)$item->CasheaBs + (float)$item->Biopago) - (float)$item->EgresoBs,
                                             2, ',', '.'
                                         ) }} Bs
                                     </td>
@@ -208,7 +208,7 @@
                                     <!-- Diferencia (Total Bs - VentaSistema) -->
                                     <td class="text-center fw-bold {{ (((float)$item->EfectivoBs + (float)$item->PagoMovilBs + (float)$item->TransferenciaBs + (float)$item->PuntoDeVentaBs) - (float)$item->EgresoBs) - (float)$item->VentaSistema > 0 ? 'text-success' : 'text-danger' }}">
                                         {{ number_format(
-                                            (((float)$item->EfectivoBs + (float)$item->PagoMovilBs + (float)$item->TransferenciaBs + (float)$item->PuntoDeVentaBs) - (float)$item->EgresoBs) - (float)$item->VentaSistema,
+                                            (((float)$item->EfectivoBs + (float)$item->PagoMovilBs + (float)$item->TransferenciaBs + (float)$item->PuntoDeVentaBs + (float)$item->CasheaBs + (float)$item->Biopago) - (float)$item->EgresoBs) - (float)$item->VentaSistema,
                                             2, ',', '.'
                                         ) }} Bs
                                     </td>
