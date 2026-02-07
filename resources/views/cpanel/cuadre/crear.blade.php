@@ -1043,14 +1043,7 @@
                 btnGuardar.disabled = false;
                 
                 if (data.success) {
-                    // showToast(data.message || 'Cierre guardado correctamente', 'success');
-                    
-                    // // Redirigir después de 2 segundos
-                    // setTimeout(() => {
-                    //     // window.history.back();
-                    //     window.location.href = document.referrer + '?refresh=' + new Date().getTime();
-                    // }, 2000);
-
+                
                     if (esFinalizar) {
                         showToast('¡Cierre finalizado correctamente!', 'success');                        
                         
@@ -1059,8 +1052,29 @@
                     }
 
                     // Redirigir a la lista
+                    // setTimeout(() => {
+                    //     window.location.href = document.referrer + '?refresh=' + new Date().getTime();
+                    // }, 2000);
+
                     setTimeout(() => {
-                        window.location.href = document.referrer + '?refresh=' + new Date().getTime();
+                        const referrer = document.referrer;
+
+                        if (!referrer) {
+                            window.location.reload();
+                            return;
+                        }
+
+                        try {
+                            const url = new URL(referrer, window.location.origin);
+
+                            // Forzar recarga sin romper parámetros existentes
+                            url.searchParams.set('_refresh', Date.now());
+
+                            window.location.href = url.toString();
+                        } catch (e) {
+                            console.error('Referrer inválido:', referrer);
+                            window.location.href = referrer;
+                        }
                     }, 2000);
                     
                 } else {
