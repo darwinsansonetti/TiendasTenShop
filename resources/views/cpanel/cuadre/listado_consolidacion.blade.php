@@ -1,6 +1,6 @@
 @extends('layout.layout_dashboard')
 
-@section('title', 'TiendasTenShop | Listado Cierre Diario')
+@section('title', 'TiendasTenShop | Listado Consolidación Financiera')
 
 @php
     use App\Helpers\FileHelper;
@@ -14,11 +14,11 @@
   <div class="container-fluid">
     <!--begin::Row-->
     <div class="row">
-      <div class="col-sm-6"><h3 class="mb-0">Cierres Diarios (PENDIENTES)</h3></div>
+      <div class="col-sm-6"><h3 class="mb-0">Consolidación Financiera</h3></div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
           <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Listado Cierre Diario</li>
+          <li class="breadcrumb-item active" aria-current="page">Consolidación Financiera</li>
         </ol>
       </div>
     </div>
@@ -35,7 +35,7 @@
         <!-- Card de filtros -->
         <div class="card card-primary card-outline mb-4">
             <div class="card-body">
-                <form action="{{ route('cpanel.cuadre.registrar_cierre') }}" method="GET" id="filtroForm">
+                <form action="{{ route('cpanel.cuadre.consolidado') }}" method="GET" id="filtroForm">
                     @csrf
                     <div class="row g-3">
                         <div class="col-md-4">
@@ -84,9 +84,13 @@
                     
                     <!-- IZQUIERDA: Nuevo Cierre -->
                     <div class="col-12 col-md-6 text-start">
-                        <a href="javascript:void(0)" class="btn btn-primary btn-sm" onclick="confirmarNuevoCierre()">
-                            <i class="fa fa-plus me-1"></i>
-                            Nuevo
+                        <a href="{{ route('cpanel.cuadre.resumen_consolidado', [
+                                'fecha_inicio' => request('fecha_inicio', now()->startOfMonth()->format('Y-m-d')),
+                                'fecha_fin' => request('fecha_fin', now()->format('Y-m-d'))
+                            ]) }}"
+                        class="btn btn-primary btn-sm">
+                            <i class="fa fa-chart-bar me-1"></i>
+                            Resumen General
                         </a>
                     </div>
 
@@ -110,7 +114,6 @@
                 </div>
             </div>
 
-
             <div class="card-body p-0">
                 <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
                     <table class="table table-hover mb-0" id="tablaIndiceRotacion">
@@ -123,7 +126,7 @@
                                 <th width="100" class="text-center">Tasa Bs</th> 
                                 <th width="140" class="text-center">Venta Sistema Bs</th> 
                                 <th width="140" class="text-center">Estatus</th> 
-                                <th width="120" class="text-center">Acción</th>
+                                <!-- <th width="120" class="text-center">Acción</th> -->
                             </tr>
                         </thead>
                         <tbody>
@@ -143,7 +146,7 @@
 
                                     <!-- Egreso Bs -->
                                     <td class="text-center fw-bold text-warning">
-                                        {{ number_format((float)$item->EgresoBs, 2, ',', '.') }}
+                                        {{ number_format((float)$item->EfectivoDivisas, 2, ',', '.') }}
                                     </td>
 
                                     <!-- Total Bs (EfectivoBs + PagoMovilBs + TransferenciaBs + PuntoDeVentaBs - EgresoBs) -->
@@ -167,20 +170,55 @@
                                     <!-- Diferencia (Total Bs - VentaSistema) -->
                                     <td class="text-center">
                                         <span class="badge bg-light text-success">
-                                            Pendiente
+                                            @switch($item->Estatus)
+                                                @case(0)
+                                                    Edición
+                                                    @break
+
+                                                @case(1)
+                                                    Nuevo
+                                                    @break
+
+                                                @case(2)
+                                                    Auditoría
+                                                    @break
+
+                                                @case(3)
+                                                    Contabilizado
+                                                    @break
+
+                                                @case(4)
+                                                    Cerrado
+                                                    @break
+
+                                                @default
+                                                    Desconocido
+                                            @endswitch
                                         </span>
                                     </td>
-
+                                    
                                     <!-- Acción -->
-                                    <td class="text-center">
+                                    <!-- <td class="text-center">
+                                        @if($item->Estatus != 4)
                                         <div class="btn-group" role="group">
-                                            <a href="{{ route('cierre.editar', $item->CierreDiarioId) }}"
+                                            <a href="{{ route('cierre.editar_auditoria', $item->CierreDiarioId) }}"
+                                                class="btn btn-sm btn-outline-primary"
+                                                title="Editar">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                        </div>
+                                        @endif
+
+                                        @if($item->Estatus == 4)
+                                        <div class="btn-group" role="group">
+                                            <a href="{{ route('cierre.detalle', $item->CierreDiarioId) }}"
                                                 class="btn btn-sm btn-outline-primary"
                                                 title="Ver detalles">
                                                 <i class="bi bi-eye"></i>
                                             </a>
                                         </div>
-                                    </td>
+                                        @endif
+                                    </td> -->
                                 </tr>
 
                             @endforeach
@@ -432,7 +470,7 @@
         XLSX.utils.book_append_sheet(wb, ws, 'CierreDiario');
 
         const fecha = new Date().toISOString().split('T')[0];
-        XLSX.writeFile(wb, `CierreDiario_${fecha}.xlsx`);
+        XLSX.writeFile(wb, `ConsolidacionFinanciera_${fecha}.xlsx`);
     }
 
     function pdfTablaVentasDiarias() {
@@ -560,95 +598,7 @@
         // DESCARGAR PDF
         // =========================
         const fecha = new Date().toISOString().split('T')[0];
-        doc.save(`CierreDiario_${fecha}.pdf`);
-    }
-
-    // function confirmarNuevoCierre() {
-    //     // Verificar si hay alguna sucursal seleccionada
-    //     const sucursalId = {{ session('sucursal_id', 0) }};
-    //     const sucursalNombre = '{{ session('sucursal_nombre') }}';
-    //     const tasaBCV = {{ $tasa['DivisaValor']['Valor'] ?? 0 }};
-
-    //     if (sucursalId === 0) {
-    //         showToast('Seleccione una Sucursal para crear su cierre diario', 'danger');
-    //     }else{
-    //         if(tasaBCV === 0){
-    //             showToast('Debe indicar la Tasa del dia antes de Crear el nuevo Cierre Diario', 'danger');
-    //         }else{
-    //             Swal.fire({
-    //                 title: `¿Seguro de crear el Cierre Diario para la sucursal ${sucursalNombre}?`,
-    //                 text: 'Se iniciará un nuevo cierre diario.',
-    //                 icon: 'warning',
-    //                 showCancelButton: true,
-    //                 confirmButtonColor: '#0d6efd',
-    //                 cancelButtonColor: '#6c757d',
-    //                 confirmButtonText: 'Sí, continuar',
-    //                 cancelButtonText: 'Cancelar'
-    //             }).then((result) => {
-    //                 if (result.isConfirmed) {
-    //                     window.location.href = "{{ route('cpanel.cuadre.crear') }}";
-    //                 }
-    //             });
-    //         }
-    //     }
-    // }
-
-    function confirmarNuevoCierre() {
-        const sucursalId = {{ session('sucursal_id', 0) }};
-        const sucursalNombre = '{{ session('sucursal_nombre') }}';
-        const tasaBCV = {{ $tasa['DivisaValor']['Valor'] ?? 0 }};
-
-        if (sucursalId === 0) {
-            showToast('Seleccione una Sucursal para crear su cierre diario', 'danger');
-            return;
-        }
-        
-        if (tasaBCV === 0) {
-            showToast('Debe indicar la Tasa del día antes de Crear el nuevo Cierre Diario', 'danger');
-            return;
-        }
-
-        Swal.fire({
-            title: `¿Seguro de crear el Cierre Diario para la sucursal ${sucursalNombre}?`,
-            text: 'Se iniciará un nuevo cierre diario.',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#0d6efd',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Sí, continuar',
-            cancelButtonText: 'Cancelar',
-            showLoaderOnConfirm: true,
-            preConfirm: async () => {
-                try {
-                    const response = await fetch("{{ route('cpanel.cuadre.verificar') }}", {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                        },
-                        body: JSON.stringify({ sucursal_id: sucursalId })
-                    });
-                    
-                    if (!response.ok) throw new Error('Error en la conexión');
-                    
-                    const data = await response.json();
-                    
-                    if (data.existe) {
-                        throw new Error(data.mensaje);
-                    }
-                    
-                    return data;
-                } catch (error) {
-                    Swal.showValidationMessage(error.message);
-                    return false;
-                }
-            },
-            allowOutsideClick: () => !Swal.isLoading()
-        }).then((result) => {
-            if (result.isConfirmed && result.value) {
-                window.location.href = "{{ route('cpanel.cuadre.crear') }}";
-            }
-        });
+        doc.save(`ConsolidacionFinanciera_${fecha}.pdf`);
     }
 
 </script>

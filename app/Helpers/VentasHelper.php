@@ -327,7 +327,8 @@ class VentasHelper
                 ])
                 ->when($sucursalId > 0, fn($q) => $q->where('SucursalId', $sucursalId))
                 ->whereBetween('Fecha', [$filtroFecha->fechaInicio, $filtroFecha->fechaFin])
-                ->where('Estatus', $tipoEstatus)
+                ->whereBetween('Estatus', [0, 1])
+                // ->where('Estatus', $tipoEstatus)
                 ->where('Tipo', 1);
         }else{
             $query = CierreDiario::with([
@@ -337,7 +338,7 @@ class VentasHelper
                 ])
                 ->when($sucursalId > 0, fn($q) => $q->where('SucursalId', $sucursalId))
                 ->whereBetween('Fecha', [$filtroFecha->fechaInicio, $filtroFecha->fechaFin])
-                ->where('Estatus', ">" , 1)
+                ->where('Estatus', ">=" , 0)
                 ->where('Tipo', 1);
         }
 
@@ -767,6 +768,20 @@ class VentasHelper
             ->toArray();
 
         return $gastos;
+    }
+
+    public static function totalesPorBanco($cierres)
+    {
+        return $cierres
+            ->pluck('pagosPuntoDeVenta') // colección de colecciones
+            ->flatten() // todos los pagos en un solo array
+            ->groupBy(fn($pago) => $pago->puntoDeVenta->banco->ID)
+            ->map(fn($pagos, $bancoId) => [
+                'BancoID' => $pagos->first()->puntoDeVenta->banco->ID,
+                'Logo' => $pagos->first()->puntoDeVenta->banco->Logo,
+                'Nombre' => $pagos->first()->puntoDeVenta->banco->Nombre,
+                'TotalPagado' => $pagos->sum('Monto')
+            ])->values();
     }
 
 }

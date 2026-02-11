@@ -145,6 +145,17 @@ Route::middleware('auth')->group(function() {
         Route::delete('/eliminar/{gasto}', [CuadreController::class, 'eliminar_gasto'])->name('gastos-diarios.eliminar');
     });
 
+    // Auditar Cierre Diario
+    Route::get('/cpanel/auditar/cierre', [CuadreController::class, 'listar_auditar_cierre'])->name('cpanel.cuadre.auditar_cierre');
+
+    // Editar y Auditar Cierre Diario
+    Route::get('/cierre/editar/auditar/{cierreDiario}', [CuadreController::class, 'editar_auditar'])->name('cierre.editar_auditoria');
+
+    // Consolidado Financiero
+    Route::get('/cpanel/consolidado', [CuadreController::class, 'listar_consolidado'])->name('cpanel.cuadre.consolidado');
+
+    // Resumen Consolidacion Financiera
+    Route::get('/cuadre/resumen/consolidacion', [CuadreController::class, 'resumen_consolidacion'])->name('cpanel.cuadre.resumen_consolidado');
 });
 
 

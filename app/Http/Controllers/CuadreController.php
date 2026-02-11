@@ -514,6 +514,16 @@ class CuadreController extends Controller
         
         // Usar transacción para asegurar integridad de datos
         DB::beginTransaction();
+
+        $statusUpdate = 1;
+
+        // Si se esta Guardando un nuevo Cierre
+        if($cierre->Estatus == 0 || $cierre->Estatus == 1){
+            $statusUpdate = 1; 
+        }else{
+            // Si se esta Guardando una Audioria
+            $statusUpdate = 2;
+        } 
         
         try {
             // Preparar datos para el cierre diario
@@ -529,12 +539,19 @@ class CuadreController extends Controller
                 'CasheaBs' => $request->cashea_bs,
                 'Biopago' => $request->biopago_bs,
                 'Observacion' => $request->observacion,
-                'Estatus' => 1,
+                'Estatus' => $statusUpdate,
             ];
 
             // Si es finalizar (valor 3), cambiar estatus
             if ($esFinalizar) {
-                $datosCierre['Estatus'] = 3; // O el valor que uses para "Finalizado"
+
+                // Si se esta Finalizando un nuevo Cierre
+                if($cierre->Estatus == 0 || $cierre->Estatus == 1){
+                    $datosCierre['Estatus'] = 3; // O el valor que uses para "Finalizado"
+                }else{
+                    // Si se esta Finalizando una Audioria
+                    $datosCierre['Estatus'] = 4;
+                }                
             }
             
             // Actualizar el cierre diario
@@ -787,5 +804,379 @@ class CuadreController extends Controller
         } catch (\Exception $e) {
             Log::error('Error actualizando totales del cierre:', ['error' => $e->getMessage()]);
         }
+    }    
+
+    // Auditar Cierre Diario
+    public function listar_auditar_cierre(Request $request)
+    {       
+        // 🚀 Aquí: usar fechas del request si existen
+        $fechaInicio = $request->input('fecha_inicio')
+            ? Carbon::parse($request->input('fecha_inicio'))->startOfDay()
+            : null;
+
+        $fechaFin = $request->input('fecha_fin')
+            ? Carbon::parse($request->input('fecha_fin'))->startOfDay()
+            : null;
+
+        $filtroFecha = new ParametrosFiltroFecha(
+            null,
+            null,
+            null,
+            false,
+            $fechaInicio,
+            $fechaFin
+        );
+
+        // Asignacion al menu
+        session([
+            'menu_active' => 'Cuadre de Caja',
+            'submenu_active' => 'Auditar Cierre'
+        ]);
+
+        // 5️⃣ Obtener sucursal activa
+        $sucursalId = session('sucursal_id');
+        $sucursalNombre = session('sucursal_nombre');
+
+        $cierreDiario = collect();
+
+        $cierreDiario = VentasHelper::buscarListadoAuditoriasNew($filtroFecha, $sucursalId, 2);
+        $cierreDiario = $cierreDiario->sortByDesc('Fecha');
+
+        $totalDivisa = $cierreDiario->sum('EfectivoDivisas');
+        $totalEfectivoBs = $cierreDiario->sum('EfectivoBs');
+        $totalPagoMovil = $cierreDiario->sum('PagoMovilBs');
+        $totalPuntoVenta = $cierreDiario->sum('PuntoDeVentaBs');
+        $totalTransferencias = $cierreDiario->sum('TransferenciaBs');
+        $totalSistemaBs = $cierreDiario->sum('VentaSistema');
+        $totalEgresosBs = $cierreDiario->sum('EgresoBs');
+        $totalEgresosDivisa = $cierreDiario->sum('EgresoDivisas');
+
+        $totalIngresoBs = $totalEfectivoBs
+                    + $totalPagoMovil
+                    + $totalPuntoVenta
+                    + $totalTransferencias;
+
+        $totalBs = $totalIngresoBs - $totalEgresosBs;
+        $totalGeneralDivisa = $totalDivisa - $totalEgresosDivisa;
+        $diferencia = $totalBs - $totalSistemaBs;
+
+        // dd($cierreDiario);
+
+        // Pasar todo a la vista
+        return view('cpanel.cuadre.listado_cierre_auditoria', [
+            'cierreDiario' => $cierreDiario,
+            'fecha_inicio' => $fechaInicio,
+            'fecha_fin' => $fechaFin,
+            'sucursalId' => $sucursalId,
+            'totalDivisa' => $totalDivisa,
+            'totalEfectivoBs' => $totalEfectivoBs,
+            'totalPagoMovil' => $totalPagoMovil,
+            'totalPuntoVenta' => $totalPuntoVenta,
+            'totalTransferencias' => $totalTransferencias,
+            'totalSistemaBs' => $totalSistemaBs,
+            'totalBs' => $totalBs,
+            'totalGeneralDivisa' => $totalGeneralDivisa,
+            'diferencia' => $diferencia, 
+        ]);
+    }
+
+    // Editar y Auditar
+    public function editar_auditar(CierreDiario $cierreDiario)
+    {
+
+        try {
+            // Validar sesión
+            $sucursalId = $cierreDiario->SucursalId;
+
+            // Obtener tasa
+            $tasa = GeneralHelper::obtenerTasaCambioDiaria($cierreDiario->Fecha);
+            $tasaBCV = $tasa['DivisaValor']['Valor'] ?? 0;
+            
+            // INICIALIZAR las variables ANTES del if-else
+            $cierreDiarioDTO = null;
+            $cierreId = $cierreDiario->CierreDiarioId;
+            
+            // Obtener el modelo completo con relaciones (siempre por ID)
+            $cierreCompleto = CierreDiario::with(['divisaValor', 'sucursal', 'pagosPuntoDeVenta', 'pagosPuntoDeVenta.puntoDeVenta', 'pagosPuntoDeVenta.puntoDeVenta.banco'])
+                ->find($cierreId);
+
+            if (!$cierreCompleto) {
+                throw new \Exception('No se encontró el cierre diario con ID: ' . $cierreId);
+            }
+
+            // Obtenemos los gastos para mostrarlos
+            $gastos = VentasHelper::obtenerGastosPorCierre($cierreId);
+
+            $cierreCompleto->Estatus = 2;
+            
+            // Actualizar el cierre diario
+            $cierreCompleto->save();
+
+        // dd($cierreCompleto);
+
+            // Preparar datos para la vista
+            $datosVista = [
+                'sucursal' => [
+                    'id' => $sucursalId,
+                    'nombre' => $cierreCompleto->sucursal['Nombre']
+                ],
+                'fecha' => [
+                    'actual' => $cierreDiario->Fecha,
+                    'formateada' => $cierreDiario->Fecha->format('d/m/Y'),
+                    'iso' => $cierreDiario->Fecha->format('Y-m-d')
+                ],
+                'tasa_bcv' => $tasaBCV,
+                'hora_inicio' => now('America/Caracas')->format('H:i:s'),
+                'usuario' => auth()->user()->name ?? 'Usuario',
+                'cierre' => $cierreCompleto,
+                'cierre_dto' => $cierreDiarioDTO, // Ahora siempre definida (aunque sea null)
+                'cierre_id' => $cierreId,
+                'gastos' => $gastos
+            ];
+
+            return view('cpanel.cuadre.crear', compact('datosVista'));
+
+        } catch (\Exception $e) {
+            
+            return redirect()->back()
+                ->with('error', 'Error al iniciar el cierre diario: ' . $e->getMessage());
+        }
+    }
+
+    // Consolidado Financiero
+    public function listar_consolidado(Request $request)
+    {       
+        // 🚀 Aquí: usar fechas del request si existen
+        $fechaInicio = $request->input('fecha_inicio')
+            ? Carbon::parse($request->input('fecha_inicio'))->startOfDay()
+            : null;
+
+        $fechaFin = $request->input('fecha_fin')
+            ? Carbon::parse($request->input('fecha_fin'))->startOfDay()
+            : null;
+
+        $filtroFecha = new ParametrosFiltroFecha(
+            null,
+            null,
+            null,
+            false,
+            $fechaInicio,
+            $fechaFin
+        );
+
+        // Asignacion al menu
+        session([
+            'menu_active' => 'Cuadre de Caja',
+            'submenu_active' => 'Consolidado Financiero'
+        ]);
+
+        // 5️⃣ Obtener sucursal activa
+        $sucursalId = session('sucursal_id');
+        $sucursalNombre = session('sucursal_nombre');
+
+        $cierreDiario = collect();
+
+        $cierreDiario = VentasHelper::buscarListadoAuditoriasNew($filtroFecha, $sucursalId, 2);
+        $cierreDiario = $cierreDiario->sortByDesc('Fecha');
+
+        $totalDivisa = $cierreDiario->sum('EfectivoDivisas');
+        $totalEfectivoBs = $cierreDiario->sum('EfectivoBs');
+        $totalPagoMovil = $cierreDiario->sum('PagoMovilBs');
+        $totalPuntoVenta = $cierreDiario->sum('PuntoDeVentaBs');
+        $totalTransferencias = $cierreDiario->sum('TransferenciaBs');
+        $totalSistemaBs = $cierreDiario->sum('VentaSistema');
+        $totalEgresosBs = $cierreDiario->sum('EgresoBs');
+        $totalEgresosDivisa = $cierreDiario->sum('EgresoDivisas');
+
+        $totalIngresoBs = $totalEfectivoBs
+                    + $totalPagoMovil
+                    + $totalPuntoVenta
+                    + $totalTransferencias;
+
+        $totalBs = $totalIngresoBs - $totalEgresosBs;
+        $totalGeneralDivisa = $totalDivisa - $totalEgresosDivisa;
+        $diferencia = $totalBs - $totalSistemaBs;
+
+        // dd($cierreDiario);
+
+        // Pasar todo a la vista
+        return view('cpanel.cuadre.listado_consolidacion', [
+            'cierreDiario' => $cierreDiario,
+            'fecha_inicio' => $fechaInicio,
+            'fecha_fin' => $fechaFin,
+            'sucursalId' => $sucursalId,
+            'sucursalNombre' => $sucursalNombre,
+            'totalDivisa' => $totalDivisa,
+            'totalEfectivoBs' => $totalEfectivoBs,
+            'totalPagoMovil' => $totalPagoMovil,
+            'totalPuntoVenta' => $totalPuntoVenta,
+            'totalTransferencias' => $totalTransferencias,
+            'totalSistemaBs' => $totalSistemaBs,
+            'totalBs' => $totalBs,
+            'totalGeneralDivisa' => $totalGeneralDivisa,
+            'diferencia' => $diferencia, 
+        ]);
+    }
+
+    // Consolidado Financiero
+    public function resumen_consolidacion(Request $request)
+    {       
+        // 🚀 Aquí: usar fechas del request si existen
+        $fechaInicio = $request->input('fecha_inicio')
+            ? Carbon::parse($request->input('fecha_inicio'))->startOfDay()
+            : null;
+
+        $fechaFin = $request->input('fecha_fin')
+            ? Carbon::parse($request->input('fecha_fin'))->startOfDay()
+            : null;
+
+        $filtroFecha = new ParametrosFiltroFecha(
+            null,
+            null,
+            null,
+            false,
+            $fechaInicio,
+            $fechaFin
+        );
+
+        // Asignacion al menu
+        session([
+            'menu_active' => 'Cuadre de Caja',
+            'submenu_active' => 'Consolidado Financiero'
+        ]);
+
+        // 5️⃣ Obtener sucursal activa
+        $sucursalId = session('sucursal_id');
+        $sucursalNombre = session('sucursal_nombre');
+
+        $cierreDiario = collect();
+
+        $cierreDiario = VentasHelper::buscarListadoAuditoriasNew($filtroFecha, $sucursalId, 2);
+        $cierreDiario = $cierreDiario->sortByDesc('Fecha');
+
+        $totalEfectivoBs = 0;
+        $totalPagoMovil = 0;
+        $totalPuntoVenta = 0;
+        $totalTransferencias = 0;
+        $totalCashea = 0;
+        $totalBiopago = 0;
+
+        $totalDivisa = 0;
+        $totalZelle = 0;
+
+        $totalEgresosBs = 0;
+        $totalEgresosDivisa = 0;
+        $totalSistemaBs = 0;
+
+        // Totales convertidos
+        $totalIngresoDivisaEnBs = 0;
+        $totalEgresoDivisaEnBs = 0;
+
+        $totalIngresoBsEnDivisa = 0;
+        $totalEgresoBsEnDivisa  = 0;
+
+        // IMPORTANTE:
+        // Cada cierre tiene su propia tasa (DivisaValor)
+        // Las conversiones SIEMPRE se hacen por registro
+        foreach ($cierreDiario as $item) {
+
+            $tasa = (float) $item->DivisaValor;
+
+            // Ingresos en Bs
+            $totalEfectivoBs     += (float) $item->EfectivoBs;
+            $totalPagoMovil      += (float) $item->PagoMovilBs;
+            $totalPuntoVenta     += (float) $item->PuntoDeVentaBs;
+            $totalTransferencias += (float) $item->TransferenciaBs;
+            $totalCashea         += (float) $item->CasheaBs;
+            $totalBiopago        += (float) $item->Biopago;
+
+            // Ingresos en divisa
+            $totalDivisa += (float) $item->EfectivoDivisas;
+            $totalZelle  += (float) $item->ZelleDivisas;
+
+            // Egresos
+            $totalEgresosBs     += (float) $item->EgresoBs;
+            $totalEgresosDivisa += (float) $item->EgresoDivisas;
+
+            // Sistema
+            $totalSistemaBs += (float) $item->VentaSistema;
+
+            // Conversión correcta (Divisa a Bs)
+            $totalIngresoDivisaEnBs += (
+                (float) $item->EfectivoDivisas +
+                (float) $item->ZelleDivisas
+            ) * $tasa;
+
+            $totalEgresoDivisaEnBs += (float) $item->EgresoDivisas * $tasa;
+
+            // Conversión correcta (Bs a Divisa)
+            $totalIngresoBsEnDivisa += (
+                (float) $item->EfectivoBs +
+                (float) $item->PagoMovilBs +
+                (float) $item->PuntoDeVentaBs +
+                (float) $item->TransferenciaBs +
+                (float) $item->CasheaBs +
+                (float) $item->Biopago
+            ) / $tasa;
+
+            $totalEgresoBsEnDivisa += (float) $item->EgresoBs / $tasa;
+        }
+
+        $totalIngresoBs = $totalEfectivoBs + $totalPagoMovil + $totalPuntoVenta + $totalTransferencias +
+                            $totalCashea + $totalBiopago;
+
+        $totalBs = $totalIngresoBs + $totalIngresoDivisaEnBs - $totalEgresosBs - $totalEgresoDivisaEnBs;
+
+        $totalDivisaGeneral = $totalIngresoBsEnDivisa + $totalDivisa + $totalZelle - $totalEgresoBsEnDivisa - $totalEgresosDivisa;
+        $totalSoloDivisa = $totalDivisa + $totalZelle;
+
+        $diferencia = $totalBs - $totalSistemaBs;
+
+        // Totales por banco
+        $cierreDiario->load([
+            'sucursal',
+            'divisaValor',
+            'pagosPuntoDeVenta.puntoDeVenta',
+            'pagosPuntoDeVenta.puntoDeVenta.banco',
+        ]);
+
+        $totalesPorBanco = VentasHelper::totalesPorBanco($cierreDiario);
+        $totalesPorBanco = collect($totalesPorBanco)->map(fn($item) => (object) $item);
+
+        // dd($totalesPorBanco);
+
+        // Pasar todo a la vista 
+        return view('cpanel.cuadre.resumen_consolidacion_financiera', [
+            'cierreDiario' => $cierreDiario,
+            'fecha_inicio' => $fechaInicio,
+            'fecha_fin' => $fechaFin,
+            'sucursalId' => $sucursalId,
+            'sucursalNombre' => $sucursalNombre,
+            'totalEfectivoBs' => $totalEfectivoBs,
+            'totalPagoMovil' => $totalPagoMovil,
+            'totalPuntoVenta' => $totalPuntoVenta,
+            'totalTransferencias' => $totalTransferencias,
+            'totalCashea' => $totalCashea,
+            'totalBiopago' => $totalBiopago,
+
+            'totalDivisa' => $totalDivisa,
+            'totalZelle' => $totalZelle,
+
+            'totalSistemaBs' => $totalSistemaBs,
+            'totalIngresoDivisaEnBs' => $totalIngresoDivisaEnBs,
+            'totalEgresoDivisaEnBs' => $totalEgresoDivisaEnBs,
+            'totalIngresoBsEnDivisa' => $totalIngresoBsEnDivisa,
+            'totalEgresoBsEnDivisa' => $totalEgresoBsEnDivisa,
+            'totalSoloDivisa' => $totalSoloDivisa,
+            'totalEgresosBs' => $totalEgresosBs,
+            'totalEgresosDivisa' => $totalEgresosDivisa,
+
+            'totalIngresoBs' => $totalIngresoBs,
+            'totalBs' => $totalBs,
+            'totalDivisaGeneral' => $totalDivisaGeneral,
+            'diferencia' => $diferencia, 
+
+            'totalesPorBanco' => $totalesPorBanco, 
+        ]);
     }
 }

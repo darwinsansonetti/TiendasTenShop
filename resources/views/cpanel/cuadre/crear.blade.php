@@ -346,12 +346,22 @@
                                                 <button type="button" class="btn btn-info" id="btn-limpiar">
                                                     <i class="fas fa-eraser me-2"></i>Limpiar Campos
                                                 </button>
+                                                
                                                 <button type="submit" class="btn btn-primary" id="btn-guardar">
                                                     <i class="fas fa-save me-2"></i>Guardar Cambios
                                                 </button>
-                                                <button type="button" class="btn btn-success" id="btn-finalizar">
-                                                    <i class="fas fa-check-circle me-2"></i>Finalizar Cierre
-                                                </button>
+
+                                                @if($datosVista['cierre']->Estatus == 0 || $datosVista['cierre']->Estatus == 1)
+                                                    <button type="button" class="btn btn-success" id="btn-finalizar">
+                                                        <i class="fas fa-check-circle me-2"></i>Finalizar Cierre
+                                                    </button>
+                                                @endif
+
+                                                @if($datosVista['cierre']->Estatus == 2 || $datosVista['cierre']->Estatus == 3)
+                                                    <button type="button" class="btn btn-success" id="btn-finalizar-auditoria">
+                                                        <i class="fas fa-check-circle me-2"></i>Finalizar Auditoria
+                                                    </button>
+                                                @endif
                                             </div>
                                         </div>
                                     </div>
@@ -1240,132 +1250,99 @@
         }
     }
     
-    // Evento para el botón Finalizar
-    document.getElementById('btn-finalizar').addEventListener('click', async function() {
+    const btnFinalizar = document.getElementById('btn-finalizar');
 
-        const ventasSistema = document.querySelector('input[name="venta_sistema"]').value;
-        const ventasingresadas = document.getElementById('total_ventas_bs').value;
+    if (btnFinalizar) {
+        // Evento para el botón Finalizar
+        btnFinalizar.addEventListener('click', async function() {
 
-        if (!ventasSistema || parseFloat(ventasSistema) <= 0) {
-            showToast('Monto invalido para las Ventas en Sistema', 'success');
-            highlightErrorEnd(document.querySelector('input[name="venta_sistema"]'));
-        }else{
-            if (!ventasingresadas || parseFloat(ventasingresadas) <= 0) {
-                showToast('Debe ingresar ventas por algun metodo de pago.', 'success');
+            const ventasSistema = document.querySelector('input[name="venta_sistema"]').value;
+            const ventasingresadas = document.getElementById('total_ventas_bs').value;
+
+            if (!ventasSistema || parseFloat(ventasSistema) <= 0) {
+                showToast('Monto invalido para las Ventas en Sistema', 'success');
+                highlightErrorEnd(document.querySelector('input[name="venta_sistema"]'));
             }else{
-                // Mostrar confirmación
-                const confirmacion = await Swal.fire({
-                    title: '¿Finalizar Cierre?',
-                    text: 'Esta acción marcará el cierre como completado. ¿Deseas continuar?',
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#3085d6',
-                    cancelButtonColor: '#d33',
-                    confirmButtonText: 'Sí, finalizar',
-                    cancelButtonText: 'Cancelar'
-                });
-                
-                if (confirmacion.isConfirmed) {
-                    // 1. Crear un flag global para indicar que es finalizar
-                    window.esFinalizar = true;
-                    
-                    // 2. Crear y disparar un evento submit personalizado
-                    const form = document.getElementById('form-cierre-diario');
-                    const submitEvent = new Event('submit', {
-                        bubbles: true,
-                        cancelable: true
+                if (!ventasingresadas || parseFloat(ventasingresadas) <= 0) {
+                    showToast('Debe ingresar ventas por algun metodo de pago.', 'success');
+                }else{
+                    // Mostrar confirmación
+                    const confirmacion = await Swal.fire({
+                        title: '¿Finalizar Cierre?',
+                        text: 'Esta acción marcará el cierre como completado. ¿Deseas continuar?',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#3085d6',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Sí, finalizar',
+                        cancelButtonText: 'Cancelar'
                     });
                     
-                    // 3. Disparar el evento (esto ejecutará tu event listener existente)
-                    form.dispatchEvent(submitEvent);
-                }
-            }    
-        }        
-    });
+                    if (confirmacion.isConfirmed) {
+                        // 1. Crear un flag global para indicar que es finalizar
+                        window.esFinalizar = true;
+                        
+                        // 2. Crear y disparar un evento submit personalizado
+                        const form = document.getElementById('form-cierre-diario');
+                        const submitEvent = new Event('submit', {
+                            bubbles: true,
+                            cancelable: true
+                        });
+                        
+                        // 3. Disparar el evento (esto ejecutará tu event listener existente)
+                        form.dispatchEvent(submitEvent);
+                    }
+                }    
+            }        
+        });
+    }
 
+    const btnFinalizarAuditoria = document.getElementById('btn-finalizar-auditoria');
 
+    if (btnFinalizarAuditoria) {
+        // Evento para el botón Finalizar Auditoria
+        btnFinalizarAuditoria.addEventListener('click', async function() {
 
-    //-------------------------------------//
-    // Gastos Diarios
-    //-------------------------------------//
+            const ventasSistema = document.querySelector('input[name="venta_sistema"]').value;
+            const ventasingresadas = document.getElementById('total_ventas_bs').value;
 
-    // Manejar el formulario de gastos
-    // document.getElementById('form-gasto-diario').addEventListener('submit', function(e) {
-    //     e.preventDefault();
-        
-    //     // Validaciones básicas
-    //     const descripcion = this.querySelector('[name="descripcion"]').value.trim();
-    //     const formaPago = this.querySelector('[name="forma_pago"]').value;
-        
-    //     if (!descripcion) {
-    //         showToast('La descripción es obligatoria', 'error');
-    //         this.querySelector('[name="descripcion"]').focus();
-    //         return;
-    //     }
-        
-    //     if (!formaPago) {
-    //         showToast('La forma de pago es obligatoria', 'error');
-    //         this.querySelector('[name="forma_pago"]').focus();
-    //         return;
-    //     }
-        
-    //     // Preparar datos
-    //     const formData = new FormData(this);
-    //     const cierreId = "{{ $datosVista['cierre_id'] }}";
-        
-    //     // Mostrar loading
-    //     const btnGuardar = document.getElementById('btn-guardar-gasto');
-    //     const originalText = btnGuardar.innerHTML;
-    //     btnGuardar.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Guardando...';
-    //     btnGuardar.disabled = true;
-        
-    //     // Enviar via AJAX
-    //     fetch("{{ route('gastos-diarios.guardar') }}", {
-    //         method: "POST",
-    //         headers: {
-    //             "X-CSRF-TOKEN": "{{ csrf_token() }}",
-    //             "X-Requested-With": "XMLHttpRequest",
-    //             "Accept": "application/json"
-    //         },
-    //         body: formData
-    //     })
-    //     .then(async response => {
-    //         const data = await response.json();
-            
-    //         if (!response.ok) {
-    //             throw new Error(data.message || 'Error del servidor');
-    //         }
-            
-    //         return data;
-    //     })
-    //     .then(data => {
-    //         if (data.success) {
-    //             showToast('Gasto guardado correctamente', 'success');
-                
-    //             // Limpiar formulario
-    //             this.reset();
-    //             this.querySelector('[name="monto_usd"]').value = 0;
-    //             this.querySelector('[name="monto_bsf"]').value = 0;
-                
-    //             // Recargar lista de gastos
-    //             // cargarGastos(cierreId);
-
-    //             actualizarTablaGastos(data.gastos);
-    //             // actualizarTotalesGastos(data.totales);
-    //         } else {
-    //             showToast(data.message || 'Error al guardar el gasto', 'error');
-    //         }
-    //     })
-    //     .catch(error => {
-    //         console.error('Error:', error);
-    //         showToast(error.message || 'Error de conexión', 'error');
-    //     })
-    //     .finally(() => {
-    //         // Restaurar botón
-    //         btnGuardar.innerHTML = originalText;
-    //         btnGuardar.disabled = false;
-    //     });
-    // });
+            if (!ventasSistema || parseFloat(ventasSistema) <= 0) {
+                showToast('Monto invalido para las Ventas en Sistema', 'success');
+                highlightErrorEnd(document.querySelector('input[name="venta_sistema"]'));
+            }else{
+                if (!ventasingresadas || parseFloat(ventasingresadas) <= 0) {
+                    showToast('Debe ingresar ventas por algun metodo de pago.', 'success');
+                }else{
+                    // Mostrar confirmación
+                    const confirmacion = await Swal.fire({
+                        title: '¿Finalizar Auditoria?',
+                        text: 'Esta acción marcará el cierre como completado. ¿Deseas continuar?',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#3085d6',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Sí, finalizar',
+                        cancelButtonText: 'Cancelar'
+                    });
+                    
+                    if (confirmacion.isConfirmed) {
+                        // 1. Crear un flag global para indicar que es finalizar
+                        window.esFinalizar = true;
+                        
+                        // 2. Crear y disparar un evento submit personalizado
+                        const form = document.getElementById('form-cierre-diario');
+                        const submitEvent = new Event('submit', {
+                            bubbles: true,
+                            cancelable: true
+                        });
+                        
+                        // 3. Disparar el evento (esto ejecutará tu event listener existente)
+                        form.dispatchEvent(submitEvent);
+                    }
+                }    
+            }        
+        });
+    }
 
     document.getElementById('form-gasto-diario').addEventListener('submit', function(e) {
         e.preventDefault();
