@@ -1058,7 +1058,7 @@ class CuadreController extends Controller
         $totalPagoMovil = 0;
         $totalPuntoVenta = 0;
         $totalTransferencias = 0;
-        $totalCashea = 0;
+        // $totalCashea = 0;
         $totalBiopago = 0;
 
         $totalDivisa = 0;
@@ -1087,7 +1087,7 @@ class CuadreController extends Controller
             $totalPagoMovil      += (float) $item->PagoMovilBs;
             $totalPuntoVenta     += (float) $item->PuntoDeVentaBs;
             $totalTransferencias += (float) $item->TransferenciaBs;
-            $totalCashea         += (float) $item->CasheaBs;
+            // $totalCashea         += (float) $item->CasheaBs;
             $totalBiopago        += (float) $item->Biopago;
 
             // Ingresos en divisa
@@ -1115,15 +1115,14 @@ class CuadreController extends Controller
                 (float) $item->PagoMovilBs +
                 (float) $item->PuntoDeVentaBs +
                 (float) $item->TransferenciaBs +
-                (float) $item->CasheaBs +
+                // (float) $item->CasheaBs +
                 (float) $item->Biopago
             ) / $tasa;
 
             $totalEgresoBsEnDivisa += (float) $item->EgresoBs / $tasa;
         }
 
-        $totalIngresoBs = $totalEfectivoBs + $totalPagoMovil + $totalPuntoVenta + $totalTransferencias +
-                            $totalCashea + $totalBiopago;
+        $totalIngresoBs = $totalEfectivoBs + $totalPagoMovil + $totalPuntoVenta + $totalTransferencias + $totalBiopago;
 
         $totalBs = $totalIngresoBs + $totalIngresoDivisaEnBs - $totalEgresosBs - $totalEgresoDivisaEnBs;
 
@@ -1156,7 +1155,7 @@ class CuadreController extends Controller
             'totalPagoMovil' => $totalPagoMovil,
             'totalPuntoVenta' => $totalPuntoVenta,
             'totalTransferencias' => $totalTransferencias,
-            'totalCashea' => $totalCashea,
+            // 'totalCashea' => $totalCashea,
             'totalBiopago' => $totalBiopago,
 
             'totalDivisa' => $totalDivisa,

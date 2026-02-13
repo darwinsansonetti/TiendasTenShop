@@ -169,17 +169,6 @@
                                     </div>
                                 </div>
 
-                                <!-- Cashea -->
-                                <div class="info-item d-flex align-items-center justify-content-between py-2">
-                                    <div class="info-label d-flex align-items-center gap-2 text-muted">
-                                        <i class="fas fa-credit-card text-dark"></i>
-                                        <span>Total Cashea</span>
-                                    </div>
-                                    <div class="info-value fw-semibold">
-                                        {{ number_format($totalCashea, 2, ',', '.') }} Bsf
-                                    </div>
-                                </div>
-
                                 <!-- Biopago -->
                                 <div class="info-item d-flex align-items-center justify-content-between py-2">
                                     <div class="info-label d-flex align-items-center gap-2 text-muted">

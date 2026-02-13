@@ -152,7 +152,7 @@
                                     <!-- Total Bs (EfectivoBs + PagoMovilBs + TransferenciaBs + PuntoDeVentaBs - EgresoBs) -->
                                     <td class="text-center fw-bold text-success">
                                         {{ number_format(
-                                            ((float)$item->EfectivoBs + (float)$item->PagoMovilBs + (float)$item->TransferenciaBs + (float)$item->PuntoDeVentaBs + (float)$item->CasheaBs + (float)$item->Biopago) - (float)$item->EgresoBs,
+                                            ((float)$item->EfectivoBs + (float)$item->PagoMovilBs + (float)$item->TransferenciaBs + (float)$item->PuntoDeVentaBs + (float)$item->Biopago) - (float)$item->EgresoBs,
                                             2, ',', '.'
                                         ) }} Bs
                                     </td>
