@@ -13,6 +13,7 @@ use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\CuadreController;
 
 use App\Http\Controllers\VentasController;
+use App\Http\Controllers\ContabilidadController;
 
 /*
 |--------------------------------------------------------------------------
@@ -156,6 +157,9 @@ Route::middleware('auth')->group(function() {
 
     // Resumen Consolidacion Financiera
     Route::get('/cuadre/resumen/consolidacion', [CuadreController::class, 'resumen_consolidacion'])->name('cpanel.cuadre.resumen_consolidado');
+
+    // Balance General
+    Route::get('/cpanel/contabilidad/general', [ContabilidadController::class, 'balance_general'])->name('cpanel.contabilidad.balance_general');
 });
 
 

@@ -555,7 +555,7 @@
               </li>
               <li class="nav-item {{ session('menu_active') == 'Cuadre de Caja' ? 'menu-open' : '' }}">
                 <a href="#" class="nav-link">
-                  <i class="nav-icon bi bi-shop"></i>
+                  <i class="nav-icon bi bi-calculator"></i>
                   <p>
                     Cuadre de Caja
                     <i class="nav-arrow bi bi-chevron-right"></i>
@@ -594,31 +594,19 @@
                   </li>
                 </ul>
               </li>
-              <li class="nav-item">
+              <li class="nav-item {{ session('menu_active') == 'Contabilidad' ? 'menu-open' : '' }}">
                 <a href="#" class="nav-link">
-                  <i class="nav-icon bi bi-box-seam-fill"></i>
+                  <i class="nav-icon bi bi-cash-stack"></i>
                   <p>
-                    Widgets
+                    Contabilidad
                     <i class="nav-arrow bi bi-chevron-right"></i>
                   </p>
                 </a>
                 <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="./widgets/small-box.html" class="nav-link">
+                    <a href="{{ route('cpanel.contabilidad.balance_general') }}" class="nav-link {{ session('submenu_active') == 'Balance General' ? 'active' : '' }}">
                       <i class="nav-icon bi bi-circle"></i>
-                      <p>Small Box</p>
-                    </a>
-                  </li>
-                  <li class="nav-item">
-                    <a href="./widgets/info-box.html" class="nav-link">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>info Box</p>
-                    </a>
-                  </li>
-                  <li class="nav-item">
-                    <a href="./widgets/cards.html" class="nav-link">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Cards</p>
+                      <p>Balance General</p>
                     </a>
                   </li>
                 </ul>

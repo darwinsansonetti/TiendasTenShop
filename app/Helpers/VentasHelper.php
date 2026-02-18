@@ -43,6 +43,7 @@ use App\DTO\PagoPuntoDeVentaDTO;
 use App\DTO\PuntoDeVentaDTO;
 use App\DTO\SucursalDTO;
 use App\DTO\VentasPeriodoDTO;
+use App\DTO\TransaccionDTO;
 
 use App\Enums\EnumCierreDiario;
 use App\Enums\EnumTipoCierre;
@@ -782,6 +783,59 @@ class VentasHelper
                 'Nombre' => $pagos->first()->puntoDeVenta->banco->Nombre,
                 'TotalPagado' => $pagos->sum('Monto')
             ])->values();
+    }
+
+    public static function BuscarGastosSucursalParaCerrar(int $sucursalId, $filtroFecha = null): array
+    {
+        $transaccionesDTO = [];
+
+        // ⚡ Cargar transacciones de tipo gasto con sus abonos y la transacción de cada abono
+        $query = Transaccion::with('transaccionesAbonos.transaccion')
+            ->whereIn('Tipo', [0, 2, 3, 5])
+            ->where('Tipo', '!=', 7)
+            ->where('Estatus', '!=', 5)
+            ->where('SucursalId', $sucursalId);
+
+        if ($filtroFecha !== null) {
+            $query->where('Fecha', '<=', $filtroFecha->fechaFin);
+        }
+
+        $transacciones = $query->get();
+
+        if ($transacciones->isEmpty()) {
+            return [];
+        }
+
+        foreach ($transacciones as $gasto) {
+
+            $transaccionDTO = new \App\DTO\TransaccionDTO();
+            $transaccionDTO->Id = $gasto->ID ?? 0;
+            $transaccionDTO->Descripcion = $gasto->Descripcion ?? '';
+            $transaccionDTO->MontoAbonado = (float) ($gasto->MontoAbonado ?? 0);
+            $transaccionDTO->MontoDivisaAbonado = (float) ($gasto->MontoDivisaAbonado ?? 0);
+            $transaccionDTO->SucursalId = $gasto->SucursalId;
+            $transaccionDTO->Fecha = $gasto->Fecha;
+
+            // ⚡ Abonos ya cargados por eager loading
+            foreach ($gasto->transaccionesAbonos as $abonoGasto) {
+                $abonoTransaccion = $abonoGasto->transaccion; 
+                if (!$abonoTransaccion) continue;
+
+                $abonoDTO = new \App\DTO\TransaccionDTO();
+                $abonoDTO->Id = $abonoTransaccion->ID ?? 0;
+                $abonoDTO->MontoAbonado = (float) ($abonoTransaccion->MontoAbonado ?? 0);
+                $abonoDTO->MontoDivisaAbonado = (float) ($abonoTransaccion->MontoDivisaAbonado ?? 0);
+                $abonoDTO->Fecha = $abonoTransaccion->Fecha ?? now();
+
+                $transaccionDTO->AbonoVentas[] = $abonoDTO;
+            }
+
+            if ($transaccionDTO->getSaldoDivisa() > 0) {
+                $transaccionesDTO[] = $transaccionDTO;
+            }
+        }
+
+        return $transaccionesDTO;
     }
 
 }

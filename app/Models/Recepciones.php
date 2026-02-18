@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Recepciones extends Model
 {
@@ -70,5 +71,20 @@ class Recepciones extends Model
     public function auditorias(): HasMany
     {
         return $this->hasMany(Auditoria::class, 'RecepcionId');
+    }
+
+    public function transacciones()
+    {
+        return $this->belongsToMany(
+            Transaccion::class,
+            'TransaccionesRecepciones',  // Tabla pivot
+            'RecepcionId',               // FK en pivot que apunta a Recepciones
+            'TransaccionId'              // FK en pivot que apunta a Transaccion
+        )->withPivot('SucursalId');      // Si necesitas acceder al campo SucursalId de la pivot
+    }
+
+    public function transaccionesRecepciones()
+    {
+        return $this->hasMany(TransaccionRecepcion::class, 'RecepcionId', 'RecepcionId');
     }
 }
