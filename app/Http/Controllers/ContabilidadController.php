@@ -460,12 +460,13 @@ class ContabilidadController extends Controller
         $totalTipo1 = Transaccion::where('Tipo', 1)->count();
         $totalTipo0 = Transaccion::where('Tipo', 0)->count();
 
-        // \Log::info('TOTALES GLOBALES:', [
-        //     'tipo_1_servicios' => $totalTipo1,
-        //     'tipo_0_mercancia' => $totalTipo0,
-        //     'fecha_min' => Transaccion::min('Fecha'),
-        //     'fecha_max' => Transaccion::max('Fecha'),
-        // ]);
+        $listaSucursales = GeneralHelper::buscarSucursales(0)
+        ->reject(function ($sucursal) {
+            return $sucursal->ID == 6;
+        })
+        ->values();
+
+        // dd($listaSucursales);
 
         foreach ($listaSucursales as $_sucursal) 
         {
@@ -496,21 +497,18 @@ class ContabilidadController extends Controller
             );
             
             $totalVentasPorCobrar = 0;
-            if (isset($ventas['ListaVentasDiarias']) && is_array($ventas['ListaVentasDiarias'])) {
-                foreach ($ventas['ListaVentasDiarias'] as $venta) {
-                    if (is_object($venta)) {
-                        $totalVentasPorCobrar += (float)(
-                            $venta->Saldo ?? $venta->saldo ?? $venta->Total ?? $venta->total ?? 0
-                        );
-                    }
-                }
-            }
+            $totalVentasPorCobrar += (float)($ventas['totales']['ventas_acumuladas'] ?? 0);
 
             // ========== PASIVOS ==========
             
             // 3. Deudas de recepciones
-            $listadoRecepciones = $ventasService->buscarRecepcionesSucursalParaCerrar($_sucursal->ID, $filtroFecha->fechaFin);
-            $totalDeudaRecepciones = array_sum(array_map(fn($r) => (float)($r['SaldoDivisa'] ?? 0), $listadoRecepciones));
+            $recepcionesData = $ventasService->buscarRecepcionesSucursalParaCerrar($_sucursal->ID, $filtroFecha->fechaFin);
+
+            // $listadoRecepciones = $recepcionesData['total_historico'];
+            $totalDeudaRecepciones = $recepcionesData['total_historico'];          // ✅ Total Historico
+            $cantidadRecepciones = $recepcionesData['cantidad_total'];             // ✅ Recepciones totales
+            $totalDeudaRecepcionesPendientes = $recepcionesData['saldo_pendiente'];          // ✅ Solo lo que deben
+            $cantidadPendiente = $recepcionesData['cantidad_pendiente'];           // ✅ Recepciones con deuda
 
             // 4. Deudas de gastos
             $gastos = VentasHelper::BuscarGastosSucursalParaCerrar($_sucursal->ID, null);
@@ -518,7 +516,10 @@ class ContabilidadController extends Controller
 
             // 5. Transferencias pendientes
             $listadoTransferencias = $ventasService->buscarTransferenciasParaCerrar($filtroFecha, $_sucursal->ID);
-            $totalTransferencias = array_sum(array_map(fn($t) => (float)($t['Saldo'] ?? 0), $listadoTransferencias));
+            // $totalTransferencias = array_sum(array_map(fn($t) => (float)($t['Saldo'] ?? 0), $listadoTransferencias));
+            $totalTransferencias = array_sum(array_map(fn($t) => $t['MontoCalculado'], $listadoTransferencias));
+            $totalTransferenciasSaldo = array_sum(array_map(fn($t) => $t['Saldo'], $listadoTransferencias));
+
 
             // 6. Facturas por pagar (solo para oficina)
             $listadoFacturas = [];
@@ -611,24 +612,32 @@ class ContabilidadController extends Controller
                 ],
                 'VentasPorCobrar' => [
                     'Monto' => round($totalVentasPorCobrar, 2),
-                    'Detalle' => $ventas['ListaVentasDiarias'] ?? [],
-                    'Cantidad' => count($ventas['ListaVentasDiarias'] ?? []),
+                    //'Detalle' => $ventas['ListaVentasDiarias'] ?? [],
+                    'Cantidad' => $ventas['totales']['cantidad_ventas'] ?? 0,
                 ],
                 'TotalActivos' => round($totalActivos, 2),
                 
                 // PASIVOS
                 'DeudaRecepciones' => [
                     'Monto' => round($totalDeudaRecepciones, 2),
-                    'Detalle' => $listadoRecepciones,
-                    'Cantidad' => count($listadoRecepciones),
+                    // 'Detalle' => $listadoRecepciones,
+                    'Cantidad' => $cantidadRecepciones,
+                    'MontoPendiene' => $totalDeudaRecepcionesPendientes,
+                    'CantidadPendiente' => $cantidadPendiente,
                 ],
                 'DeudaGastos' => [
                     'Monto' => round($totalDeudaGastos, 2),
                     'Detalle' => $gastos,
                     'Cantidad' => count($gastos),
                 ],
-                'TransferenciasPendientes' => [
-                    'Monto' => round($totalTransferencias, 2),
+                // 'TransferenciasPendientes' => [
+                //     'Monto' => round($totalTransferencias, 2),
+                //     'Detalle' => $listadoTransferencias,
+                //     'Cantidad' => count($listadoTransferencias),
+                // ],
+                'Transferencias' => [
+                    'MontoAcumulado' => round($totalTransferencias, 2),  // ✅ Total histórico
+                    'SaldoPendiente' => round($totalTransferenciasSaldo, 2),  // Lo que aún se debe
                     'Detalle' => $listadoTransferencias,
                     'Cantidad' => count($listadoTransferencias),
                 ],

@@ -285,23 +285,49 @@ class VentasService
         });
     }
 
-    public function obtenerListadoVentasDiariasParaCerrar($filtroFecha, $sucursalId, $incluirGastos)
-    {
-        $ventas = VentaDiariaTotalizada::with('sucursal')
-            ->when($sucursalId, fn($q) => $q->where('SucursalId', $sucursalId))
-            ->where('Saldo', '>', 0)
-            ->where('Fecha', '<=', $filtroFecha->fechaFin)
-            ->where(function ($q) {
-                $q->whereNull('Estatus')
-                ->orWhere('Estatus', '!=', 4);
-            })
-            ->orderBy('Fecha')
-            ->get();
+    // public function obtenerListadoVentasDiariasParaCerrar($filtroFecha, $sucursalId, $incluirGastos)
+    // {
+    //     $ventas = VentaDiariaTotalizada::with('sucursal')
+    //         ->when($sucursalId, fn($q) => $q->where('SucursalId', $sucursalId))
+    //         ->where('Saldo', '>', 0)
+    //         ->where('Fecha', '<=', $filtroFecha->fechaFin)
+    //         ->where(function ($q) {
+    //             $q->whereNull('Estatus')
+    //             ->orWhere('Estatus', '!=', 4);
+    //         })
+    //         ->orderBy('Fecha')
+    //         ->get();
 
-        $detalle = $this->obtenerDetallesPorVentasBalance($sucursalId, $ventas);
+    //     $detalle = $this->obtenerDetallesPorVentasBalance($sucursalId, $ventas);
+
+    //     return [
+    //         'ListaVentasDiarias' => $detalle
+    //     ];
+    // }
+
+    public function ObtenerListadoVentasDiariasParaCerrar($filtroFecha, $sucursalId, $incluirGastos)
+    {
+        // $query = VentaDiariaTotalizada::query()
+        //     ->when($sucursalId, fn($q) => $q->where('SucursalId', $sucursalId))
+        //     ->where('TotalDivisa', '>', 0)
+        //     ->where('Fecha', '<=', $filtroFecha->fechaFin);
+
+        $fechaLimite = Carbon::parse('2021-12-01')->startOfDay();
+
+        $query = VentaDiariaTotalizada::query()
+            ->when($sucursalId, fn($q) => $q->where('SucursalId', $sucursalId))
+            ->where('TotalDivisa', '>', 0)
+            ->where('Fecha', '>=', $fechaLimite)
+            ->where('Fecha', '<=', $filtroFecha->fechaFin);
+        
+        $totalVentas = $query->sum('TotalDivisa');
+        $cantidadVentas = $query->count(); 
 
         return [
-            'ListaVentasDiarias' => $detalle
+            'totales' => [
+                'ventas_acumuladas' => round($totalVentas, 2),
+                'cantidad_ventas' => $cantidadVentas,
+            ]
         ];
     }
 
@@ -372,120 +398,348 @@ class VentasService
         return $listaDetalleDTO;
     }
 
+    // public function buscarRecepcionesSucursalParaCerrar(int $sucursalId, $fechaFin = null): array
+    // {
+    //     try {
+    //         // Cargar recepciones con sus relaciones
+    //         $query = Recepciones::with([
+    //             'detalles',
+    //             'transacciones' => function($q) {
+    //                 $q->where('Tipo', 7)
+    //                 ->select('transacciones.ID', 'Descripcion', 'MontoDivisaAbonado', 'Fecha');
+    //             }
+    //         ])
+    //         ->where('SucursalDestinoId', $sucursalId)
+    //         ->whereNotIn('Estatus', [7, 8]); // Excluir Pagada y FinalizadaPagada
+
+    //         // Aplicar filtro de fecha si existe
+    //         if ($fechaFin !== null) {
+    //             if (!$fechaFin instanceof Carbon) {
+    //                 $fechaFin = Carbon::parse($fechaFin);
+    //             }
+    //             $query->where('FechaCreacion', '<=', $fechaFin);
+    //         }
+
+    //         $recepciones = $query->get();
+            
+    //         if ($recepciones->isEmpty()) {
+    //             return [];
+    //         }
+
+    //         $recepcionesDTO = [];
+
+    //         foreach ($recepciones as $recepcion) {
+    //             // Calcular total: CantidadRecibida * CostoDivisa
+    //             $totalDivisa = $recepcion->detalles->sum(function($detalle) {
+    //                 return (float)$detalle->CantidadRecibida * (float)$detalle->CostoDivisa;
+    //             });
+                
+    //             // Obtener abonos y calcular total abonado
+    //             $abonos = $recepcion->transacciones;
+    //             $totalAbonado = $abonos->sum('MontoDivisaAbonado');
+                
+    //             // Mapear abonos a DTO
+    //             $abonosDTO = $abonos->map(function($abono) {
+    //                 return [
+    //                     'Id' => $abono->ID,
+    //                     'Descripcion' => $abono->Descripcion,
+    //                     'MontoDivisaAbonado' => (float)$abono->MontoDivisaAbonado,
+    //                     'Fecha' => $abono->Fecha instanceof Carbon 
+    //                         ? $abono->Fecha->format('Y-m-d H:i:s') 
+    //                         : $abono->Fecha,
+    //                 ];
+    //             })->toArray();
+
+    //             $saldoDivisa = round($totalDivisa - $totalAbonado, 2);
+
+    //             // Solo incluir si hay saldo pendiente (considerando margen de redondeo)
+    //             if ($saldoDivisa > 0.01) {
+    //                 $recepcionesDTO[] = [
+    //                     'RecepcionId' => $recepcion->RecepcionId,
+    //                     'SucursalDestinoId' => $recepcion->SucursalDestinoId,
+    //                     'FechaCreacion' => $recepcion->FechaCreacion instanceof Carbon 
+    //                         ? $recepcion->FechaCreacion->format('Y-m-d H:i:s') 
+    //                         : $recepcion->FechaCreacion,
+    //                     'TotalDivisa' => round($totalDivisa, 2),
+    //                     'SaldoDivisa' => $saldoDivisa,
+    //                     'Abonos' => $abonosDTO,
+    //                     'Estatus' => $recepcion->Estatus,
+    //                 ];
+    //             }
+    //         }
+
+    //         return $recepcionesDTO;
+
+    //     } catch (\Exception $ex) {
+    //         \Log::error('Error en buscarRecepcionesSucursalParaCerrar: ' . $ex->getMessage());
+    //         \Log::error($ex->getTraceAsString());
+    //         return [];
+    //     }
+    // }
+    
+
+    // public function buscarRecepcionesSucursalParaCerrar(int $sucursalId, $fechaFin = null): array
+    // {
+    //     try {
+    //         $fechaLimite = Carbon::parse('2021-12-01')->startOfDay();
+
+    //         // ===== 1. Obtener TOTALES de recepciones (una sola consulta) =====
+    //         $queryRecepciones = Recepciones::where('SucursalDestinoId', $sucursalId);
+            
+    //         if ($fechaFin !== null) {
+    //             $queryRecepciones->where('FechaCreacion', '>=', $fechaLimite);
+    //             $queryRecepciones->where('FechaCreacion', '<=', $fechaFin);
+    //         }
+            
+    //         // Obtener IDs de las recepciones (rápido, solo IDs)
+    //         $recepcionIds = $queryRecepciones->pluck('RecepcionId');
+            
+    //         if ($recepcionIds->isEmpty()) {
+    //             return [];
+    //         }
+
+    //         // ===== 2. Calcular TOTAL DIVISA por recepción (detalles) =====
+    //         $totalesPorRecepcion = DB::table('RecepcionesDetalles')
+    //             ->select('RecepcionId')
+    //             ->selectRaw('SUM(CantidadRecibida * CostoDivisa) as total_divisa')
+    //             ->whereIn('RecepcionId', $recepcionIds)
+    //             ->groupBy('RecepcionId')
+    //             ->get()
+    //             ->keyBy('RecepcionId');
+
+    //         // ===== 3. Calcular TOTAL ABONADO por recepción (transacciones tipo 7) =====
+    //         $abonosPorRecepcion = DB::table('TransaccionesRecepciones as tr')
+    //             ->join('Transacciones as t', 'tr.TransaccionId', '=', 't.ID')
+    //             ->select('tr.RecepcionId')
+    //             ->selectRaw('SUM(t.MontoDivisaAbonado) as total_abonado')
+    //             ->whereIn('tr.RecepcionId', $recepcionIds)
+    //             ->where('t.Tipo', 7)  // ✅ MANTENEMOS ESTO (solo abonos)
+    //             ->groupBy('tr.RecepcionId')
+    //             ->get()
+    //             ->keyBy('RecepcionId');
+
+    //         // ===== 4. Construir resultado (solo recepciones con saldo > 0) =====
+    //         $recepcionesDTO = [];
+            
+    //         foreach ($recepcionIds as $id) {
+    //             $totalDivisa = (float)($totalesPorRecepcion[$id]->total_divisa ?? 0);
+    //             $totalAbonado = (float)($abonosPorRecepcion[$id]->total_abonado ?? 0);
+    //             $saldoDivisa = round($totalDivisa - $totalAbonado, 2);
+                
+    //             if ($saldoDivisa > 0.01) {
+    //                 // Solo si necesitas datos adicionales de la recepción
+    //                 $recepcion = $recepcionIds[$id] ?? null; // O podrías obtener solo si es necesario
+                    
+    //                 $recepcionesDTO[] = [
+    //                     'RecepcionId' => $id,
+    //                     'SucursalDestinoId' => $sucursalId,
+    //                     // 'FechaCreacion' => $recepcion->FechaCreacion, // Si necesitas la fecha
+    //                     'TotalDivisa' => round($totalDivisa, 2),
+    //                     'SaldoDivisa' => $saldoDivisa,
+    //                     // 'Abonos' => $abonosDTO, // Si no necesitas detalle, omítelo
+    //                     // 'Estatus' => $recepcion->Estatus,
+    //                 ];
+    //             }
+    //         }
+
+    //         return $recepcionesDTO;
+
+    //     } catch (\Exception $ex) {
+    //         \Log::error('Error en buscarRecepcionesSucursalParaCerrar: ' . $ex->getMessage());
+    //         return [];
+    //     }
+    // }
+
     public function buscarRecepcionesSucursalParaCerrar(int $sucursalId, $fechaFin = null): array
     {
         try {
-            // Cargar recepciones con sus relaciones
-            $query = Recepciones::with([
-                'detalles',
-                'transacciones' => function($q) {
-                    $q->where('Tipo', 7)
-                    ->select('transacciones.ID', 'Descripcion', 'MontoDivisaAbonado', 'Fecha');
-                }
-            ])
-            ->where('SucursalDestinoId', $sucursalId)
-            ->whereNotIn('Estatus', [7, 8]); // Excluir Pagada y FinalizadaPagada
+            $fechaLimite = Carbon::parse('2021-12-01')->startOfDay();
 
-            // Aplicar filtro de fecha si existe
-            if ($fechaFin !== null) {
-                if (!$fechaFin instanceof Carbon) {
-                    $fechaFin = Carbon::parse($fechaFin);
-                }
-                $query->where('FechaCreacion', '<=', $fechaFin);
-            }
-
-            $recepciones = $query->get();
+            // ===== 1. Obtener TODAS las recepciones en el rango =====
+            $queryRecepciones = Recepciones::where('SucursalDestinoId', $sucursalId);
             
-            if ($recepciones->isEmpty()) {
-                return [];
+            if ($fechaFin !== null) {
+                $queryRecepciones->where('FechaCreacion', '>=', $fechaLimite);
+                $queryRecepciones->where('FechaCreacion', '<=', $fechaFin);
+            }
+            
+            $recepcionIds = $queryRecepciones->pluck('RecepcionId');
+            
+            if ($recepcionIds->isEmpty()) {
+                return [
+                    'total_historico' => 0,
+                    'saldo_pendiente' => 0,
+                    'cantidad_total' => 0,
+                    'cantidad_pendiente' => 0,
+                    'detalle' => []
+                ];
             }
 
-            $recepcionesDTO = [];
+            // ===== 2. Calcular TOTAL DIVISA por recepción =====
+            $totalesPorRecepcion = DB::table('RecepcionesDetalles')
+                ->select('RecepcionId')
+                ->selectRaw('SUM(CantidadRecibida * CostoDivisa) as total_divisa')
+                ->whereIn('RecepcionId', $recepcionIds)
+                ->groupBy('RecepcionId')
+                ->get()
+                ->keyBy('RecepcionId');
 
-            foreach ($recepciones as $recepcion) {
-                // Calcular total: CantidadRecibida * CostoDivisa
-                $totalDivisa = $recepcion->detalles->sum(function($detalle) {
-                    return (float)$detalle->CantidadRecibida * (float)$detalle->CostoDivisa;
-                });
+            // ===== 3. Calcular TOTAL ABONADO por recepción =====
+            $abonosPorRecepcion = DB::table('TransaccionesRecepciones as tr')
+                ->join('Transacciones as t', 'tr.TransaccionId', '=', 't.ID')
+                ->select('tr.RecepcionId')
+                ->selectRaw('SUM(t.MontoDivisaAbonado) as total_abonado')
+                ->whereIn('tr.RecepcionId', $recepcionIds)
+                ->where('t.Tipo', 7)
+                ->groupBy('tr.RecepcionId')
+                ->get()
+                ->keyBy('RecepcionId');
+
+            // ===== 4. Calcular totales =====
+            $totalHistorico = 0;
+            $saldoPendiente = 0;
+            $cantidadPendiente = 0;
+            $detalle = [];
+
+            foreach ($recepcionIds as $id) {
+                $totalDivisa = (float)($totalesPorRecepcion[$id]->total_divisa ?? 0);
+                $totalAbonado = (float)($abonosPorRecepcion[$id]->total_abonado ?? 0);
+                $saldo = round($totalDivisa - $totalAbonado, 2);
                 
-                // Obtener abonos y calcular total abonado
-                $abonos = $recepcion->transacciones;
-                $totalAbonado = $abonos->sum('MontoDivisaAbonado');
+                // Sumar al total histórico
+                $totalHistorico += $totalDivisa;
                 
-                // Mapear abonos a DTO
-                $abonosDTO = $abonos->map(function($abono) {
-                    return [
-                        'Id' => $abono->ID,
-                        'Descripcion' => $abono->Descripcion,
-                        'MontoDivisaAbonado' => (float)$abono->MontoDivisaAbonado,
-                        'Fecha' => $abono->Fecha instanceof Carbon 
-                            ? $abono->Fecha->format('Y-m-d H:i:s') 
-                            : $abono->Fecha,
-                    ];
-                })->toArray();
-
-                $saldoDivisa = round($totalDivisa - $totalAbonado, 2);
-
-                // Solo incluir si hay saldo pendiente (considerando margen de redondeo)
-                if ($saldoDivisa > 0.01) {
-                    $recepcionesDTO[] = [
-                        'RecepcionId' => $recepcion->RecepcionId,
-                        'SucursalDestinoId' => $recepcion->SucursalDestinoId,
-                        'FechaCreacion' => $recepcion->FechaCreacion instanceof Carbon 
-                            ? $recepcion->FechaCreacion->format('Y-m-d H:i:s') 
-                            : $recepcion->FechaCreacion,
+                // Si tiene saldo pendiente
+                if ($saldo > 0.01) {
+                    $saldoPendiente += $saldo;
+                    $cantidadPendiente++;
+                    
+                    $detalle[] = [
+                        'RecepcionId' => $id,
                         'TotalDivisa' => round($totalDivisa, 2),
-                        'SaldoDivisa' => $saldoDivisa,
-                        'Abonos' => $abonosDTO,
-                        'Estatus' => $recepcion->Estatus,
+                        'SaldoDivisa' => $saldo,
                     ];
                 }
             }
 
-            return $recepcionesDTO;
+            // dd([
+            //     'total_historico' => round($totalHistorico, 2),    // 💰 Suma de TODAS las recepciones
+            //     'saldo_pendiente' => round($saldoPendiente, 2),    // 💰 Solo lo que aún deben
+            //     'cantidad_total' => $recepcionIds->count(),        // 📦 Total de recepciones
+            //     'cantidad_pendiente' => $cantidadPendiente,        // 📦 Solo las pendientes
+            //     'detalle' => $detalle,                              // 📋 Detalle de las pendientes
+            // ]);
+
+            return [
+                'total_historico' => round($totalHistorico, 2),    // 💰 Suma de TODAS las recepciones
+                'saldo_pendiente' => round($saldoPendiente, 2),    // 💰 Solo lo que aún deben
+                'cantidad_total' => $recepcionIds->count(),        // 📦 Total de recepciones
+                'cantidad_pendiente' => $cantidadPendiente,        // 📦 Solo las pendientes
+                'detalle' => $detalle,                              // 📋 Detalle de las pendientes
+            ];
 
         } catch (\Exception $ex) {
-            \Log::error('Error en buscarRecepcionesSucursalParaCerrar: ' . $ex->getMessage());
-            \Log::error($ex->getTraceAsString());
-            return [];
+            \Log::error('Error: ' . $ex->getMessage());
+            return [
+                'total_historico' => 0,
+                'saldo_pendiente' => 0,
+                'cantidad_total' => 0,
+                'cantidad_pendiente' => 0,
+                'detalle' => []
+            ];
         }
     }
+
+    // public function buscarTransferenciasParaCerrar($filtroFecha, int $sucursalId): array
+    // {
+    //     try {
+    //         // Validar que $filtroFecha tenga fechaFin
+    //         $fechaFin = null;
+    //         if ($filtroFecha && property_exists($filtroFecha, 'fechaFin')) {
+    //             $fechaFin = $filtroFecha->fechaFin;
+    //         }
+
+    //         // Construir consulta
+    //         $query = Transferencia::where('SucursalOrigenId', $sucursalId)
+    //             ->where('Saldo', '>', 0); // Solo transferencias con saldo pendiente
+
+    //         // Aplicar filtro de fecha si existe
+    //         if ($fechaFin) {
+    //             if (!$fechaFin instanceof Carbon) {
+    //                 $fechaFin = Carbon::parse($fechaFin);
+    //             }
+    //             $query->where('Fecha', '<=', $fechaFin);
+    //         }
+
+    //         // Ejecutar consulta
+    //         $transferencias = $query->get();
+
+    //         // Si no hay resultados, retornar array vacío
+    //         if ($transferencias->isEmpty()) {
+    //             return [];
+    //         }
+
+    //         // Convertir a DTO (array asociativo)
+    //         return $this->generarListadoTransferencias($transferencias);
+
+    //     } catch (\Exception $ex) {
+    //         Log::error('Error en TransferenciaService@buscarTransferenciasParaCerrar: ' . $ex->getMessage());
+    //         Log::error($ex->getTraceAsString());
+    //         return [];
+    //     }
+    // }
+
+    // private function generarListadoTransferencias($transferencias): array
+    // {
+    //     $transferenciasDTO = [];
+
+    //     foreach ($transferencias as $transferencia) {
+    //         $transferenciasDTO[] = [
+    //             'TransferenciaId' => $transferencia->TransferenciaId,
+    //             'SucursalOrigenId' => $transferencia->SucursalOrigenId,
+    //             'SucursalDestinoId' => $transferencia->SucursalDestinoId,
+    //             'Fecha' => $transferencia->Fecha instanceof Carbon 
+    //                 ? $transferencia->Fecha->format('Y-m-d H:i:s') 
+    //                 : $transferencia->Fecha,
+    //             'Monto' => (float)$transferencia->Monto,
+    //             'Saldo' => (float)$transferencia->Saldo,
+    //             'Estatus' => $transferencia->Estatus,
+    //             // Agrega más campos según necesites
+    //         ];
+    //     }
+
+    //     return $transferenciasDTO;
+    // }
 
     public function buscarTransferenciasParaCerrar($filtroFecha, int $sucursalId): array
     {
         try {
-            // Validar que $filtroFecha tenga fechaFin
             $fechaFin = null;
+            $fechaLimite = Carbon::parse('2021-12-01')->startOfDay();
+
             if ($filtroFecha && property_exists($filtroFecha, 'fechaFin')) {
                 $fechaFin = $filtroFecha->fechaFin;
             }
 
-            // Construir consulta
-            $query = Transferencia::where('SucursalOrigenId', $sucursalId)
-                ->where('Saldo', '>', 0); // Solo transferencias con saldo pendiente
+            // ===== 1. Obtener TODAS las transferencias =====
+            $query = Transferencia::with('detalles.producto')  // Cargar detalles y productos
+                ->where('SucursalOrigenId', $sucursalId);
 
-            // Aplicar filtro de fecha si existe
             if ($fechaFin) {
-                if (!$fechaFin instanceof Carbon) {
-                    $fechaFin = Carbon::parse($fechaFin);
-                }
+                $query->where('Fecha', '>=', $fechaLimite);
                 $query->where('Fecha', '<=', $fechaFin);
             }
 
-            // Ejecutar consulta
             $transferencias = $query->get();
 
-            // Si no hay resultados, retornar array vacío
             if ($transferencias->isEmpty()) {
                 return [];
             }
 
-            // Convertir a DTO (array asociativo)
             return $this->generarListadoTransferencias($transferencias);
 
         } catch (\Exception $ex) {
-            Log::error('Error en TransferenciaService@buscarTransferenciasParaCerrar: ' . $ex->getMessage());
-            Log::error($ex->getTraceAsString());
+            Log::error('Error en buscarTransferenciasParaCerrar: ' . $ex->getMessage());
             return [];
         }
     }
@@ -495,6 +749,22 @@ class VentasService
         $transferenciasDTO = [];
 
         foreach ($transferencias as $transferencia) {
+            // ===== Calcular MONTO total de la transferencia =====
+            $montoCalculado = 0;
+            
+            foreach ($transferencia->detalles as $detalle) {
+                // Usar CantidadRecibida (o CantidadEmitida si prefieres)
+                $cantidad = (float)($detalle->CantidadRecibida ?? $detalle->CantidadEmitida ?? 0);
+                
+                // Obtener costo del producto
+                $costoDivisa = 0;
+                if ($detalle->producto) {
+                    $costoDivisa = (float)($detalle->producto->CostoDivisa ?? 0);
+                }
+                
+                $montoCalculado += $cantidad * $costoDivisa;
+            }
+
             $transferenciasDTO[] = [
                 'TransferenciaId' => $transferencia->TransferenciaId,
                 'SucursalOrigenId' => $transferencia->SucursalOrigenId,
@@ -502,10 +772,10 @@ class VentasService
                 'Fecha' => $transferencia->Fecha instanceof Carbon 
                     ? $transferencia->Fecha->format('Y-m-d H:i:s') 
                     : $transferencia->Fecha,
-                'Monto' => (float)$transferencia->Monto,
-                'Saldo' => (float)$transferencia->Saldo,
+                'MontoCalculado' => round($montoCalculado, 2),  // ✅ Monto histórico real
+                'Saldo' => (float)$transferencia->Saldo,        // Saldo actual pendiente
                 'Estatus' => $transferencia->Estatus,
-                // Agrega más campos según necesites
+                'CantidadProductos' => $transferencia->detalles->count(),
             ];
         }
 

@@ -148,25 +148,28 @@
                                     <table class="table table-bordered table-hover table-striped mb-0" id="tablaBalanceGeneral">
                                         <thead class="thead-light">
                                             <tr>
-                                                <th rowspan="2" class="align-middle text-center">Sucursal</th>
+                                                <th rowspan="2" class="align-middle text-center" style="vertical-align: middle;">Sucursal</th>
                                                 <th colspan="2" class="text-center bg-light">ACTIVOS</th>
-                                                <th colspan="3" class="text-center bg-light">PASIVOS</th>
-                                                <th rowspan="2" class="text-center align-middle">PATRIMONIO</th>
+                                                <th colspan="4" class="text-center bg-light">PASIVOS</th>
+                                                <th rowspan="2" class="text-center align-middle" style="vertical-align: middle;">PATRIMONIO</th>
                                             </tr>
                                             <tr>
                                                 <th class="text-center">Inventario</th>
                                                 <th class="text-center">Ventas</th>
                                                 <th class="text-center">Deuda Recepciones</th>
+                                                <th class="text-center bg-warning" style="background-color: #fff3cd !important;">⚠️ Pendiente</th>
                                                 <th class="text-center">Deuda Gastos</th>
-                                                <th class="text-center">Total Pasivos</th>
+                                                <th class="text-center">Transferencias</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             @foreach($sucursales as $s)
                                             <tr>
                                                 <td class="align-middle"><strong>{{ $s['SucursalNombre'] }}</strong></td>
+                                                
+                                                {{-- ACTIVOS --}}
                                                 <td class="text-right align-middle">
-                                                    $ {{ number_format($s['Inventario']['Monto'], 2) }}
+                                                    <strong>$ {{ number_format($s['Inventario']['Monto'], 2) }}</strong>
                                                     <br>
                                                     <small class="text-muted">
                                                         <i class="fas fa-cubes"></i> {{ number_format($s['Inventario']['Unidades']) }} | 
@@ -174,42 +177,71 @@
                                                     </small>
                                                 </td>
                                                 <td class="text-right align-middle">
-                                                    $ {{ number_format($s['VentasPorCobrar']['Monto'], 2) }}
+                                                    <strong>$ {{ number_format($s['VentasPorCobrar']['Monto'], 2) }}</strong>
                                                     <br>
                                                     <small class="text-muted">
                                                         <i class="fas fa-receipt"></i> {{ $s['VentasPorCobrar']['Cantidad'] }} ventas
                                                     </small>
                                                 </td>
+                                                
+                                                {{-- PASIVOS --}}
                                                 <td class="text-right align-middle">
-                                                    $ {{ number_format($s['DeudaRecepciones']['Monto'], 2) }}
+                                                    <strong>$ {{ number_format($s['DeudaRecepciones']['Monto'], 2) }}</strong>
                                                     <br>
                                                     <small class="text-muted">
-                                                        <i class="fas fa-truck-loading"></i> {{ $s['DeudaRecepciones']['Cantidad'] }} recepciones
+                                                        <i class="fas fa-truck-loading"></i> {{ $s['DeudaRecepciones']['Cantidad'] ?? 0 }} recepciones
                                                     </small>
                                                 </td>
+                                                
+                                                {{-- COLUMNA DESTACADA: Deuda Pendiente --}}
+                                                <td class="text-right align-middle" style="background-color: #fff3cd; border-left: 3px solid #ffc107;">
+                                                    <strong class="text-warning" style="color: #856404 !important;">$ {{ number_format($s['DeudaRecepciones']['MontoPendiene'], 2) }}</strong>
+                                                    <br>
+                                                    <small class="text-warning" style="color: #856404 !important;">
+                                                        <i class="fas fa-exclamation-triangle"></i> {{ $s['DeudaRecepciones']['CantidadPendiente'] ?? 0 }} pendientes
+                                                    </small>
+                                                </td>
+                                                
                                                 <td class="text-right align-middle">
-                                                    $ {{ number_format($s['DeudaGastos']['Monto'], 2) }}
+                                                    <strong>$ {{ number_format($s['DeudaGastos']['Monto'], 2) }}</strong>
                                                     <br>
                                                     <small class="text-muted">
                                                         <i class="fas fa-credit-card"></i> {{ number_format($s['DeudaGastos']['Cantidad']) }} gastos
                                                     </small>
                                                 </td>
+                                                
                                                 <td class="text-right align-middle">
-                                                    <strong>$ {{ number_format($s['TotalPasivos'], 2) }}</strong>
+                                                    @if(isset($s['Transferencias']) && $s['Transferencias']['MontoAcumulado'] > 0)
+                                                        <strong>$ {{ number_format($s['Transferencias']['MontoAcumulado'] ?? 0, 2) }}</strong>
+                                                        <br>
+                                                        <small class="text-muted">
+                                                            <i class="fas fa-exchange-alt"></i> {{ $s['Transferencias']['Cantidad'] ?? 0 }} transferencias
+                                                        </small>
+                                                    @else
+                                                        <span class="text-muted">$ 0.00</span>
+                                                        <br>
+                                                        <small class="text-muted">0 transferencias</small>
+                                                    @endif
                                                 </td>
-                                                <td class="text-right align-middle {{ $s['Patrimonio'] >= 0 ? 'text-success' : 'text-danger' }}">
-                                                    <strong>$ {{ number_format($s['Patrimonio'], 2) }}</strong>
+                                                
+                                                {{-- PATRIMONIO --}}
+                                                <td class="text-right align-middle {{ $s['Patrimonio'] >= 0 ? 'text-success' : 'text-danger' }}" style="font-weight: bold; background-color: {{ $s['Patrimonio'] >= 0 ? '#e8f5e9' : '#ffebee' }};">
+                                                    $ {{ number_format($s['Patrimonio'], 2) }}
                                                 </td>
                                             </tr>
                                             @endforeach
                                         </tbody>
                                         <tfoot class="bg-light font-weight-bold">
                                             <tr>
-                                                <td class="text-center">TOTALES</td>
-                                                <td class="text-right" colspan="2">$ {{ number_format($resumen['TotalActivos'], 2) }}</td>
-                                                <td class="text-right" colspan="3">$ {{ number_format($resumen['TotalPasivos'], 2) }}</td>
+                                                <td class="text-center"><strong>TOTALES</strong></td>
+                                                <td class="text-right"><strong>$ {{ number_format($resumen['TotalActivos'], 2) }}</strong></td>
+                                                <td class="text-right"></td>
+                                                <td class="text-right"><strong>$ {{ number_format($resumen['TotalPasivos'] ?? 0, 2) }}</strong></td>
+                                                <td class="text-right"></td>
+                                                <td class="text-right"></td>
+                                                <td class="text-right"></td>
                                                 <td class="text-right {{ $resumen['TotalPatrimonio'] >= 0 ? 'text-success' : 'text-danger' }}">
-                                                    $ {{ number_format($resumen['TotalPatrimonio'], 2) }}
+                                                    <strong>$ {{ number_format($resumen['TotalPatrimonio'], 2) }}</strong>
                                                 </td>
                                             </tr>
                                         </tfoot>
