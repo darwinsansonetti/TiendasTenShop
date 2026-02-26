@@ -456,9 +456,11 @@ class ContabilidadController extends Controller
         $ventasService = new VentasService();
         $listaBalance = [];
 
-        // Antes del foreach, agrega esto:
-        $totalTipo1 = Transaccion::where('Tipo', 1)->count();
-        $totalTipo0 = Transaccion::where('Tipo', 0)->count();
+        // $listadoFacturas = $ventasService->buscarFacturasActivas();
+
+        // // Antes del foreach, agrega esto:
+        // $totalTipo1 = Transaccion::where('Tipo', 1)->count();
+        // $totalTipo0 = Transaccion::where('Tipo', 0)->count();
 
         $listaSucursales = GeneralHelper::buscarSucursales(0)
         ->reject(function ($sucursal) {
@@ -470,15 +472,15 @@ class ContabilidadController extends Controller
 
         foreach ($listaSucursales as $_sucursal) 
         {
-            $transaccionesEnRango = Transaccion::where('SucursalId', $_sucursal->ID)
-                ->whereBetween('Fecha', [$fechaInicio, $fechaFin])
-                ->count();
+            // $transaccionesEnRango = Transaccion::where('SucursalId', $_sucursal->ID)
+            //     ->whereBetween('Fecha', [$fechaInicio, $fechaFin])
+            //     ->count();
             
             // \Log::info("Sucursal {$_sucursal->ID} ({$_sucursal->Nombre}) tiene {$transaccionesEnRango} transacciones en el rango");
 
             // ========== ACTIVOS ==========
             
-            // 1. Inventario
+            // 1. Inventario // No genera para OFICINA PRINCIPAL
             $valorizacion = ValorizacionInventario::where('SucursalId', $_sucursal->ID)->first();
             
             $totalInventario = 0;
@@ -490,8 +492,32 @@ class ContabilidadController extends Controller
                 $unidades = (int)($valorizacion->Existencia ?? 0);
                 $referencias = (int)($valorizacion->Referencias ?? 0);
             }
+
+            // 2.0 Ventas por TOTALIZAR // No genera para OFICINA PRINCIPAL
+            $ventasTotalizar = $ventasService->obtenerListadoVentasDiariasParaCerrarSinTotalizar(
+                $filtroFecha, $_sucursal->ID, true
+            );
+
+            $totalVentasSinTotalizar = 0;
+            if (isset($ventasTotalizar['ListaVentasDiarias']) && is_array($ventasTotalizar['ListaVentasDiarias'])) {
+                foreach ($ventasTotalizar['ListaVentasDiarias'] as $venta) {
+                    // Las ventas son objetos, necesitas ver sus propiedades
+                    if (is_object($venta)) {
+                        // Prueba estas propiedades (usa la que funcione)
+                        $totalVentasSinTotalizar += (float)(
+                            $venta->Saldo ?? 
+                            $venta->saldo ?? 
+                            $venta->Total ?? 
+                            $venta->total ?? 
+                            0
+                        );
+                    }
+                }
+            }
+
+            // dd($totalVentasSinTotalizar);
             
-            // 2. Ventas por cobrar
+            // 2.1 Ventas por cobrar // No genera para OFICINA PRINCIPAL
             $ventas = $ventasService->ObtenerListadoVentasDiariasParaCerrar(
                 $filtroFecha, $_sucursal->ID, true
             );
@@ -501,7 +527,7 @@ class ContabilidadController extends Controller
 
             // ========== PASIVOS ==========
             
-            // 3. Deudas de recepciones
+            // 3. Deudas de recepciones // No genera para OFICINA PRINCIPAL
             $recepcionesData = $ventasService->buscarRecepcionesSucursalParaCerrar($_sucursal->ID, $filtroFecha->fechaFin);
 
             // $listadoRecepciones = $recepcionesData['total_historico'];
@@ -529,33 +555,55 @@ class ContabilidadController extends Controller
                 $listadoFacturas = $ventasService->buscarFacturasActivas();
                 
                 // Separar facturas por tipo de saldo
-                $facturasPositivas = [];
-                $facturasNegativas = [];
-                $totalFacturasPositivas = 0;
-                $totalFacturasNegativas = 0;
+                $facturasMercancia = 0;
+                $totalFacturasMercancia = 0;
+                $totalFacturasMercanciaPagado = 0;
+                $totalFacturasMercanciaPorPagar = 0;
+                $facturasServicios = 0;
+                $totalFacturasServicios = 0;
+                $totalFacturasServiciosPagado = 0;
+                $totalFacturasServiciosPorPagar = 0;
                 
                 foreach ($listadoFacturas as $factura) {
-                    $saldo = (float)($factura['MontoDivisa'] ?? 0);
-                    
-                    if ($saldo > 0) {
-                        $facturasPositivas[] = $factura;
-                        $totalFacturasPositivas += $saldo;
-                    } else {
-                        $facturasNegativas[] = $factura;
-                        $totalFacturasNegativas += $saldo; // Será negativo
+                    // La factura es tipo MERCANCIA
+                    if($factura['Factura']['Tipo'] == 0){
+                        $totalFacturasMercancia += $factura['TotalDivisa'];
+                        $totalFacturasMercanciaPagado += $factura['TotalAbonadoDivisa'];
+                        $totalFacturasMercanciaPorPagar += $factura['TotalSaldoDivisa'];
+                        $facturasMercancia++;
+                    }
+
+                    // La factura es tipo SERVICIO
+                    if($factura['Factura']['Tipo'] == 1){
+                        $totalFacturasServicios += $factura['Factura']['MontoDivisa'];
+                        $totalFacturasServiciosPagado += $factura['TotalAbonadoDivisa'];
+                        $totalFacturasServiciosPorPagar += $factura['TotalSaldoDivisa'];
+                        $facturasServicios++;
                     }
                 }
                 
-                // Para PASIVOS, solo consideramos las facturas con saldo POSITIVO
-                $totalFacturas = $totalFacturasPositivas;
-                
                 // Guardamos el detalle completo para referencia
                 $listadoFacturas = [
-                    'positivas' => $facturasPositivas,
-                    'negativas' => $facturasNegativas,
-                    'total_positivo' => $totalFacturasPositivas,
-                    'total_negativo' => $totalFacturasNegativas,
+                    'cantidad_facturas_mercancia' => $facturasMercancia,
+                    'facturas_mercancia' => $totalFacturasMercancia,
+                    'abonado_mercancia' => $totalFacturasMercanciaPagado,
+                    'pendiente_mercancia' => $totalFacturasMercanciaPorPagar,
+                    'cantidad_facturas_servicios' => $facturasServicios,
+                    'facturas_servicios' => $totalFacturasServicios,
+                    'abonado_servicios' => $totalFacturasServiciosPagado,
+                    'pendiente_servicios' => $totalFacturasServiciosPorPagar,
                 ];
+
+                // dd([
+                //     'cantidad_facturas_mercancia' => $facturasMercancia,
+                //     'facturas_mercancia' => $totalFacturasMercancia,
+                //     'abonado_mercancia' => $totalFacturasMercanciaPagado,
+                //     'pendiente_mercancia' => $totalFacturasMercanciaPorPagar,
+                //     'cantidad_facturas_servicios' => $facturasServicios,
+                //     'facturas_servicios' => $totalFacturasServicios,
+                //     'abonado_servicios' => $totalFacturasServiciosPagado,
+                //     'pendiente_servicios' => $totalFacturasServiciosPorPagar,
+                // ]);
             }
 
             // ========== PAGOS DEL PERÍODO ==========
@@ -609,6 +657,11 @@ class ContabilidadController extends Controller
                     'Detalle' => $valorizacion,
                     'Unidades' => $unidades,
                     'Referencias' => $referencias,
+                ],
+                'VentasSinTotalizar' => [
+                    'Monto' => round($totalVentasSinTotalizar, 2),
+                    //'Detalle' => $ventas['ListaVentasDiarias'] ?? [],
+                    'Cantidad' => count($ventasTotalizar['ListaVentasDiarias'] ?? []),
                 ],
                 'VentasPorCobrar' => [
                     'Monto' => round($totalVentasPorCobrar, 2),
@@ -664,12 +717,93 @@ class ContabilidadController extends Controller
             ];
         }
 
-        // ========== CÁLCULOS DE OFICINA (DESPUÉS DEL FOREACH) ==========
+        // // ========== CÁLCULOS DE OFICINA (DESPUÉS DEL FOREACH) ==========
         
+        // // Separar sucursales y oficina
+        // $sucursalesBalance = array_filter($listaBalance, fn($item) => $item['SucursalTipo'] != 0);
+        // $oficinaBalance = array_filter($listaBalance, fn($item) => $item['SucursalTipo'] == 0);
+        
+        // if (!empty($oficinaBalance)) {
+        //     $oficinaKey = array_key_first($oficinaBalance);
+            
+        //     // ===== ACTIVOS DE OFICINA (lo que le deben las sucursales) =====
+        //     $totalDeudaRecepciones = 0;
+        //     $totalTransferencias = 0;
+            
+        //     foreach ($sucursalesBalance as $sucursal) {
+        //         $totalDeudaRecepciones += $sucursal['DeudaRecepciones']['Monto'] ?? 0;
+        //         $totalTransferencias += $sucursal['TransferenciasPendientes']['Monto'] ?? 0;
+        //     }
+            
+        //     $totalCuentasPorCobrar = $totalDeudaRecepciones + $totalTransferencias;
+            
+        //     // Actualizar la oficina con sus activos reales
+        //     $listaBalance[$oficinaKey]['CuentasPorCobrar'] = [
+        //         'Monto' => round($totalCuentasPorCobrar, 2),
+        //         'Detalle' => [
+        //             'Recepciones' => $totalDeudaRecepciones,
+        //             'Transferencias' => $totalTransferencias,
+        //         ],
+        //     ];
+            
+        //     // Recalcular TotalActivos de la oficina
+        //     $listaBalance[$oficinaKey]['TotalActivos'] = $totalCuentasPorCobrar;
+            
+        //     // Recalcular Patrimonio de la oficina
+        //     $pasivosOficina = $listaBalance[$oficinaKey]['TotalPasivos'];
+        //     $listaBalance[$oficinaKey]['Patrimonio'] = round($totalCuentasPorCobrar - $pasivosOficina, 2);
+        // }        
+
+        // // ========== RESUMEN DE OFICINA ==========
+        // $oficinaBalance = array_filter($listaBalance, fn($item) => $item['SucursalTipo'] == 0);
+        // $oficinaResumen = null;
+        
+        // if (!empty($oficinaBalance)) {
+        //     $oficina = $oficinaBalance[array_key_first($oficinaBalance)];
+            
+        //     // Procesar facturas (nuevo formato con positivas/negativas separadas)
+        //     $facturasPositivas = 0;
+        //     $montoFacturasPositivas = 0;
+        //     $facturasNegativas = 0;
+        //     $montoFacturasNegativas = 0;
+            
+        //     $detalleFacturas = $oficina['FacturasPorPagar']['Detalle'] ?? [];
+            
+        //     // Verificar si es el nuevo formato
+        //     if (is_array($detalleFacturas) && isset($detalleFacturas['positivas'])) {
+        //         $facturasPositivas = count($detalleFacturas['positivas']);
+        //         $montoFacturasPositivas = $detalleFacturas['total_positivo'] ?? 0;
+        //         $facturasNegativas = count($detalleFacturas['negativas']);
+        //         $montoFacturasNegativas = $detalleFacturas['total_negativo'] ?? 0;
+        //     }
+            
+        //     $oficinaResumen = [
+        //         'TotalActivos' => $oficina['TotalActivos'],
+        //         'TotalPasivos' => $oficina['TotalPasivos'],
+        //         'TotalPatrimonio' => $oficina['Patrimonio'],
+        //         'CuentasPorCobrar' => $oficina['CuentasPorCobrar']['Monto'] ?? 0,
+        //         'DeudaGastos' => $oficina['DeudaGastos']['Monto'],
+        //         'FacturasPorPagar' => [
+        //             'Total' => $oficina['FacturasPorPagar']['Monto'], // Solo positivas
+        //             'CantidadTotal' => $oficina['FacturasPorPagar']['Cantidad'],
+        //             'Positivas' => [
+        //                 'Cantidad' => $facturasPositivas,
+        //                 'Monto' => round($montoFacturasPositivas, 2)
+        //             ],
+        //             'Negativas' => [
+        //                 'Cantidad' => $facturasNegativas,
+        //                 'Monto' => round($montoFacturasNegativas, 2)
+        //             ]
+        //         ],
+        //     ];
+        // }
+
+        // ========== CÁLCULOS DE OFICINA (DESPUÉS DEL FOREACH) ==========
+
         // Separar sucursales y oficina
         $sucursalesBalance = array_filter($listaBalance, fn($item) => $item['SucursalTipo'] != 0);
         $oficinaBalance = array_filter($listaBalance, fn($item) => $item['SucursalTipo'] == 0);
-        
+
         if (!empty($oficinaBalance)) {
             $oficinaKey = array_key_first($oficinaBalance);
             
@@ -699,6 +833,54 @@ class ContabilidadController extends Controller
             // Recalcular Patrimonio de la oficina
             $pasivosOficina = $listaBalance[$oficinaKey]['TotalPasivos'];
             $listaBalance[$oficinaKey]['Patrimonio'] = round($totalCuentasPorCobrar - $pasivosOficina, 2);
+        }        
+
+        // ========== RESUMEN DE OFICINA ==========
+        $oficinaBalance = array_filter($listaBalance, fn($item) => $item['SucursalTipo'] == 0);
+        $oficinaResumen = null;
+
+        if (!empty($oficinaBalance)) {
+            $oficina = $oficinaBalance[array_key_first($oficinaBalance)];
+            
+            // Obtener detalles de facturas
+            $detalleFacturas = $oficina['FacturasPorPagar']['Detalle'] ?? [];
+            
+            $oficinaResumen = [
+                'TotalActivos' => $oficina['TotalActivos'],
+                'TotalPasivos' => $oficina['TotalPasivos'],
+                'TotalPatrimonio' => $oficina['Patrimonio'],
+                'CuentasPorCobrar' => $oficina['CuentasPorCobrar']['Monto'] ?? 0,
+                'DeudaGastos' => $oficina['DeudaGastos']['Monto'],
+                
+                // 👇 NUEVO: Facturas de Mercancía (Tipo 0)
+                'FacturasMercancia' => [
+                    'Cantidad' => $detalleFacturas['cantidad_facturas_mercancia'] ?? 0,
+                    'Total' => round($detalleFacturas['facturas_mercancia'] ?? 0, 2),
+                    'Pagado' => round($detalleFacturas['abonado_mercancia'] ?? 0, 2),
+                    'Pendiente' => round($detalleFacturas['pendiente_mercancia'] ?? 0, 2),
+                ],
+                
+                // 👇 NUEVO: Facturas de Servicios (Tipo 1)
+                'FacturasServicios' => [
+                    'Cantidad' => $detalleFacturas['cantidad_facturas_servicios'] ?? 0,
+                    'Total' => round($detalleFacturas['facturas_servicios'] ?? 0, 2),
+                    'Pagado' => round($detalleFacturas['abonado_servicios'] ?? 0, 2),
+                    'Pendiente' => round($detalleFacturas['pendiente_servicios'] ?? 0, 2),
+                ],
+                
+                // Mantener compatibilidad con código existente
+                'FacturasPorPagar' => [
+                    'Total' => $oficina['FacturasPorPagar']['Monto'] ?? 0,
+                    'CantidadTotal' => ($detalleFacturas['cantidad_facturas_mercancia'] ?? 0) + 
+                                    ($detalleFacturas['cantidad_facturas_servicios'] ?? 0),
+                    'Positivas' => [
+                        'Cantidad' => ($detalleFacturas['cantidad_facturas_mercancia'] ?? 0) + 
+                                    ($detalleFacturas['cantidad_facturas_servicios'] ?? 0),
+                        'Monto' => round(($detalleFacturas['pendiente_mercancia'] ?? 0) + 
+                                        ($detalleFacturas['pendiente_servicios'] ?? 0), 2)
+                    ],
+                ],
+            ];
         }
 
         // ========== RESUMEN DE SUCURSALES ==========
@@ -710,50 +892,6 @@ class ContabilidadController extends Controller
             'TotalEgresosPeriodo' => round(array_sum(array_column($sucursalesBalance, 'TotalEgresosPeriodo')), 2),
             'CantidadSucursales' => count($sucursalesBalance),
         ];
-
-        // ========== RESUMEN DE OFICINA ==========
-        $oficinaBalance = array_filter($listaBalance, fn($item) => $item['SucursalTipo'] == 0);
-        $oficinaResumen = null;
-        
-        if (!empty($oficinaBalance)) {
-            $oficina = $oficinaBalance[array_key_first($oficinaBalance)];
-            
-            // Procesar facturas (nuevo formato con positivas/negativas separadas)
-            $facturasPositivas = 0;
-            $montoFacturasPositivas = 0;
-            $facturasNegativas = 0;
-            $montoFacturasNegativas = 0;
-            
-            $detalleFacturas = $oficina['FacturasPorPagar']['Detalle'] ?? [];
-            
-            // Verificar si es el nuevo formato
-            if (is_array($detalleFacturas) && isset($detalleFacturas['positivas'])) {
-                $facturasPositivas = count($detalleFacturas['positivas']);
-                $montoFacturasPositivas = $detalleFacturas['total_positivo'] ?? 0;
-                $facturasNegativas = count($detalleFacturas['negativas']);
-                $montoFacturasNegativas = $detalleFacturas['total_negativo'] ?? 0;
-            }
-            
-            $oficinaResumen = [
-                'TotalActivos' => $oficina['TotalActivos'],
-                'TotalPasivos' => $oficina['TotalPasivos'],
-                'TotalPatrimonio' => $oficina['Patrimonio'],
-                'CuentasPorCobrar' => $oficina['CuentasPorCobrar']['Monto'] ?? 0,
-                'DeudaGastos' => $oficina['DeudaGastos']['Monto'],
-                'FacturasPorPagar' => [
-                    'Total' => $oficina['FacturasPorPagar']['Monto'], // Solo positivas
-                    'CantidadTotal' => $oficina['FacturasPorPagar']['Cantidad'],
-                    'Positivas' => [
-                        'Cantidad' => $facturasPositivas,
-                        'Monto' => round($montoFacturasPositivas, 2)
-                    ],
-                    'Negativas' => [
-                        'Cantidad' => $facturasNegativas,
-                        'Monto' => round($montoFacturasNegativas, 2)
-                    ]
-                ],
-            ];
-        }
 
         // dd([
         //     'sucursales' => $sucursalesBalance,

@@ -52,89 +52,117 @@
                     </div>
                     <div class="card-body">
 
-                        {{-- OFICINA PRINCIPAL --}}
-                        @if($oficina)
-                        <div class="card card-light mb-4">
-                            <div class="card-header bg-light border-bottom">
-                                <h4 class="card-title mb-0">
-                                    <i class="fas fa-building text-primary mr-2"></i> OFICINA PRINCIPAL
-                                </h4>
+                    {{-- OFICINA PRINCIPAL --}}
+                    @if($oficina)
+                    <div class="card card-light mb-3">
+                        <div class="card-header bg-light border-bottom py-2">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-building text-primary mr-2"></i> OFICINA PRINCIPAL - RESUMEN FACTURAS
+                            </h5>
+                        </div>
+                        <div class="card-body p-2">
+                            
+                            {{-- Tabla de 5 columnas --}}
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-hover table-sm mb-0">
+                                    <thead class="bg-light">
+                                        <tr>
+                                            <th class="text-center align-middle" style="width: 15%">Tipo</th>
+                                            <th class="text-center align-middle" style="width: 15%">Facturas</th>
+                                            <th class="text-center align-middle" style="width: 25%">Monto General</th>
+                                            <th class="text-center align-middle" style="width: 25%">Monto Abonado</th>
+                                            <th class="text-center align-middle" style="width: 20%">Monto Pendiente</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {{-- Fila Mercancía --}}
+                                        <tr>
+                                            <td class="text-center align-middle font-weight-bold text-primary">
+                                                Mercancía
+                                            </td>
+                                            <td class="text-center align-middle font-weight-bold">
+                                                {{ $oficina['FacturasMercancia']['Cantidad'] }}
+                                            </td>
+                                            <td class="text-end align-middle font-weight-bold">
+                                                $ {{ number_format($oficina['FacturasMercancia']['Total'], 2) }}
+                                            </td>
+                                            <td class="text-end align-middle font-weight-bold text-success">
+                                                $ {{ number_format($oficina['FacturasMercancia']['Pagado'], 2) }}
+                                            </td>
+                                            <td class="text-end align-middle font-weight-bold {{ $oficina['FacturasMercancia']['Pendiente'] > 0 ? 'text-danger' : 'text-dark' }}">
+                                                $ {{ number_format($oficina['FacturasMercancia']['Pendiente'], 2) }}
+                                            </td>
+                                        </tr>
+                                        
+                                        {{-- Fila Servicios --}}
+                                        <tr>
+                                            <td class="text-center align-middle font-weight-bold text-warning">
+                                                </i> Servicios
+                                            </td>
+                                            <td class="text-center align-middle font-weight-bold">
+                                                {{ $oficina['FacturasServicios']['Cantidad'] }}
+                                            </td>
+                                            <td class="text-end align-middle font-weight-bold">
+                                                $ {{ number_format($oficina['FacturasServicios']['Total'], 2) }}
+                                            </td>
+                                            <td class="text-end align-middle font-weight-bold text-success">
+                                                $ {{ number_format($oficina['FacturasServicios']['Pagado'], 2) }}
+                                            </td>
+                                            <td class="text-end align-middle font-weight-bold {{ $oficina['FacturasServicios']['Pendiente'] > 0 ? 'text-danger' : 'text-dark' }}">
+                                                $ {{ number_format($oficina['FacturasServicios']['Pendiente'], 2) }}
+                                            </td>
+                                        </tr>
+                                        
+                                        {{-- Fila Totales --}}
+                                        @php
+                                            $totalFacturas = $oficina['FacturasMercancia']['Cantidad'] + $oficina['FacturasServicios']['Cantidad'];
+                                            $totalGeneral = $oficina['FacturasMercancia']['Total'] + $oficina['FacturasServicios']['Total'];
+                                            $totalAbonado = $oficina['FacturasMercancia']['Pagado'] + $oficina['FacturasServicios']['Pagado'];
+                                            $totalPendiente = $oficina['FacturasMercancia']['Pendiente'] + $oficina['FacturasServicios']['Pendiente'];
+                                        @endphp
+                                        <tr class="bg-secondary text-white font-weight-bold">
+                                            <td class="text-center align-middle font-weight-bold text-dark">
+                                                -
+                                            </td>
+                                            <td class="text-center align-middle font-weight-bold">
+                                                {{ $totalFacturas }}
+                                            </td>
+                                            <td class="text-end align-middle font-weight-bold">
+                                                $ {{ number_format($totalGeneral, 2) }}
+                                            </td>
+                                            <td class="text-end align-middle font-weight-bold text-success">
+                                                $ {{ number_format($totalAbonado, 2) }}
+                                            </td>
+                                            <td class="text-end align-middle font-weight-bold {{ $totalPendiente > 0 ? 'text-danger' : 'text-dark' }}">
+                                                $ {{ number_format($totalPendiente, 2) }}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
-                            <div class="card-body p-3">
-                                {{-- Métricas principales --}}
-                                <div class="row">
-                                    <div class="col-lg-3 col-md-6 mb-3">
-                                        <div class="info-box bg-white border shadow-sm">
-                                            <span class="info-box-icon text-primary"><i class="bi bi-cash-stack"></i></span>
-                                            <div class="info-box-content">
-                                                <span class="info-box-text">Cuentas por Cobrar</span>
-                                                <span class="info-box-number font-weight-bold" data-tipo="cuentas-cobrar">$ {{ number_format($oficina['CuentasPorCobrar'], 2) }}</span>
-                                                <small class="text-muted">De sucursales</small>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-lg-3 col-md-6 mb-3">
-                                        <div class="info-box bg-white border shadow-sm">
-                                            <span class="info-box-icon text-warning"><i class="bi bi-receipt"></i></span>
-                                            <div class="info-box-content">
-                                                <span class="info-box-text">Facturas por Pagar</span>
-                                                <span class="info-box-number font-weight-bold" data-tipo="facturas-pagar">$ {{ number_format($oficina['FacturasPorPagar']['Total'], 2) }}</span>
-                                                <small class="text-muted">{{ $oficina['FacturasPorPagar']['CantidadTotal'] }} facturas</small>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-lg-3 col-md-6 mb-3">
-                                        <div class="info-box bg-white border shadow-sm">
-                                            <span class="info-box-icon text-danger"><i class="bi bi-credit-card"></i></span>
-                                            <div class="info-box-content">
-                                                <span class="info-box-text">Deuda Gastos</span>
-                                                <span class="info-box-number font-weight-bold" data-tipo="deuda-gastos">$ {{ number_format($oficina['DeudaGastos'], 2) }}</span>
-                                                <small class="text-muted">Gastos pendientes</small>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-lg-3 col-md-6 mb-3">
-                                        <div class="info-box bg-white border shadow-sm">
-                                            <span class="info-box-icon {{ $oficina['TotalPatrimonio'] >= 0 ? 'text-success' : 'text-danger' }}">
-                                                <i class="bi bi-pie-chart"></i>
-                                            </span>
-                                            <div class="info-box-content">
-                                                <span class="info-box-text">Patrimonio</span>
-                                                <span class="info-box-number font-weight-bold {{ $oficina['TotalPatrimonio'] >= 0 ? 'text-success' : 'text-danger' }}" data-tipo="patrimonio-oficina">
-                                                    $ {{ number_format($oficina['TotalPatrimonio'], 2) }}
-                                                </span>
-                                                <small class="text-muted">Activos - Pasivos</small>
-                                            </div>
-                                        </div>
-                                    </div>
+                            
+                            {{-- Información adicional destacada --}}
+                            <div class="mt-3 d-flex flex-wrap align-items-center justify-content-between">
+                                <div class="text-muted small">
+                                    <i class="bi bi-info-circle me-1"></i> Resumen de facturas de Mercancía y Servicios
                                 </div>
-
-                                {{-- Resumen de balance --}}
-                                <div class="row mt-2">
-                                    <div class="col-md-12">
-                                        <div class="bg-light p-3 rounded">
-                                            <div class="row text-center">
-                                                <div class="col-md-4 border-right">
-                                                    <span class="text-muted d-block">Total Activos</span>
-                                                    <h5 class="font-weight-bold mb-0" data-tipo="activos-oficina">$ {{ number_format($oficina['TotalActivos'], 2) }}</h5>
-                                                </div>
-                                                <div class="col-md-4 border-right">
-                                                    <span class="text-muted d-block">Total Pasivos</span>
-                                                    <h5 class="font-weight-bold mb-0" data-tipo="pasivos-oficina">$ {{ number_format($oficina['TotalPasivos'], 2) }}</h5>
-                                                </div>
-                                                <div class="col-md-4">
-                                                    <span class="text-muted d-block">Patrimonio Neto</span>
-                                                    <h5 class="font-weight-bold mb-0 {{ $oficina['TotalPatrimonio'] >= 0 ? 'text-success' : 'text-danger' }}" data-tipo="patrimonio-neto-oficina">
-                                                        $ {{ number_format($oficina['TotalPatrimonio'], 2) }}
-                                                    </h5>
-                                                </div>
-                                            </div>
-                                        </div>
+                                <div class="d-flex gap-3">
+                                    <div class="d-flex align-items-center">
+                                        <span class="badge bg-warning rounded-pill me-1">!</span>
+                                        <span class="small text-muted">Cuentas x Cobrar:</span>
+                                        <strong class="text-warning ms-1">$ {{ number_format($oficina['CuentasPorCobrar'] ?? 0, 2) }}</strong>
+                                    </div>
+                                    <div class="d-flex align-items-center">
+                                        <span class="badge bg-danger rounded-pill me-1">!</span>
+                                        <span class="small text-muted">Deudas Gastos:</span>
+                                        {{-- CORREGIDO: Cambié 'DeudasGastos' por 'DeudaGastos' (singular) --}}
+                                        <strong class="text-danger ms-1">$ {{ number_format($oficina['DeudaGastos'] ?? 0, 2) }}</strong>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        @endif
+                    </div>
+                    @endif
                         
                         {{-- TABLA DE SUCURSALES --}}
                         <div class="card card-light">
@@ -155,7 +183,7 @@
                                             </tr>
                                             <tr>
                                                 <th class="text-center">Inventario</th>
-                                                <th class="text-center">Ventas</th>
+                                                <th class="text-center">Ventas No Totalizadas</th>
                                                 <th class="text-center">Deuda Recepciones</th>
                                                 <th class="text-center bg-warning" style="background-color: #fff3cd !important;">⚠️ Pendiente</th>
                                                 <th class="text-center">Deuda Gastos</th>
@@ -168,7 +196,7 @@
                                                 <td class="align-middle"><strong>{{ $s['SucursalNombre'] }}</strong></td>
                                                 
                                                 {{-- ACTIVOS --}}
-                                                <td class="text-right align-middle">
+                                                <td class="text-center align-middle">
                                                     <strong>$ {{ number_format($s['Inventario']['Monto'], 2) }}</strong>
                                                     <br>
                                                     <small class="text-muted">
@@ -176,16 +204,16 @@
                                                         <i class="fas fa-tag"></i> {{ number_format($s['Inventario']['Referencias']) }}
                                                     </small>
                                                 </td>
-                                                <td class="text-right align-middle">
-                                                    <strong>$ {{ number_format($s['VentasPorCobrar']['Monto'], 2) }}</strong>
+                                                <td class="text-center align-middle">
+                                                    <strong>$ {{ number_format($s['VentasSinTotalizar']['Monto'], 2) }}</strong>
                                                     <br>
                                                     <small class="text-muted">
-                                                        <i class="fas fa-receipt"></i> {{ $s['VentasPorCobrar']['Cantidad'] }} ventas
+                                                        <i class="fas fa-receipt"></i> {{ $s['VentasSinTotalizar']['Cantidad'] }} ventas
                                                     </small>
                                                 </td>
                                                 
                                                 {{-- PASIVOS --}}
-                                                <td class="text-right align-middle">
+                                                <td class="text-center align-middle">
                                                     <strong>$ {{ number_format($s['DeudaRecepciones']['Monto'], 2) }}</strong>
                                                     <br>
                                                     <small class="text-muted">
@@ -194,7 +222,7 @@
                                                 </td>
                                                 
                                                 {{-- COLUMNA DESTACADA: Deuda Pendiente --}}
-                                                <td class="text-right align-middle" style="background-color: #fff3cd; border-left: 3px solid #ffc107;">
+                                                <td class="text-center align-middle" style="background-color: #fff3cd; border-left: 3px solid #ffc107;">
                                                     <strong class="text-warning" style="color: #856404 !important;">$ {{ number_format($s['DeudaRecepciones']['MontoPendiene'], 2) }}</strong>
                                                     <br>
                                                     <small class="text-warning" style="color: #856404 !important;">
@@ -202,7 +230,7 @@
                                                     </small>
                                                 </td>
                                                 
-                                                <td class="text-right align-middle">
+                                                <td class="text-center align-middle">
                                                     <strong>$ {{ number_format($s['DeudaGastos']['Monto'], 2) }}</strong>
                                                     <br>
                                                     <small class="text-muted">
@@ -210,7 +238,7 @@
                                                     </small>
                                                 </td>
                                                 
-                                                <td class="text-right align-middle">
+                                                <td class="text-center align-middle">
                                                     @if(isset($s['Transferencias']) && $s['Transferencias']['MontoAcumulado'] > 0)
                                                         <strong>$ {{ number_format($s['Transferencias']['MontoAcumulado'] ?? 0, 2) }}</strong>
                                                         <br>
@@ -225,7 +253,7 @@
                                                 </td>
                                                 
                                                 {{-- PATRIMONIO --}}
-                                                <td class="text-right align-middle {{ $s['Patrimonio'] >= 0 ? 'text-success' : 'text-danger' }}" style="font-weight: bold; background-color: {{ $s['Patrimonio'] >= 0 ? '#e8f5e9' : '#ffebee' }};">
+                                                <td class="text-center align-middle {{ $s['Patrimonio'] >= 0 ? 'text-success' : 'text-danger' }}" style="font-weight: bold; background-color: {{ $s['Patrimonio'] >= 0 ? '#e8f5e9' : '#ffebee' }};">
                                                     $ {{ number_format($s['Patrimonio'], 2) }}
                                                 </td>
                                             </tr>

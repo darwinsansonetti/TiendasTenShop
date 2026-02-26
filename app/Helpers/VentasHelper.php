@@ -839,103 +839,111 @@ class VentasHelper
     // }
 
     public static function BuscarGastosSucursalParaCerrar(int $sucursalId, $filtroFecha = null): array
-{
-    $transaccionesDTO = [];
+    {
+        $transaccionesDTO = [];
 
-    // ⚡ Cargar transacciones de tipo gasto con sus abonos y la transacción de cada abono
-    $query = Transaccion::with('transaccionesAbonos.transaccion')
-        ->whereIn('Tipo', [0, 2, 3, 5])
-        ->where('Tipo', '!=', 7)
-        ->where('Estatus', '!=', 5)
-        ->where('SucursalId', $sucursalId);
+        // ⚡ Cargar transacciones de tipo gasto con sus abonos y la transacción de cada abono
+        $query = Transaccion::with('transaccionesAbonos.transaccion')
+            ->whereIn('Tipo', [0, 2, 3, 5])
+            ->where('Tipo', '!=', 7)
+            ->where('Estatus', '!=', 5)
+            ->where('SucursalId', $sucursalId);
 
-    if ($filtroFecha !== null) {
-        $query->where('Fecha', '<=', $filtroFecha->fechaFin);
-    }
-
-    $transacciones = $query->get();
-
-    if ($transacciones->isEmpty()) {
-        return []; // 👈 IMPORTANTE: retornar array vacío
-    }
-
-    // 👇 DEBUG PARA SUCURSAL 7 - AGREGAR ESTO
-    if ($sucursalId == 7) {
-        \Log::info("=== DEBUG GASTOS SUCURSAL 7 ===");
-        \Log::info("Total gastos encontrados: " . $transacciones->count());
-        
-        $totalGastos = 0;
-        $gastosPorTipo = [];
-        
-        foreach ($transacciones as $gasto) {
-            $totalGastos += (float)$gasto->MontoDivisaAbonado;
-            
-            // Agrupar por tipo
-            $tipo = $gasto->Tipo;
-            if (!isset($gastosPorTipo[$tipo])) {
-                $gastosPorTipo[$tipo] = [
-                    'cantidad' => 0,
-                    'total' => 0,
-                    'descripcion' => self::getTipoDescripcion($tipo)
-                ];
-            }
-            $gastosPorTipo[$tipo]['cantidad']++;
-            $gastosPorTipo[$tipo]['total'] += (float)$gasto->MontoDivisaAbonado;
-            
-            // Log de gastos individuales grandes (> $1000)
-            if ((float)$gasto->MontoDivisaAbonado > 1000) {
-                \Log::info("GASTO GRANDE - ID: {$gasto->ID}, Tipo: {$gasto->Tipo}, Monto: {$gasto->MontoDivisaAbonado}, Fecha: {$gasto->Fecha}, Desc: {$gasto->Descripcion}");
-            }
+        if ($filtroFecha !== null) {
+            $query->where('Fecha', '<=', $filtroFecha->fechaFin);
         }
-        
-        \Log::info("TOTAL GASTOS BRUTO: $" . number_format($totalGastos, 2));
-        \Log::info("GASTOS POR TIPO:", $gastosPorTipo);
-        
-        // También ver abonos si hay
-        $totalAbonos = 0;
-        foreach ($transacciones as $gasto) {
-            foreach ($gasto->transaccionesAbonos as $abonoGasto) {
-                if ($abonoGasto->transaccion) {
-                    $totalAbonos += (float)$abonoGasto->transaccion->MontoDivisaAbonado;
+
+        $transacciones = $query->get();
+
+        // if($sucursalId == 8){
+        //     dd([
+        //         'totales' => [
+        //             'transacciones' => $transacciones,
+        //         ]
+        //     ]);
+        // }
+
+        if ($transacciones->isEmpty()) {
+            return []; // 👈 IMPORTANTE: retornar array vacío
+        }
+
+        // 👇 DEBUG PARA SUCURSAL 7 - AGREGAR ESTO
+        if ($sucursalId == 7) {
+            // \Log::info("=== DEBUG GASTOS SUCURSAL 7 ===");
+            // \Log::info("Total gastos encontrados: " . $transacciones->count());
+            
+            $totalGastos = 0;
+            $gastosPorTipo = [];
+            
+            foreach ($transacciones as $gasto) {
+                $totalGastos += (float)$gasto->MontoDivisaAbonado;
+                
+                // Agrupar por tipo
+                $tipo = $gasto->Tipo;
+                if (!isset($gastosPorTipo[$tipo])) {
+                    $gastosPorTipo[$tipo] = [
+                        'cantidad' => 0,
+                        'total' => 0,
+                        'descripcion' => self::getTipoDescripcion($tipo)
+                    ];
+                }
+                $gastosPorTipo[$tipo]['cantidad']++;
+                $gastosPorTipo[$tipo]['total'] += (float)$gasto->MontoDivisaAbonado;
+                
+                // // Log de gastos individuales grandes (> $1000)
+                // if ((float)$gasto->MontoDivisaAbonado > 1000) {
+                //     \Log::info("GASTO GRANDE - ID: {$gasto->ID}, Tipo: {$gasto->Tipo}, Monto: {$gasto->MontoDivisaAbonado}, Fecha: {$gasto->Fecha}, Desc: {$gasto->Descripcion}");
+                // }
+            }
+            
+            // \Log::info("TOTAL GASTOS BRUTO: $" . number_format($totalGastos, 2));
+            // \Log::info("GASTOS POR TIPO:", $gastosPorTipo);
+            
+            // También ver abonos si hay
+            $totalAbonos = 0;
+            foreach ($transacciones as $gasto) {
+                foreach ($gasto->transaccionesAbonos as $abonoGasto) {
+                    if ($abonoGasto->transaccion) {
+                        $totalAbonos += (float)$abonoGasto->transaccion->MontoDivisaAbonado;
+                    }
                 }
             }
+            // \Log::info("TOTAL ABONOS: $" . number_format($totalAbonos, 2));
+            // \Log::info("SALDO PENDIENTE (bruto - abonos): $" . number_format($totalGastos - $totalAbonos, 2));
         }
-        \Log::info("TOTAL ABONOS: $" . number_format($totalAbonos, 2));
-        \Log::info("SALDO PENDIENTE (bruto - abonos): $" . number_format($totalGastos - $totalAbonos, 2));
+        // 👆 FIN DEBUG
+
+        foreach ($transacciones as $gasto) {
+
+            $transaccionDTO = new \App\DTO\TransaccionDTO();
+            $transaccionDTO->Id = $gasto->ID ?? 0;
+            $transaccionDTO->Descripcion = $gasto->Descripcion ?? '';
+            $transaccionDTO->MontoAbonado = (float) ($gasto->MontoAbonado ?? 0);
+            $transaccionDTO->MontoDivisaAbonado = (float) ($gasto->MontoDivisaAbonado ?? 0);
+            $transaccionDTO->SucursalId = $gasto->SucursalId;
+            $transaccionDTO->Fecha = $gasto->Fecha;
+
+            // ⚡ Abonos ya cargados por eager loading
+            foreach ($gasto->transaccionesAbonos as $abonoGasto) {
+                $abonoTransaccion = $abonoGasto->transaccion; 
+                if (!$abonoTransaccion) continue;
+
+                $abonoDTO = new \App\DTO\TransaccionDTO();
+                $abonoDTO->Id = $abonoTransaccion->ID ?? 0;
+                $abonoDTO->MontoAbonado = (float) ($abonoTransaccion->MontoAbonado ?? 0);
+                $abonoDTO->MontoDivisaAbonado = (float) ($abonoTransaccion->MontoDivisaAbonado ?? 0);
+                $abonoDTO->Fecha = $abonoTransaccion->Fecha ?? now();
+
+                $transaccionDTO->AbonoVentas[] = $abonoDTO;
+            }
+
+            if ($transaccionDTO->getSaldoDivisa() > 0) {
+                $transaccionesDTO[] = $transaccionDTO;
+            }
+        }
+
+        return $transaccionesDTO; // 👈 ESTO FALTABA
     }
-    // 👆 FIN DEBUG
-
-    foreach ($transacciones as $gasto) {
-
-        $transaccionDTO = new \App\DTO\TransaccionDTO();
-        $transaccionDTO->Id = $gasto->ID ?? 0;
-        $transaccionDTO->Descripcion = $gasto->Descripcion ?? '';
-        $transaccionDTO->MontoAbonado = (float) ($gasto->MontoAbonado ?? 0);
-        $transaccionDTO->MontoDivisaAbonado = (float) ($gasto->MontoDivisaAbonado ?? 0);
-        $transaccionDTO->SucursalId = $gasto->SucursalId;
-        $transaccionDTO->Fecha = $gasto->Fecha;
-
-        // ⚡ Abonos ya cargados por eager loading
-        foreach ($gasto->transaccionesAbonos as $abonoGasto) {
-            $abonoTransaccion = $abonoGasto->transaccion; 
-            if (!$abonoTransaccion) continue;
-
-            $abonoDTO = new \App\DTO\TransaccionDTO();
-            $abonoDTO->Id = $abonoTransaccion->ID ?? 0;
-            $abonoDTO->MontoAbonado = (float) ($abonoTransaccion->MontoAbonado ?? 0);
-            $abonoDTO->MontoDivisaAbonado = (float) ($abonoTransaccion->MontoDivisaAbonado ?? 0);
-            $abonoDTO->Fecha = $abonoTransaccion->Fecha ?? now();
-
-            $transaccionDTO->AbonoVentas[] = $abonoDTO;
-        }
-
-        if ($transaccionDTO->getSaldoDivisa() > 0) {
-            $transaccionesDTO[] = $transaccionDTO;
-        }
-    }
-
-    return $transaccionesDTO; // 👈 ESTO FALTABA
-}
 
 // Agrega esta función auxiliar en la misma clase
 private static function getTipoDescripcion($tipo)

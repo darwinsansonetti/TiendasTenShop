@@ -233,16 +233,16 @@ class VentasService
             $query->where('Estatus', $estatusTransaccion);
         }
 
-        // Log para depurar
-        \Log::info('=== Buscar Transacciones ===', [
-            'tipo' => $tipoTransaccion,
-            'sucursal' => $sucursalId,
-            'proveedor' => $proveedorId,
-            'fecha_inicio' => $fechaInicio ? $fechaInicio->format('Y-m-d H:i:s') : null,
-            'fecha_fin' => $fechaFin ? $fechaFin->format('Y-m-d H:i:s') : null,
-            'sql' => $query->toSql(),
-            'bindings' => $query->getBindings(),
-        ]);
+        // // Log para depurar
+        // \Log::info('=== Buscar Transacciones ===', [
+        //     'tipo' => $tipoTransaccion,
+        //     'sucursal' => $sucursalId,
+        //     'proveedor' => $proveedorId,
+        //     'fecha_inicio' => $fechaInicio ? $fechaInicio->format('Y-m-d H:i:s') : null,
+        //     'fecha_fin' => $fechaFin ? $fechaFin->format('Y-m-d H:i:s') : null,
+        //     'sql' => $query->toSql(),
+        //     'bindings' => $query->getBindings(),
+        // ]);
 
         return $query->get();
     }
@@ -285,25 +285,25 @@ class VentasService
         });
     }
 
-    // public function obtenerListadoVentasDiariasParaCerrar($filtroFecha, $sucursalId, $incluirGastos)
-    // {
-    //     $ventas = VentaDiariaTotalizada::with('sucursal')
-    //         ->when($sucursalId, fn($q) => $q->where('SucursalId', $sucursalId))
-    //         ->where('Saldo', '>', 0)
-    //         ->where('Fecha', '<=', $filtroFecha->fechaFin)
-    //         ->where(function ($q) {
-    //             $q->whereNull('Estatus')
-    //             ->orWhere('Estatus', '!=', 4);
-    //         })
-    //         ->orderBy('Fecha')
-    //         ->get();
+    public function obtenerListadoVentasDiariasParaCerrarSinTotalizar($filtroFecha, $sucursalId, $incluirGastos)
+    {
+        $ventas = VentaDiariaTotalizada::with('sucursal')
+            ->when($sucursalId, fn($q) => $q->where('SucursalId', $sucursalId))
+            ->where('Saldo', '>', 0)
+            ->where('Fecha', '<=', $filtroFecha->fechaFin)
+            ->where(function ($q) {
+                $q->whereNull('Estatus')
+                ->orWhere('Estatus', '!=', 4);
+            })
+            ->orderBy('Fecha')
+            ->get();
 
-    //     $detalle = $this->obtenerDetallesPorVentasBalance($sucursalId, $ventas);
+        $detalle = $this->obtenerDetallesPorVentasBalance($sucursalId, $ventas);
 
-    //     return [
-    //         'ListaVentasDiarias' => $detalle
-    //     ];
-    // }
+        return [
+            'ListaVentasDiarias' => $detalle
+        ];
+    }
 
     public function ObtenerListadoVentasDiariasParaCerrar($filtroFecha, $sucursalId, $incluirGastos)
     {
@@ -785,11 +785,10 @@ class VentasService
     public function buscarFacturasActivas(): array
     {
         try {
-            Log::info('=== VentasService@buscarFacturasActivas (Optimizado) ===');
 
-            // 1. Obtener IDs de facturas con estatus 1, 2 y 4 (una sola consulta)
+            // 1️⃣ Obtener todas las facturas activas (1,2,4)
             $facturas = Factura::with(['proveedor', 'detalles'])
-                ->whereIn('Estatus', [1, 2, 4]) // Activas, Adicionales y Otro estatus
+                ->whereIn('Estatus', [1, 2, 4])
                 ->orderBy('FechaCreacion')
                 ->get();
 
@@ -797,9 +796,11 @@ class VentasService
                 return [];
             }
 
-            // 2. Obtener TODOS los abonos de todas las facturas en UNA SOLA CONSULTA
+            // dd($facturas);
+
+            // 2️⃣ Obtener TODOS los abonos en una sola consulta
             $facturaIds = $facturas->pluck('ID')->toArray();
-            
+
             $abonos = Transaccion::select(
                     'transacciones.ID',
                     'transacciones.Descripcion',
@@ -807,155 +808,72 @@ class VentasService
                     'transacciones.MontoDivisaAbonado',
                     'transacciones.Fecha',
                     'transacciones.Tipo',
-                    'tp.FacturaId'  // Obtener el FacturaId de la tabla pivote
+                    'tp.FacturaId'
                 )
                 ->join('TransaccionesProveedor as tp', 'transacciones.ID', '=', 'tp.TransaccionId')
                 ->whereIn('tp.FacturaId', $facturaIds)
                 ->get()
-                ->groupBy('FacturaId'); // Agrupar por FacturaId
+                ->groupBy('FacturaId');
 
-            Log::info('Facturas encontradas: ' . $facturas->count());
-            Log::info('Abonos encontrados: ' . $abonos->count());
+            $resultado = [];
 
-            // 3. Obtener IDs de contenedores y sucursales únicos
-            $contenedorIds = $facturas->whereNotNull('ContenedorId')
-                                      ->pluck('ContenedorId')
-                                      ->unique()
-                                      ->toArray();
-            
-            $sucursalIds = $facturas->pluck('SucursalId')
-                                    ->unique()
-                                    ->toArray();
-
-            // 4. Cargar todos los contenedores en UNA SOLA CONSULTA
-            $contenedores = [];
-            if (!empty($contenedorIds)) {
-                $contenedores = Contenedor::whereIn('Id', $contenedorIds)
-                    ->get()
-                    ->keyBy('Id');
-            }
-
-            // 5. Cargar todas las sucursales en UNA SOLA CONSULTA
-            $sucursales = [];
-            if (!empty($sucursalIds)) {
-                $sucursales = Sucursal::whereIn('ID', $sucursalIds)
-                    ->get()
-                    ->keyBy('ID');
-            }
-
-            // 6. Construir el resultado final
-            $facturasDTO = [];
-
+            // 3️⃣ Recorrer cada factura (igual que foreach en .NET)
             foreach ($facturas as $factura) {
-                // Calcular totales desde detalles (similar a .NET)
+
                 $totalDivisa = 0;
-                $totalBs = 0;
-                
-                $detallesDTO = [];
-                foreach ($factura->detalles as $detalle) {
-                    $totalDivisa += (float)$detalle->CostoDivisa * $detalle->CantidadRecibida;
-                    $totalBs += (float)$detalle->CostoBs * $detalle->CantidadRecibida;
+
+                // Mercancia
+                if($factura->Tipo == 0){
+                    // 🔹 Calcular TotalDivisa
+                    $totalDivisa = $factura->detalles->sum(function ($detalle) {
+                        return $detalle->CantidadEmitida * $detalle->CostoDivisa;
+                    });
                     
-                    $detallesDTO[] = [
-                        'ID' => $detalle->ID,
-                        'ProductoId' => $detalle->ProductoId,
-                        'CantidadEmitida' => $detalle->CantidadEmitida,
-                        'CantidadRecibida' => $detalle->CantidadRecibida,
-                        'CostoDivisa' => (float)$detalle->CostoDivisa,
-                        'CostoBs' => (float)$detalle->CostoBs,
-                        'SubtotalDivisa' => (float)$detalle->CostoDivisa * $detalle->CantidadRecibida,
-                        'SubtotalBs' => (float)$detalle->CostoBs * $detalle->CantidadRecibida,
-                    ];
+                    $totalDivisa += $factura->Traspaso ?? 0;
                 }
 
-                // Procesar abonos de esta factura
+                // Servicio
+                if($factura->Tipo == 1){
+                    // 🔹 Calcular TotalDivisa
+                    $totalDivisa = $factura->MontoDivisa;
+                }
+
+                // 🔹 Obtener abonos de esta factura
+                $totalAbonadoDivisa = 0;
                 $abonosDTO = [];
-                $totalAbonado = 0;
-                
+
                 if (isset($abonos[$factura->ID])) {
                     foreach ($abonos[$factura->ID] as $abono) {
-                        $totalAbonado += (float)$abono->MontoDivisaAbonado;
+                        $totalAbonadoDivisa += (float) $abono->MontoDivisaAbonado;
+
                         $abonosDTO[] = [
                             'ID' => $abono->ID,
                             'Descripcion' => $abono->Descripcion,
-                            'MontoAbonado' => (float)$abono->MontoAbonado,
-                            'MontoDivisaAbonado' => (float)$abono->MontoDivisaAbonado,
+                            'MontoDivisaAbonado' => (float) $abono->MontoDivisaAbonado,
                             'Fecha' => $abono->Fecha,
                             'Tipo' => $abono->Tipo,
                         ];
                     }
                 }
 
-                // Construir DTO de factura
-                $facturaDTO = [
-                    'ID' => $factura->ID,
+                // 🔹 Saldo
+                $totalSaldoDivisa = $totalDivisa - $totalAbonadoDivisa;
+
+                // 🔹 Agregar al resultado
+                $resultado[] = [
+                    'FacturaId' => $factura->ID,
+                    'Factura' => $factura,
                     'ProveedorId' => $factura->ProveedorId,
-                    'SucursalId' => $factura->SucursalId,
-                    'ContenedorId' => $factura->ContenedorId,
-                    'Numero' => $factura->Numero,
-                    'Serie' => $factura->Serie,
-                    'FechaCreacion' => $factura->FechaCreacion,
-                    'FechaDespacho' => $factura->FechaDespacho,
-                    'FechaCierre' => $factura->FechaCierre,
-                    'Estatus' => $factura->Estatus,
-                    'Tipo' => $factura->Tipo,
-                    'MontoDivisa' => (float)$factura->MontoDivisa ?: $totalDivisa,
-                    'MontoBs' => (float)$factura->MontoBs ?: $totalBs,
-                    'SaldoDivisa' => round(((float)$factura->MontoDivisa ?: $totalDivisa) - $totalAbonado, 2),
-                    'Descripcion' => $factura->Descripcion,
-                    'TasaDeCambio' => (float)$factura->TasaDeCambio,
-                    'MonedaPrincipal' => $factura->MonedaPrincipal,
-                    'Detalles' => $detallesDTO,
-                    'Pagos' => $abonosDTO,
-                    'Proveedor' => null,
-                    'Sucursal' => null,
-                    'Contenedor' => null,
+                    'TotalDivisa' => round($totalDivisa, 2),
+                    'TotalAbonadoDivisa' => round($totalAbonadoDivisa, 2),
+                    'TotalSaldoDivisa' => round($totalSaldoDivisa, 2),
+                    'Abonos' => $abonosDTO
                 ];
-
-                // Agregar proveedor si existe
-                if ($factura->proveedor) {
-                    $facturaDTO['Proveedor'] = [
-                        'ID' => $factura->proveedor->ID,
-                        'Nombre' => $factura->proveedor->Nombre,
-                        'Rif' => $factura->proveedor->Rif,
-                        'Tipo' => $factura->proveedor->Tipo,
-                    ];
-                }
-
-                // Agregar sucursal si existe (de nuestra colección precargada)
-                if (isset($sucursales[$factura->SucursalId])) {
-                    $suc = $sucursales[$factura->SucursalId];
-                    $facturaDTO['Sucursal'] = [
-                        'ID' => $suc->ID,
-                        'Nombre' => $suc->Nombre,
-                        'Tipo' => $suc->Tipo,
-                    ];
-                }
-
-                // Si el proveedor es tipo 0 y tiene contenedor, agregar contenedor
-                if ($factura->proveedor && ($factura->proveedor->Tipo ?? 0) == 0 && $factura->ContenedorId) {
-                    if (isset($contenedores[$factura->ContenedorId])) {
-                        $cont = $contenedores[$factura->ContenedorId];
-                        $facturaDTO['Contenedor'] = [
-                            'Id' => $cont->Id,
-                            'Nombre' => $cont->Nombre,
-                            'FechaCreacion' => $cont->FechaCreacion,
-                            'FechaDespacho' => $cont->FechaDespacho,
-                            'FechaRecepcion' => $cont->FechaRecepcion,
-                            'Flete' => (float)$cont->Flete,
-                            'Aduana' => (float)$cont->Aduana,
-                            'NumeroOperacion' => $cont->NumeroOperacion,
-                            'Origen' => $cont->Origen,
-                            'Estatus' => $cont->Estatus,
-                        ];
-                    }
-                }
-
-                $facturasDTO[] = $facturaDTO;
             }
 
-            Log::info('Facturas DTO generadas: ' . count($facturasDTO));
-            return $facturasDTO;
+            // dd($resultado);
+
+            return $resultado;
 
         } catch (\Exception $ex) {
             Log::error('Error en buscarFacturasActivas: ' . $ex->getMessage());
@@ -963,6 +881,256 @@ class VentasService
             return [];
         }
     }
+
+    // public function buscarFacturasActivas(): array
+    // {
+    //     try {
+    //         Log::info('=== VentasService@buscarFacturasActivas (Optimizado) ===');
+
+    //         // 1. Obtener IDs de facturas con estatus 1, 2 y 4 (una sola consulta)
+    //         $facturas = Factura::with(['proveedor', 'detalles'])
+    //             ->whereIn('Estatus', [1, 2, 4]) // Activas, Adicionales y Otro estatus
+    //             ->orderBy('FechaCreacion')
+    //             ->get();
+
+    //         if ($facturas->isEmpty()) {
+    //             return [];
+    //         }
+
+    //         // 2. Obtener TODOS los abonos de todas las facturas en UNA SOLA CONSULTA
+    //         $facturaIds = $facturas->pluck('ID')->toArray();
+            
+    //         $abonos = Transaccion::select(
+    //                 'transacciones.ID',
+    //                 'transacciones.Descripcion',
+    //                 'transacciones.MontoAbonado',
+    //                 'transacciones.MontoDivisaAbonado',
+    //                 'transacciones.Fecha',
+    //                 'transacciones.Tipo',
+    //                 'tp.FacturaId'  // Obtener el FacturaId de la tabla pivote
+    //             )
+    //             ->join('TransaccionesProveedor as tp', 'transacciones.ID', '=', 'tp.TransaccionId')
+    //             ->whereIn('tp.FacturaId', $facturaIds)
+    //             ->get()
+    //             ->groupBy('FacturaId'); // Agrupar por FacturaId
+
+    //         Log::info('Facturas encontradas: ' . $facturas->count());
+    //         Log::info('Abonos encontrados: ' . $abonos->count());
+
+    //         // 3. Obtener IDs de contenedores y sucursales únicos
+    //         $contenedorIds = $facturas->whereNotNull('ContenedorId')
+    //                                   ->pluck('ContenedorId')
+    //                                   ->unique()
+    //                                   ->toArray();
+            
+    //         $sucursalIds = $facturas->pluck('SucursalId')
+    //                                 ->unique()
+    //                                 ->toArray();
+
+    //         // 4. Cargar todos los contenedores en UNA SOLA CONSULTA
+    //         $contenedores = [];
+    //         if (!empty($contenedorIds)) {
+    //             $contenedores = Contenedor::whereIn('Id', $contenedorIds)
+    //                 ->get()
+    //                 ->keyBy('Id');
+    //         }
+
+    //         // 5. Cargar todas las sucursales en UNA SOLA CONSULTA
+    //         $sucursales = [];
+    //         if (!empty($sucursalIds)) {
+    //             $sucursales = Sucursal::whereIn('ID', $sucursalIds)
+    //                 ->get()
+    //                 ->keyBy('ID');
+    //         }
+
+    //         // 6. Construir el resultado final
+    //         $facturasDTO = [];
+
+    //         foreach ($facturas as $factura) {
+    //             // Calcular totales desde detalles (similar a .NET)
+    //             $totalDivisa = 0;
+    //             $totalBs = 0;
+                
+    //             $detallesDTO = [];
+    //             foreach ($factura->detalles as $detalle) {
+    //                 $totalDivisa += (float)$detalle->CostoDivisa * $detalle->CantidadRecibida;
+    //                 $totalBs += (float)$detalle->CostoBs * $detalle->CantidadRecibida;
+                    
+    //                 $detallesDTO[] = [
+    //                     'ID' => $detalle->ID,
+    //                     'ProductoId' => $detalle->ProductoId,
+    //                     'CantidadEmitida' => $detalle->CantidadEmitida,
+    //                     'CantidadRecibida' => $detalle->CantidadRecibida,
+    //                     'CostoDivisa' => (float)$detalle->CostoDivisa,
+    //                     'CostoBs' => (float)$detalle->CostoBs,
+    //                     'SubtotalDivisa' => (float)$detalle->CostoDivisa * $detalle->CantidadRecibida,
+    //                     'SubtotalBs' => (float)$detalle->CostoBs * $detalle->CantidadRecibida,
+    //                 ];
+    //             }
+
+    //             // Procesar abonos de esta factura
+    //             $abonosDTO = [];
+    //             $totalAbonado = 0;
+                
+    //             if (isset($abonos[$factura->ID])) {
+    //                 foreach ($abonos[$factura->ID] as $abono) {
+    //                     $totalAbonado += (float)$abono->MontoDivisaAbonado;
+    //                     $abonosDTO[] = [
+    //                         'ID' => $abono->ID,
+    //                         'Descripcion' => $abono->Descripcion,
+    //                         'MontoAbonado' => (float)$abono->MontoAbonado,
+    //                         'MontoDivisaAbonado' => (float)$abono->MontoDivisaAbonado,
+    //                         'Fecha' => $abono->Fecha,
+    //                         'Tipo' => $abono->Tipo,
+    //                     ];
+    //                 }
+    //             }
+
+    //             // Construir DTO de factura
+    //             $facturaDTO = [
+    //                 'ID' => $factura->ID,
+    //                 'ProveedorId' => $factura->ProveedorId,
+    //                 'SucursalId' => $factura->SucursalId,
+    //                 'ContenedorId' => $factura->ContenedorId,
+    //                 'Numero' => $factura->Numero,
+    //                 'Serie' => $factura->Serie,
+    //                 'FechaCreacion' => $factura->FechaCreacion,
+    //                 'FechaDespacho' => $factura->FechaDespacho,
+    //                 'FechaCierre' => $factura->FechaCierre,
+    //                 'Estatus' => $factura->Estatus,
+    //                 'Tipo' => $factura->Tipo,
+    //                 'MontoDivisa' => (float)$factura->MontoDivisa ?: $totalDivisa,
+    //                 'MontoBs' => (float)$factura->MontoBs ?: $totalBs,
+    //                 'SaldoDivisa' => round(((float)$factura->MontoDivisa ?: $totalDivisa) - $totalAbonado, 2),
+    //                 'Descripcion' => $factura->Descripcion,
+    //                 'TasaDeCambio' => (float)$factura->TasaDeCambio,
+    //                 'MonedaPrincipal' => $factura->MonedaPrincipal,
+    //                 'Detalles' => $detallesDTO,
+    //                 'Pagos' => $abonosDTO,
+    //                 'Proveedor' => null,
+    //                 'Sucursal' => null,
+    //                 'Contenedor' => null,
+    //             ];
+
+    //             // Agregar proveedor si existe
+    //             if ($factura->proveedor) {
+    //                 $facturaDTO['Proveedor'] = [
+    //                     'ID' => $factura->proveedor->ID,
+    //                     'Nombre' => $factura->proveedor->Nombre,
+    //                     'Rif' => $factura->proveedor->Rif,
+    //                     'Tipo' => $factura->proveedor->Tipo,
+    //                 ];
+    //             }
+
+    //             // Agregar sucursal si existe (de nuestra colección precargada)
+    //             if (isset($sucursales[$factura->SucursalId])) {
+    //                 $suc = $sucursales[$factura->SucursalId];
+    //                 $facturaDTO['Sucursal'] = [
+    //                     'ID' => $suc->ID,
+    //                     'Nombre' => $suc->Nombre,
+    //                     'Tipo' => $suc->Tipo,
+    //                 ];
+    //             }
+
+    //             // Si el proveedor es tipo 0 y tiene contenedor, agregar contenedor
+    //             if ($factura->proveedor && ($factura->proveedor->Tipo ?? 0) == 0 && $factura->ContenedorId) {
+    //                 if (isset($contenedores[$factura->ContenedorId])) {
+    //                     $cont = $contenedores[$factura->ContenedorId];
+    //                     $facturaDTO['Contenedor'] = [
+    //                         'Id' => $cont->Id,
+    //                         'Nombre' => $cont->Nombre,
+    //                         'FechaCreacion' => $cont->FechaCreacion,
+    //                         'FechaDespacho' => $cont->FechaDespacho,
+    //                         'FechaRecepcion' => $cont->FechaRecepcion,
+    //                         'Flete' => (float)$cont->Flete,
+    //                         'Aduana' => (float)$cont->Aduana,
+    //                         'NumeroOperacion' => $cont->NumeroOperacion,
+    //                         'Origen' => $cont->Origen,
+    //                         'Estatus' => $cont->Estatus,
+    //                     ];
+    //                 }
+    //             }
+
+    //             $facturasDTO[] = $facturaDTO;
+    //         }
+
+    //         Log::info('Facturas DTO generadas: ' . count($facturasDTO));
+    //         return $facturasDTO;
+
+    //     } catch (\Exception $ex) {
+    //         Log::error('Error en buscarFacturasActivas: ' . $ex->getMessage());
+    //         Log::error($ex->getTraceAsString());
+    //         return [];
+    //     }
+    // }
+
+    // public function buscarFacturasActivas(): array
+    // {
+    //     try {
+    //         // Log::info('=== VentasService@buscarFacturasActivas (Optimizado) ===');
+
+    //         $facturaId = 1195;
+    //         // 1. Obtener IDs de facturas con estatus 1, 2 y 4 (una sola consulta)
+    //         $factura = Factura::with(['proveedor', 'detalles'])
+    //             ->where('Id', $facturaId)
+    //             ->firstOrFail();
+
+    //         // 2. Calcular TotalDivisa sumando CantidadRecibida * CostoDivisa de los detalles
+    //         $totalDivisa = $factura->detalles->sum(function($detalle) {
+    //             // Multiplicamos CantidadRecibida por CostoDivisa para cada detalle
+    //             return $detalle->CantidadEmitida * $detalle->CostoDivisa;
+    //         });
+
+    //         $totalDivisa += $factura->Traspaso;
+
+    //         // 2. Obtener TODOS los abonos de todas las facturas en UNA SOLA CONSULTA
+    //         $abonos = Transaccion::select(
+    //                 'transacciones.ID',
+    //                 'transacciones.Descripcion',
+    //                 'transacciones.MontoAbonado',
+    //                 'transacciones.MontoDivisaAbonado',
+    //                 'transacciones.Fecha',
+    //                 'transacciones.Tipo',
+    //                 'tp.FacturaId'  // Obtener el FacturaId de la tabla pivote
+    //             )
+    //             ->join('TransaccionesProveedor as tp', 'transacciones.ID', '=', 'tp.TransaccionId')
+    //             ->where('tp.FacturaId', $facturaId)
+    //             ->get()
+    //             ->groupBy('FacturaId'); // Agrupar por FacturaId
+
+    //         Log::info('Abonos encontrados: ' . $abonos->count());
+
+    //         $abonosDTO = [];
+    //         $totalAbonado = 0;
+
+    //         foreach ($abonos[$factura->ID] as $abono) {
+    //             $totalAbonado += (float)$abono->MontoDivisaAbonado;
+    //             $abonosDTO[] = [
+    //                 'ID' => $abono->ID,
+    //                 'Descripcion' => $abono->Descripcion,
+    //                 'MontoAbonado' => (float)$abono->MontoAbonado,
+    //                 'MontoDivisaAbonado' => (float)$abono->MontoDivisaAbonado,
+    //                 'Fecha' => $abono->Fecha,
+    //                 'Tipo' => $abono->Tipo,
+    //             ];
+    //         }
+
+    //         $totalAbonadoDivisa = $totalAbonado ?? 0;
+    //         $totalSaldoDivisa = $totalDivisa - $totalAbonadoDivisa;
+
+    //         \Log::info("Factura ID: {$facturaId}");
+    //         \Log::info("TotalDivisa calculado: {$totalDivisa}");
+    //         \Log::info("TotalAbonadoDivisa: {$totalAbonadoDivisa}");
+    //         \Log::info("TotalSaldoDivisa: {$totalSaldoDivisa}");
+
+    //         dd($factura);
+
+    //     } catch (\Exception $ex) {
+    //         Log::error('Error en buscarFacturasActivas: ' . $ex->getMessage());
+    //         Log::error($ex->getTraceAsString());
+    //         return [];
+    //     }
+    // }
 
     /**
      * Versión con filtros adicionales (si los necesitas)
