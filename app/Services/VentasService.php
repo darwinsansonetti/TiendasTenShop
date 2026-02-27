@@ -305,6 +305,19 @@ class VentasService
         ];
     }
 
+    public function obtenerUltimaVentaDiariaTotalizada($sucursalId)
+    {
+        $venta = VentaDiariaTotalizada::with('sucursal')
+            ->where('SucursalId', $sucursalId)
+            ->where('Estatus', 4)
+            ->where('Saldo', 0)
+            ->where('TotalDivisa', '>', 0)
+            ->orderByDesc('ID')
+            ->first();
+
+        return $venta;
+    }
+
     public function ObtenerListadoVentasDiariasParaCerrar($filtroFecha, $sucursalId, $incluirGastos)
     {
         // $query = VentaDiariaTotalizada::query()

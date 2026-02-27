@@ -236,7 +236,8 @@
         const exchangeRate = document.getElementById('exchangeRate');
 
         // Establecer fecha máxima como hoy
-        const today = new Date().toISOString().split('T')[0];
+        // const today = new Date().toISOString().split('T')[0];
+        const today = new Date().toLocaleDateString('en-CA');
         saleDate.max = today;
         saleDate.value = today;
 

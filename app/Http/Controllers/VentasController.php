@@ -470,6 +470,27 @@ class VentasController extends Controller
         // DB::transaction(function () use ($rows, $sucursalId, $saleDate) {
         DB::transaction(function () use ($rows, $sucursalId, $saleDate) {
             try {
+
+                $ventasExistentes = Venta::whereDate('Fecha', $saleDate)
+                    ->where('SucursalId', $sucursalId)
+                    ->pluck('ID');
+
+                if ($ventasExistentes->isNotEmpty()) {
+
+                    // 1️⃣ Borrar VentasVendedor primero
+                    DB::table('VentasVendedor')
+                        ->whereIn('VentaId', $ventasExistentes)
+                        ->delete();
+
+                    // 2️⃣ Borrar detalles
+                    VentaProducto::whereIn('VentaId', $ventasExistentes)
+                        ->delete();
+
+                    // 3️⃣ Borrar cabecera
+                    Venta::whereIn('ID', $ventasExistentes)
+                        ->delete();
+                }
+
                 // Estado inicial
                 $estado = 'INICIO';
                 $venta = null;
@@ -651,10 +672,21 @@ class VentasController extends Controller
                     }
                 }
                 
-                if ($venta) {
-                    $totalProductos = VentaProducto::where('VentaId', $venta->ID)->count();
-                    $totalVenta = VentaProducto::where('VentaId', $venta->ID)->sum('MontoDivisa');
+                // if ($venta) {
+                //     $totalProductos = VentaProducto::where('VentaId', $venta->ID)->count();
+                //     $totalVenta = VentaProducto::where('VentaId', $venta->ID)->sum('MontoDivisa');
                     
+                //     return $venta;
+                // } 
+
+                if ($venta) {
+                    $totalVenta = VentaProducto::where('VentaId', $venta->ID)
+                                    ->sum('MontoDivisa');
+
+                    $venta->update([
+                        'Saldo' => $totalVenta
+                    ]);
+
                     return $venta;
                 } else {
                     throw new \Exception("No se pudo crear la venta. Formato de archivo incorrecto.");

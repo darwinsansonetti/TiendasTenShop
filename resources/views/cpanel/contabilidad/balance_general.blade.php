@@ -205,11 +205,25 @@
                                                     </small>
                                                 </td>
                                                 <td class="text-center align-middle">
-                                                    <strong>$ {{ number_format($s['VentasSinTotalizar']['Monto'], 2) }}</strong>
-                                                    <br>
-                                                    <small class="text-muted">
-                                                        <i class="fas fa-receipt"></i> {{ $s['VentasSinTotalizar']['Cantidad'] }} ventas
-                                                    </small>
+                                                    @if(number_format($s['VentasSinTotalizar']['Monto'], 2) > 0)
+                                                        <strong>$ {{ number_format($s['VentasSinTotalizar']['Monto'], 2) }}</strong>
+                                                        <br>
+                                                        <small class="text-muted">
+                                                            <i class="fas fa-receipt"></i> {{ $s['VentasSinTotalizar']['Cantidad'] }} ventas
+                                                        </small>
+                                                    @else
+                                                        <strong>$ {{ number_format($s['VentasSinTotalizar']['Monto'], 2) }}</strong>
+                                                        <br>
+                                                        <small class="text-muted">
+                                                            <i class="fas fa-receipt"></i>
+                                                            @if($s['UltimaVentaTotalizada']['UltimaVenta'])
+                                                                {{ \Carbon\Carbon::parse($s['UltimaVentaTotalizada']['UltimaVenta']->Fecha)->format('d/m/Y H:i') }} — 
+                                                                ${{ number_format($s['UltimaVentaTotalizada']['UltimaVenta']->TotalDivisa, 2) }}
+                                                            @else
+                                                                Sin ventas totalizadas
+                                                            @endif
+                                                        </small>
+                                                    @endif
                                                 </td>
                                                 
                                                 {{-- PASIVOS --}}

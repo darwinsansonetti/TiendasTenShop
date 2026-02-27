@@ -515,6 +515,11 @@ class ContabilidadController extends Controller
                 }
             }
 
+            // 2.3 Ultima Venta Totalizada // No genera para OFICINA PRINCIPAL
+            $UltimaVentaTotalizada = $ventasService->obtenerUltimaVentaDiariaTotalizada(
+                $_sucursal->ID
+            );
+
             // dd($totalVentasSinTotalizar);
             
             // 2.1 Ventas por cobrar // No genera para OFICINA PRINCIPAL
@@ -662,6 +667,9 @@ class ContabilidadController extends Controller
                     'Monto' => round($totalVentasSinTotalizar, 2),
                     //'Detalle' => $ventas['ListaVentasDiarias'] ?? [],
                     'Cantidad' => count($ventasTotalizar['ListaVentasDiarias'] ?? []),
+                ],
+                'UltimaVentaTotalizada' => [
+                    'UltimaVenta' => $UltimaVentaTotalizada,
                 ],
                 'VentasPorCobrar' => [
                     'Monto' => round($totalVentasPorCobrar, 2),
