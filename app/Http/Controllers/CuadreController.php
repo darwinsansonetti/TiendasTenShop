@@ -1080,6 +1080,19 @@ class CuadreController extends Controller
         // Las conversiones SIEMPRE se hacen por registro
         foreach ($cierreDiario as $item) {
 
+            $gastos = VentasHelper::obtenerGastosPorCierre($item->CierreDiarioId);
+
+            if($gastos){
+                foreach($gastos as $gasto){
+                    if($gasto['monto_bsf'] > 0){
+                        $totalEgresosBs     += (float) $gasto['monto_bsf'];
+                    }else{
+                        $totalEgresosDivisa += (float) $gasto['monto_usd'];
+                    }   
+                }
+
+            }
+
             $tasa = (float) $item->DivisaValor;
 
             // Ingresos en Bs
@@ -1094,9 +1107,9 @@ class CuadreController extends Controller
             $totalDivisa += (float) $item->EfectivoDivisas;
             $totalZelle  += (float) $item->ZelleDivisas;
 
-            // Egresos
-            $totalEgresosBs     += (float) $item->EgresoBs;
-            $totalEgresosDivisa += (float) $item->EgresoDivisas;
+            // // Egresos
+            // $totalEgresosBs     += (float) $item->EgresoBs;
+            // $totalEgresosDivisa += (float) $item->EgresoDivisas;
 
             // Sistema
             $totalSistemaBs += (float) $item->VentaSistema;
@@ -1107,7 +1120,7 @@ class CuadreController extends Controller
                 (float) $item->ZelleDivisas
             ) * $tasa;
 
-            $totalEgresoDivisaEnBs += (float) $item->EgresoDivisas * $tasa;
+            $totalEgresoDivisaEnBs += (float) $totalEgresosDivisa * $tasa;
 
             // Conversión correcta (Bs a Divisa)
             $totalIngresoBsEnDivisa += (
@@ -1119,7 +1132,7 @@ class CuadreController extends Controller
                 (float) $item->Biopago
             ) / $tasa;
 
-            $totalEgresoBsEnDivisa += (float) $item->EgresoBs / $tasa;
+            $totalEgresoBsEnDivisa += (float) $totalEgresosBs / $tasa;
         }
 
         $totalIngresoBs = $totalEfectivoBs + $totalPagoMovil + $totalPuntoVenta + $totalTransferencias + $totalBiopago;

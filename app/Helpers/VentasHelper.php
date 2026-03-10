@@ -19,6 +19,7 @@ use App\Models\PagoPuntoDeVenta;
 use App\Models\Proveedor;
 use App\Models\TransaccionCierreDiario;
 use App\Models\Transaccion;
+use App\Models\Factura;
 
 use App\Helpers\ParametrosFiltroFecha;
 use Illuminate\Support\Collection;
@@ -956,6 +957,155 @@ private static function getTipoDescripcion($tipo)
     ];
     return $tipos[$tipo] ?? 'Desconocido';
 }
+
+    public static function buscarListadoAuditoriasConContabilidad(ParametrosFiltroFecha $filtroFecha, int $sucursalId, int $tipoEstatus, int $tipo)
+    {
+        $query = CierreDiario::with([
+                    'pagosPuntoDeVenta',
+                    'sucursal',
+                    'divisaValor'
+                ])
+                ->when($sucursalId > 0, fn($q) => $q->where('SucursalId', $sucursalId))
+                ->whereBetween('Fecha', [$filtroFecha->fechaInicio, $filtroFecha->fechaFin])
+                // ->where('Estatus', $tipoEstatus)
+                ->where('Tipo', $tipo);
+
+        $cierres = $query->get();
+
+        foreach ($cierres as $cierre) {
+
+            // Total punto de venta
+            $totalPDV = $cierre->pagosPuntoDeVenta->sum('Monto');
+            $cierre->PuntoDeVentaBs = number_format($totalPDV, 2, '.', '');
+
+            // Valor de la divisa
+            $divisaValor = $cierre->divisaValor->Valor ?? 1;
+            $cierre->DivisaValor = number_format($divisaValor, 2, '.', '');
+
+            // Conversión a divisa y formateo como string
+            $cierre->EfectivoBsaDivisa      = $divisaValor > 0 ? number_format($cierre->EfectivoBs / $divisaValor, 2, '.', '') : '0.00';
+            $cierre->PagoMovilBsaDivisa     = $divisaValor > 0 ? number_format($cierre->PagoMovilBs / $divisaValor, 2, '.', '') : '0.00';
+            $cierre->TransferenciaBsaDivisa = $divisaValor > 0 ? number_format($cierre->TransferenciaBs / $divisaValor, 2, '.', '') : '0.00';
+            $cierre->PuntoDeVentaBsaDivisa  = $divisaValor > 0 ? number_format($totalPDV / $divisaValor, 2, '.', '') : '0.00';
+
+            $cierre->SucursalNombre = $cierre->sucursal->Nombre ?? 'Sin Sucursal';
+        }
+
+        return $cierres;
+    }
+
+    public static function buscarFacturasActivasEnProceso(ParametrosFiltroFecha $filtroFecha): array
+    {
+        try {
+
+            $facturas = Factura::with(['proveedor', 'detalles'])
+                ->where('Estatus', 1)
+                ->whereIn('Tipo', [0, 1])
+                ->whereDate('FechaCreacion', $filtroFecha->fechaInicio)
+                ->orderBy('FechaCreacion')
+                ->get();
+
+            if ($facturas->isEmpty()) {
+                return [];
+            }
+
+
+            // 2️⃣ Obtener TODOS los abonos en una sola consulta
+            $facturaIds = $facturas->pluck('ID')->toArray();
+
+            $abonos = Transaccion::select(
+                    'transacciones.ID',
+                    'transacciones.Descripcion',
+                    'transacciones.MontoAbonado',
+                    'transacciones.MontoDivisaAbonado',
+                    'transacciones.Fecha',
+                    'transacciones.Tipo',
+                    'tp.FacturaId'
+                )
+                ->join('TransaccionesProveedor as tp', 'transacciones.ID', '=', 'tp.TransaccionId')
+                ->whereIn('tp.FacturaId', $facturaIds)
+                ->get()
+                ->groupBy('FacturaId');
+
+            $resultado = [];
+
+            // 3️⃣ Recorrer cada factura (igual que foreach en .NET)
+            foreach ($facturas as $factura) {
+
+                $totalDivisa = 0;
+                $totalBs = 0;
+
+                // Mercancia
+                if($factura->Tipo == 0){
+                    // 🔹 Calcular TotalDivisa
+                    $totalDivisa = $factura->detalles->sum(function ($detalle) {
+                        return $detalle->CantidadEmitida * $detalle->CostoDivisa;
+                    });
+        
+                    $totalBs = $factura->detalles->sum(function ($detalle) { // ← NUEVO
+                        return $detalle->CantidadEmitida * $detalle->CostoBs; // ¿Tienes CostoBs?
+                    });
+                    
+                    $totalDivisa += $factura->Traspaso ?? 0;
+                }
+
+                // Servicio
+                if($factura->Tipo == 1){
+                    // 🔹 Calcular TotalDivisa
+                    $totalDivisa = $factura->MontoDivisa;
+                    $totalBs = $factura->MontoBs ?? 0;
+                }
+
+                // 🔹 Obtener abonos de esta factura
+                $totalAbonadoDivisa = 0;
+                $totalAbonadoBs = 0;
+                $abonosDTO = [];
+
+                if (isset($abonos[$factura->ID])) {
+                    foreach ($abonos[$factura->ID] as $abono) {
+                        $totalAbonadoDivisa += (float) $abono->MontoDivisaAbonado;
+                        $totalAbonadoBs += (float) $abono->MontoAbonado;
+
+                        $abonosDTO[] = [
+                            'ID' => $abono->ID,
+                            'Descripcion' => $abono->Descripcion,
+                            'MontoDivisaAbonado' => (float) $abono->MontoDivisaAbonado,
+                            'MontoBs' => (float) $abono->MontoAbonado,
+                            'Fecha' => $abono->Fecha,
+                            'Tipo' => $abono->Tipo,
+                        ];
+                    }
+                }
+
+                // 🔹 Saldo
+                $totalSaldoDivisa = $totalDivisa - $totalAbonadoDivisa;
+                $totalSaldoBs = $totalBs - $totalAbonadoBs;
+
+                // 🔹 Agregar al resultado
+                $resultado[] = [
+                    'FacturaId' => $factura->ID,
+                    'Factura' => $factura,
+                    'ProveedorId' => $factura->ProveedorId,
+                    'TotalBs' => round($totalBs, 2),              
+                    'TotalDivisa' => round($totalDivisa, 2),
+                    'TotalAbonadoBs' => round($totalAbonadoBs, 2), 
+                    'TotalAbonadoDivisa' => round($totalAbonadoDivisa, 2),
+                    'TotalSaldoBs' => round($totalSaldoBs, 2),     
+                    'TotalSaldoDivisa' => round($totalSaldoDivisa, 2),
+                    'Abonos' => $abonosDTO
+                ];
+            }
+
+            // dd($resultado);
+
+            return $resultado;
+
+        } catch (\Exception $ex) {
+            Log::error('Error en buscarFacturasActivas: ' . $ex->getMessage());
+            Log::error($ex->getTraceAsString());
+            return [];
+        }
+    }
 
     // public static function BuscarGastosSucursalParaCerrar(int $sucursalId, $filtroFecha = null): array
     // {

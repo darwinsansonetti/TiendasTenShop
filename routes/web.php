@@ -160,6 +160,12 @@ Route::middleware('auth')->group(function() {
 
     // Balance General
     Route::get('/cpanel/contabilidad/general', [ContabilidadController::class, 'balance_general'])->name('cpanel.contabilidad.balance_general');
+
+    // Vista Cerrar Dia
+    Route::get('/cpanel/contabilidad/show/cerrar', [ContabilidadController::class, 'enviar_listado_cerrar_dia'])->name('cpanel.contabilidad.show_cerrar_dia');
+
+    // Probar Cerrar Dia
+    Route::get('/cpanel/contabilidad/probar/cerrar', [ContabilidadController::class, 'cerrar_dia_automaticamente'])->name('cpanel.contabilidad.probar_cerrar_dia');
 });
 
 

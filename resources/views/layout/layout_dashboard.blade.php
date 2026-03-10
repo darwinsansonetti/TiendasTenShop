@@ -610,6 +610,22 @@
                     </a>
                   </li>
                 </ul>
+                <ul class="nav nav-treeview">
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.contabilidad.show_cerrar_dia') }}" class="nav-link {{ session('submenu_active') == 'Cerrar Día' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-circle"></i>
+                      <p>Cerrar Día</p>
+                    </a>
+                  </li>
+                </ul>
+                <ul class="nav nav-treeview">
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.contabilidad.probar_cerrar_dia') }}" class="nav-link {{ session('submenu_active') == 'Probar Cerrar Dia' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-circle"></i>
+                      <p>Probar Cerrar Dia</p>
+                    </a>
+                  </li>
+                </ul>
               </li>
               <li class="nav-item">
                 <a href="#" class="nav-link">

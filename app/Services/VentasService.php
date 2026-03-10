@@ -10,7 +10,11 @@ use App\Models\Recepciones;
 use App\Models\Transferencia;
 use App\Models\Factura;
 use App\Models\Contenedor;
+use App\Models\Prestamo;
 use App\Models\Sucursal;
+use App\Models\AspNetUser;
+use App\Helpers\ParametrosFiltroFecha;
+use App\Helpers\GeneralHelper;
 
 use App\DTO\TransaccionDTO;
 
@@ -233,17 +237,6 @@ class VentasService
             $query->where('Estatus', $estatusTransaccion);
         }
 
-        // // Log para depurar
-        // \Log::info('=== Buscar Transacciones ===', [
-        //     'tipo' => $tipoTransaccion,
-        //     'sucursal' => $sucursalId,
-        //     'proveedor' => $proveedorId,
-        //     'fecha_inicio' => $fechaInicio ? $fechaInicio->format('Y-m-d H:i:s') : null,
-        //     'fecha_fin' => $fechaFin ? $fechaFin->format('Y-m-d H:i:s') : null,
-        //     'sql' => $query->toSql(),
-        //     'bindings' => $query->getBindings(),
-        // ]);
-
         return $query->get();
     }
 
@@ -411,158 +404,6 @@ class VentasService
         return $listaDetalleDTO;
     }
 
-    // public function buscarRecepcionesSucursalParaCerrar(int $sucursalId, $fechaFin = null): array
-    // {
-    //     try {
-    //         // Cargar recepciones con sus relaciones
-    //         $query = Recepciones::with([
-    //             'detalles',
-    //             'transacciones' => function($q) {
-    //                 $q->where('Tipo', 7)
-    //                 ->select('transacciones.ID', 'Descripcion', 'MontoDivisaAbonado', 'Fecha');
-    //             }
-    //         ])
-    //         ->where('SucursalDestinoId', $sucursalId)
-    //         ->whereNotIn('Estatus', [7, 8]); // Excluir Pagada y FinalizadaPagada
-
-    //         // Aplicar filtro de fecha si existe
-    //         if ($fechaFin !== null) {
-    //             if (!$fechaFin instanceof Carbon) {
-    //                 $fechaFin = Carbon::parse($fechaFin);
-    //             }
-    //             $query->where('FechaCreacion', '<=', $fechaFin);
-    //         }
-
-    //         $recepciones = $query->get();
-            
-    //         if ($recepciones->isEmpty()) {
-    //             return [];
-    //         }
-
-    //         $recepcionesDTO = [];
-
-    //         foreach ($recepciones as $recepcion) {
-    //             // Calcular total: CantidadRecibida * CostoDivisa
-    //             $totalDivisa = $recepcion->detalles->sum(function($detalle) {
-    //                 return (float)$detalle->CantidadRecibida * (float)$detalle->CostoDivisa;
-    //             });
-                
-    //             // Obtener abonos y calcular total abonado
-    //             $abonos = $recepcion->transacciones;
-    //             $totalAbonado = $abonos->sum('MontoDivisaAbonado');
-                
-    //             // Mapear abonos a DTO
-    //             $abonosDTO = $abonos->map(function($abono) {
-    //                 return [
-    //                     'Id' => $abono->ID,
-    //                     'Descripcion' => $abono->Descripcion,
-    //                     'MontoDivisaAbonado' => (float)$abono->MontoDivisaAbonado,
-    //                     'Fecha' => $abono->Fecha instanceof Carbon 
-    //                         ? $abono->Fecha->format('Y-m-d H:i:s') 
-    //                         : $abono->Fecha,
-    //                 ];
-    //             })->toArray();
-
-    //             $saldoDivisa = round($totalDivisa - $totalAbonado, 2);
-
-    //             // Solo incluir si hay saldo pendiente (considerando margen de redondeo)
-    //             if ($saldoDivisa > 0.01) {
-    //                 $recepcionesDTO[] = [
-    //                     'RecepcionId' => $recepcion->RecepcionId,
-    //                     'SucursalDestinoId' => $recepcion->SucursalDestinoId,
-    //                     'FechaCreacion' => $recepcion->FechaCreacion instanceof Carbon 
-    //                         ? $recepcion->FechaCreacion->format('Y-m-d H:i:s') 
-    //                         : $recepcion->FechaCreacion,
-    //                     'TotalDivisa' => round($totalDivisa, 2),
-    //                     'SaldoDivisa' => $saldoDivisa,
-    //                     'Abonos' => $abonosDTO,
-    //                     'Estatus' => $recepcion->Estatus,
-    //                 ];
-    //             }
-    //         }
-
-    //         return $recepcionesDTO;
-
-    //     } catch (\Exception $ex) {
-    //         \Log::error('Error en buscarRecepcionesSucursalParaCerrar: ' . $ex->getMessage());
-    //         \Log::error($ex->getTraceAsString());
-    //         return [];
-    //     }
-    // }
-    
-
-    // public function buscarRecepcionesSucursalParaCerrar(int $sucursalId, $fechaFin = null): array
-    // {
-    //     try {
-    //         $fechaLimite = Carbon::parse('2021-12-01')->startOfDay();
-
-    //         // ===== 1. Obtener TOTALES de recepciones (una sola consulta) =====
-    //         $queryRecepciones = Recepciones::where('SucursalDestinoId', $sucursalId);
-            
-    //         if ($fechaFin !== null) {
-    //             $queryRecepciones->where('FechaCreacion', '>=', $fechaLimite);
-    //             $queryRecepciones->where('FechaCreacion', '<=', $fechaFin);
-    //         }
-            
-    //         // Obtener IDs de las recepciones (rápido, solo IDs)
-    //         $recepcionIds = $queryRecepciones->pluck('RecepcionId');
-            
-    //         if ($recepcionIds->isEmpty()) {
-    //             return [];
-    //         }
-
-    //         // ===== 2. Calcular TOTAL DIVISA por recepción (detalles) =====
-    //         $totalesPorRecepcion = DB::table('RecepcionesDetalles')
-    //             ->select('RecepcionId')
-    //             ->selectRaw('SUM(CantidadRecibida * CostoDivisa) as total_divisa')
-    //             ->whereIn('RecepcionId', $recepcionIds)
-    //             ->groupBy('RecepcionId')
-    //             ->get()
-    //             ->keyBy('RecepcionId');
-
-    //         // ===== 3. Calcular TOTAL ABONADO por recepción (transacciones tipo 7) =====
-    //         $abonosPorRecepcion = DB::table('TransaccionesRecepciones as tr')
-    //             ->join('Transacciones as t', 'tr.TransaccionId', '=', 't.ID')
-    //             ->select('tr.RecepcionId')
-    //             ->selectRaw('SUM(t.MontoDivisaAbonado) as total_abonado')
-    //             ->whereIn('tr.RecepcionId', $recepcionIds)
-    //             ->where('t.Tipo', 7)  // ✅ MANTENEMOS ESTO (solo abonos)
-    //             ->groupBy('tr.RecepcionId')
-    //             ->get()
-    //             ->keyBy('RecepcionId');
-
-    //         // ===== 4. Construir resultado (solo recepciones con saldo > 0) =====
-    //         $recepcionesDTO = [];
-            
-    //         foreach ($recepcionIds as $id) {
-    //             $totalDivisa = (float)($totalesPorRecepcion[$id]->total_divisa ?? 0);
-    //             $totalAbonado = (float)($abonosPorRecepcion[$id]->total_abonado ?? 0);
-    //             $saldoDivisa = round($totalDivisa - $totalAbonado, 2);
-                
-    //             if ($saldoDivisa > 0.01) {
-    //                 // Solo si necesitas datos adicionales de la recepción
-    //                 $recepcion = $recepcionIds[$id] ?? null; // O podrías obtener solo si es necesario
-                    
-    //                 $recepcionesDTO[] = [
-    //                     'RecepcionId' => $id,
-    //                     'SucursalDestinoId' => $sucursalId,
-    //                     // 'FechaCreacion' => $recepcion->FechaCreacion, // Si necesitas la fecha
-    //                     'TotalDivisa' => round($totalDivisa, 2),
-    //                     'SaldoDivisa' => $saldoDivisa,
-    //                     // 'Abonos' => $abonosDTO, // Si no necesitas detalle, omítelo
-    //                     // 'Estatus' => $recepcion->Estatus,
-    //                 ];
-    //             }
-    //         }
-
-    //         return $recepcionesDTO;
-
-    //     } catch (\Exception $ex) {
-    //         \Log::error('Error en buscarRecepcionesSucursalParaCerrar: ' . $ex->getMessage());
-    //         return [];
-    //     }
-    // }
-
     public function buscarRecepcionesSucursalParaCerrar(int $sucursalId, $fechaFin = null): array
     {
         try {
@@ -662,67 +503,6 @@ class VentasService
             ];
         }
     }
-
-    // public function buscarTransferenciasParaCerrar($filtroFecha, int $sucursalId): array
-    // {
-    //     try {
-    //         // Validar que $filtroFecha tenga fechaFin
-    //         $fechaFin = null;
-    //         if ($filtroFecha && property_exists($filtroFecha, 'fechaFin')) {
-    //             $fechaFin = $filtroFecha->fechaFin;
-    //         }
-
-    //         // Construir consulta
-    //         $query = Transferencia::where('SucursalOrigenId', $sucursalId)
-    //             ->where('Saldo', '>', 0); // Solo transferencias con saldo pendiente
-
-    //         // Aplicar filtro de fecha si existe
-    //         if ($fechaFin) {
-    //             if (!$fechaFin instanceof Carbon) {
-    //                 $fechaFin = Carbon::parse($fechaFin);
-    //             }
-    //             $query->where('Fecha', '<=', $fechaFin);
-    //         }
-
-    //         // Ejecutar consulta
-    //         $transferencias = $query->get();
-
-    //         // Si no hay resultados, retornar array vacío
-    //         if ($transferencias->isEmpty()) {
-    //             return [];
-    //         }
-
-    //         // Convertir a DTO (array asociativo)
-    //         return $this->generarListadoTransferencias($transferencias);
-
-    //     } catch (\Exception $ex) {
-    //         Log::error('Error en TransferenciaService@buscarTransferenciasParaCerrar: ' . $ex->getMessage());
-    //         Log::error($ex->getTraceAsString());
-    //         return [];
-    //     }
-    // }
-
-    // private function generarListadoTransferencias($transferencias): array
-    // {
-    //     $transferenciasDTO = [];
-
-    //     foreach ($transferencias as $transferencia) {
-    //         $transferenciasDTO[] = [
-    //             'TransferenciaId' => $transferencia->TransferenciaId,
-    //             'SucursalOrigenId' => $transferencia->SucursalOrigenId,
-    //             'SucursalDestinoId' => $transferencia->SucursalDestinoId,
-    //             'Fecha' => $transferencia->Fecha instanceof Carbon 
-    //                 ? $transferencia->Fecha->format('Y-m-d H:i:s') 
-    //                 : $transferencia->Fecha,
-    //             'Monto' => (float)$transferencia->Monto,
-    //             'Saldo' => (float)$transferencia->Saldo,
-    //             'Estatus' => $transferencia->Estatus,
-    //             // Agrega más campos según necesites
-    //         ];
-    //     }
-
-    //     return $transferenciasDTO;
-    // }
 
     public function buscarTransferenciasParaCerrar($filtroFecha, int $sucursalId): array
     {
@@ -894,260 +674,7 @@ class VentasService
             return [];
         }
     }
-
-    // public function buscarFacturasActivas(): array
-    // {
-    //     try {
-    //         Log::info('=== VentasService@buscarFacturasActivas (Optimizado) ===');
-
-    //         // 1. Obtener IDs de facturas con estatus 1, 2 y 4 (una sola consulta)
-    //         $facturas = Factura::with(['proveedor', 'detalles'])
-    //             ->whereIn('Estatus', [1, 2, 4]) // Activas, Adicionales y Otro estatus
-    //             ->orderBy('FechaCreacion')
-    //             ->get();
-
-    //         if ($facturas->isEmpty()) {
-    //             return [];
-    //         }
-
-    //         // 2. Obtener TODOS los abonos de todas las facturas en UNA SOLA CONSULTA
-    //         $facturaIds = $facturas->pluck('ID')->toArray();
-            
-    //         $abonos = Transaccion::select(
-    //                 'transacciones.ID',
-    //                 'transacciones.Descripcion',
-    //                 'transacciones.MontoAbonado',
-    //                 'transacciones.MontoDivisaAbonado',
-    //                 'transacciones.Fecha',
-    //                 'transacciones.Tipo',
-    //                 'tp.FacturaId'  // Obtener el FacturaId de la tabla pivote
-    //             )
-    //             ->join('TransaccionesProveedor as tp', 'transacciones.ID', '=', 'tp.TransaccionId')
-    //             ->whereIn('tp.FacturaId', $facturaIds)
-    //             ->get()
-    //             ->groupBy('FacturaId'); // Agrupar por FacturaId
-
-    //         Log::info('Facturas encontradas: ' . $facturas->count());
-    //         Log::info('Abonos encontrados: ' . $abonos->count());
-
-    //         // 3. Obtener IDs de contenedores y sucursales únicos
-    //         $contenedorIds = $facturas->whereNotNull('ContenedorId')
-    //                                   ->pluck('ContenedorId')
-    //                                   ->unique()
-    //                                   ->toArray();
-            
-    //         $sucursalIds = $facturas->pluck('SucursalId')
-    //                                 ->unique()
-    //                                 ->toArray();
-
-    //         // 4. Cargar todos los contenedores en UNA SOLA CONSULTA
-    //         $contenedores = [];
-    //         if (!empty($contenedorIds)) {
-    //             $contenedores = Contenedor::whereIn('Id', $contenedorIds)
-    //                 ->get()
-    //                 ->keyBy('Id');
-    //         }
-
-    //         // 5. Cargar todas las sucursales en UNA SOLA CONSULTA
-    //         $sucursales = [];
-    //         if (!empty($sucursalIds)) {
-    //             $sucursales = Sucursal::whereIn('ID', $sucursalIds)
-    //                 ->get()
-    //                 ->keyBy('ID');
-    //         }
-
-    //         // 6. Construir el resultado final
-    //         $facturasDTO = [];
-
-    //         foreach ($facturas as $factura) {
-    //             // Calcular totales desde detalles (similar a .NET)
-    //             $totalDivisa = 0;
-    //             $totalBs = 0;
-                
-    //             $detallesDTO = [];
-    //             foreach ($factura->detalles as $detalle) {
-    //                 $totalDivisa += (float)$detalle->CostoDivisa * $detalle->CantidadRecibida;
-    //                 $totalBs += (float)$detalle->CostoBs * $detalle->CantidadRecibida;
-                    
-    //                 $detallesDTO[] = [
-    //                     'ID' => $detalle->ID,
-    //                     'ProductoId' => $detalle->ProductoId,
-    //                     'CantidadEmitida' => $detalle->CantidadEmitida,
-    //                     'CantidadRecibida' => $detalle->CantidadRecibida,
-    //                     'CostoDivisa' => (float)$detalle->CostoDivisa,
-    //                     'CostoBs' => (float)$detalle->CostoBs,
-    //                     'SubtotalDivisa' => (float)$detalle->CostoDivisa * $detalle->CantidadRecibida,
-    //                     'SubtotalBs' => (float)$detalle->CostoBs * $detalle->CantidadRecibida,
-    //                 ];
-    //             }
-
-    //             // Procesar abonos de esta factura
-    //             $abonosDTO = [];
-    //             $totalAbonado = 0;
-                
-    //             if (isset($abonos[$factura->ID])) {
-    //                 foreach ($abonos[$factura->ID] as $abono) {
-    //                     $totalAbonado += (float)$abono->MontoDivisaAbonado;
-    //                     $abonosDTO[] = [
-    //                         'ID' => $abono->ID,
-    //                         'Descripcion' => $abono->Descripcion,
-    //                         'MontoAbonado' => (float)$abono->MontoAbonado,
-    //                         'MontoDivisaAbonado' => (float)$abono->MontoDivisaAbonado,
-    //                         'Fecha' => $abono->Fecha,
-    //                         'Tipo' => $abono->Tipo,
-    //                     ];
-    //                 }
-    //             }
-
-    //             // Construir DTO de factura
-    //             $facturaDTO = [
-    //                 'ID' => $factura->ID,
-    //                 'ProveedorId' => $factura->ProveedorId,
-    //                 'SucursalId' => $factura->SucursalId,
-    //                 'ContenedorId' => $factura->ContenedorId,
-    //                 'Numero' => $factura->Numero,
-    //                 'Serie' => $factura->Serie,
-    //                 'FechaCreacion' => $factura->FechaCreacion,
-    //                 'FechaDespacho' => $factura->FechaDespacho,
-    //                 'FechaCierre' => $factura->FechaCierre,
-    //                 'Estatus' => $factura->Estatus,
-    //                 'Tipo' => $factura->Tipo,
-    //                 'MontoDivisa' => (float)$factura->MontoDivisa ?: $totalDivisa,
-    //                 'MontoBs' => (float)$factura->MontoBs ?: $totalBs,
-    //                 'SaldoDivisa' => round(((float)$factura->MontoDivisa ?: $totalDivisa) - $totalAbonado, 2),
-    //                 'Descripcion' => $factura->Descripcion,
-    //                 'TasaDeCambio' => (float)$factura->TasaDeCambio,
-    //                 'MonedaPrincipal' => $factura->MonedaPrincipal,
-    //                 'Detalles' => $detallesDTO,
-    //                 'Pagos' => $abonosDTO,
-    //                 'Proveedor' => null,
-    //                 'Sucursal' => null,
-    //                 'Contenedor' => null,
-    //             ];
-
-    //             // Agregar proveedor si existe
-    //             if ($factura->proveedor) {
-    //                 $facturaDTO['Proveedor'] = [
-    //                     'ID' => $factura->proveedor->ID,
-    //                     'Nombre' => $factura->proveedor->Nombre,
-    //                     'Rif' => $factura->proveedor->Rif,
-    //                     'Tipo' => $factura->proveedor->Tipo,
-    //                 ];
-    //             }
-
-    //             // Agregar sucursal si existe (de nuestra colección precargada)
-    //             if (isset($sucursales[$factura->SucursalId])) {
-    //                 $suc = $sucursales[$factura->SucursalId];
-    //                 $facturaDTO['Sucursal'] = [
-    //                     'ID' => $suc->ID,
-    //                     'Nombre' => $suc->Nombre,
-    //                     'Tipo' => $suc->Tipo,
-    //                 ];
-    //             }
-
-    //             // Si el proveedor es tipo 0 y tiene contenedor, agregar contenedor
-    //             if ($factura->proveedor && ($factura->proveedor->Tipo ?? 0) == 0 && $factura->ContenedorId) {
-    //                 if (isset($contenedores[$factura->ContenedorId])) {
-    //                     $cont = $contenedores[$factura->ContenedorId];
-    //                     $facturaDTO['Contenedor'] = [
-    //                         'Id' => $cont->Id,
-    //                         'Nombre' => $cont->Nombre,
-    //                         'FechaCreacion' => $cont->FechaCreacion,
-    //                         'FechaDespacho' => $cont->FechaDespacho,
-    //                         'FechaRecepcion' => $cont->FechaRecepcion,
-    //                         'Flete' => (float)$cont->Flete,
-    //                         'Aduana' => (float)$cont->Aduana,
-    //                         'NumeroOperacion' => $cont->NumeroOperacion,
-    //                         'Origen' => $cont->Origen,
-    //                         'Estatus' => $cont->Estatus,
-    //                     ];
-    //                 }
-    //             }
-
-    //             $facturasDTO[] = $facturaDTO;
-    //         }
-
-    //         Log::info('Facturas DTO generadas: ' . count($facturasDTO));
-    //         return $facturasDTO;
-
-    //     } catch (\Exception $ex) {
-    //         Log::error('Error en buscarFacturasActivas: ' . $ex->getMessage());
-    //         Log::error($ex->getTraceAsString());
-    //         return [];
-    //     }
-    // }
-
-    // public function buscarFacturasActivas(): array
-    // {
-    //     try {
-    //         // Log::info('=== VentasService@buscarFacturasActivas (Optimizado) ===');
-
-    //         $facturaId = 1195;
-    //         // 1. Obtener IDs de facturas con estatus 1, 2 y 4 (una sola consulta)
-    //         $factura = Factura::with(['proveedor', 'detalles'])
-    //             ->where('Id', $facturaId)
-    //             ->firstOrFail();
-
-    //         // 2. Calcular TotalDivisa sumando CantidadRecibida * CostoDivisa de los detalles
-    //         $totalDivisa = $factura->detalles->sum(function($detalle) {
-    //             // Multiplicamos CantidadRecibida por CostoDivisa para cada detalle
-    //             return $detalle->CantidadEmitida * $detalle->CostoDivisa;
-    //         });
-
-    //         $totalDivisa += $factura->Traspaso;
-
-    //         // 2. Obtener TODOS los abonos de todas las facturas en UNA SOLA CONSULTA
-    //         $abonos = Transaccion::select(
-    //                 'transacciones.ID',
-    //                 'transacciones.Descripcion',
-    //                 'transacciones.MontoAbonado',
-    //                 'transacciones.MontoDivisaAbonado',
-    //                 'transacciones.Fecha',
-    //                 'transacciones.Tipo',
-    //                 'tp.FacturaId'  // Obtener el FacturaId de la tabla pivote
-    //             )
-    //             ->join('TransaccionesProveedor as tp', 'transacciones.ID', '=', 'tp.TransaccionId')
-    //             ->where('tp.FacturaId', $facturaId)
-    //             ->get()
-    //             ->groupBy('FacturaId'); // Agrupar por FacturaId
-
-    //         Log::info('Abonos encontrados: ' . $abonos->count());
-
-    //         $abonosDTO = [];
-    //         $totalAbonado = 0;
-
-    //         foreach ($abonos[$factura->ID] as $abono) {
-    //             $totalAbonado += (float)$abono->MontoDivisaAbonado;
-    //             $abonosDTO[] = [
-    //                 'ID' => $abono->ID,
-    //                 'Descripcion' => $abono->Descripcion,
-    //                 'MontoAbonado' => (float)$abono->MontoAbonado,
-    //                 'MontoDivisaAbonado' => (float)$abono->MontoDivisaAbonado,
-    //                 'Fecha' => $abono->Fecha,
-    //                 'Tipo' => $abono->Tipo,
-    //             ];
-    //         }
-
-    //         $totalAbonadoDivisa = $totalAbonado ?? 0;
-    //         $totalSaldoDivisa = $totalDivisa - $totalAbonadoDivisa;
-
-    //         \Log::info("Factura ID: {$facturaId}");
-    //         \Log::info("TotalDivisa calculado: {$totalDivisa}");
-    //         \Log::info("TotalAbonadoDivisa: {$totalAbonadoDivisa}");
-    //         \Log::info("TotalSaldoDivisa: {$totalSaldoDivisa}");
-
-    //         dd($factura);
-
-    //     } catch (\Exception $ex) {
-    //         Log::error('Error en buscarFacturasActivas: ' . $ex->getMessage());
-    //         Log::error($ex->getTraceAsString());
-    //         return [];
-    //     }
-    // }
-
-    /**
-     * Versión con filtros adicionales (si los necesitas)
-     */
+    
     public function buscarFacturasActivasConFiltros(?int $tipo = null, ?int $proveedorId = null): array
     {
         try {
@@ -1308,5 +835,271 @@ class VentasService
         }
 
         return $facturaDTO;
+    }
+    
+    public function obtenerVentasDiariasParaCerrarSinTotalizar($sucursalId, $incluirGastos)
+    {
+        $ventas = VentaDiariaTotalizada::with('sucursal')
+            ->when($sucursalId, fn($q) => $q->where('SucursalId', $sucursalId))
+            ->where('Saldo', '>', 0)
+            ->where(function ($q) {
+                $q->whereNull('Estatus')
+                ->orWhere('Estatus', '!=', 4);
+            })
+            ->orderBy('Fecha')
+            ->get();
+
+        $detalle = $this->obtenerDetallesPorVentasBalance($sucursalId, $ventas);
+
+        return [
+            'ListaVentasDiarias' => $detalle
+        ];
+    }
+    
+
+    public function BuscarPrestamosActivos($filtroFecha) 
+    {        
+        // Buscar préstamos nuevos (estatus 1)
+        $prestamosNuevos = $this->buscarListadoPrestamos(null, $filtroFecha, 1);
+        
+        // Buscar préstamos en proceso (estatus 2)
+        $prestamosEnProceso = $this->buscarListadoPrestamos(null, $filtroFecha, 2);
+        
+        // Combinar listas
+        $todosPrestamos = collect();
+        
+        if ($prestamosNuevos->isNotEmpty()) {
+            $todosPrestamos = $todosPrestamos->concat($prestamosNuevos);
+        }
+        
+        if ($prestamosEnProceso->isNotEmpty()) {
+            $todosPrestamos = $todosPrestamos->concat($prestamosEnProceso);
+        }
+        
+        // Para cada préstamo, cargar sus pagos (cuando implementes esa función)
+        if ($todosPrestamos->isNotEmpty()) {
+            foreach ($todosPrestamos as $prestamo) {
+                $prestamo->listaPagos = $this->buscarPagosPrestamo($prestamo->prestamoId);
+            }
+        }
+        
+        return $todosPrestamos;
+    }
+
+    public function buscarListadoPrestamos($usuarioId = null, $filtroFecha = null, $estatus = null)
+    {
+        $query = Prestamo::with(['detalles']);
+        
+        // Filtro por estatus
+        if (!is_null($estatus)) {
+            $query->where('Estatus', $estatus);
+        }
+        
+        // Filtro por usuario
+        if (!is_null($usuarioId) && !empty($usuarioId)) {
+            $query->where('UsuarioId', $usuarioId);
+        }
+        
+        // Filtro por fechas (como en .NET: Fecha >= inicio AND Fecha <= fin)
+        if ($filtroFecha && isset($filtroFecha->fechaInicio) && isset($filtroFecha->fechaFin)) {
+            $fechaInicio = $filtroFecha->fechaInicio->startOfDay();
+            $fechaFin = $filtroFecha->fechaFin->startOfDay();
+            
+            $query->where('Fecha', '>=', $fechaInicio)
+                  ->where('Fecha', '<=', $fechaFin);
+        }
+        
+        // Ejecutar consulta (AsNoTracking equivalente)
+        $prestamosModel = $query->get();
+        
+        // Construir DTOs
+        return $this->construirListaPrestamos($prestamosModel);
+    }
+
+    protected function construirListaPrestamos($listaPrestamoModel)
+    {
+        $listaPrestamoDTO = collect();
+        
+        if ($listaPrestamoModel->isEmpty()) {
+            return $listaPrestamoDTO;
+        }
+
+        // Obtener tasa del día (una sola vez para todos)
+        $tasa = GeneralHelper::obtenerTasaCambioDiaria(now());
+        $tasaDia = $tasa['DivisaValor']['Valor'];
+        
+        foreach ($listaPrestamoModel as $item) {
+            // Mapear modelo a DTO
+            $prestamoDTO = $this->mapearPrestamoADTO($item);
+            
+            // Buscar usuario
+            if ($item->UsuarioId) {
+
+                $usuario = AspNetUser::find($item->UsuarioId);
+                $prestamoDTO->usuario = $usuario ? $usuario->toArray() : null;
+            }
+            
+            // Asignar tasa de cambio del día
+            if ($tasaDia) {
+                $prestamoDTO->divisaValor = $tasaDia ?? 0;
+                // Calcular monto en Bs si es necesario
+                $prestamoDTO->montoBs = $prestamoDTO->montoDivisa * $prestamoDTO->divisaValor;
+            }
+            
+            $listaPrestamoDTO->push($prestamoDTO);
+        }
+        
+        return $listaPrestamoDTO;
+    }
+
+    protected function mapearPrestamoADTO($model)
+    {
+        $dto = new \stdClass();
+        
+        // Propiedades básicas
+        $dto->prestamoId = $model->PrestamoId ?? $model->Id; // Ajusta según tu campo real
+        $dto->usuarioId = $model->UsuarioId;
+        $dto->fecha = $model->Fecha;
+        $dto->fechaCierre = $model->FechaCierre ?? null;
+        $dto->observacion = $model->Observacion ?? $model->Descripcion ?? '';
+        
+        // Montos
+        $dto->montoDivisa = (float)($model->MontoDivisa ?? 0);
+        $dto->montoBs = (float)($model->MontoBs ?? 0);
+        
+        // Enums y IDs
+        $dto->estatus = (int)($model->Estatus ?? 0);
+        $dto->tipo = (int)($model->Tipo ?? 0);
+        $dto->sucursalId = (int)($model->SucursalId ?? 0);
+        $dto->tasaCambioId = (int)($model->TasaCambioId ?? 0);
+        
+        // Relaciones
+        $dto->prestamosDetalles = $model->prestamosDetalles ?? collect(); // Relación
+        $dto->listaPagos = collect(); // Se llenará después con buscarPagosPrestamo
+        $dto->pago = null; // TransaccionDTO individual
+        $dto->ultimoAbono = null; // Último abono
+        
+        // Datos adicionales que se llenarán después
+        $dto->usuario = null; // UsuarioRegistradoIdentity
+        $dto->divisaValor = null; // DivisaValorDTO
+        $dto->productoSeleccionado = null; // ProductoDTO
+        
+        return $dto;
+    }
+
+    public function buscarPagosPrestamo($prestamoId)
+    {
+        // En .NET: from abonos in _context.Transacciones
+        //         where abonos.TransaccionesUsuario.Any(pro => pro.PrestamoId == _prestamoId)
+        //         orderby abonos.Fecha descending
+        //         select abonos
+        
+        $pagos = DB::table('Transacciones as t')
+            ->join('TransaccionesUsuario as tu', 't.ID', '=', 'tu.TransaccionId')
+            ->where('tu.PrestamoId', $prestamoId)
+            ->orderBy('t.Fecha', 'desc')
+            ->select('t.*')
+            ->get();
+        
+        // Convertir a DTOs (similar al _mapper.Map<TransaccionDTO>(item))
+        $pagosDTO = collect();
+        
+        foreach ($pagos as $pago) {
+            $pagoDTO = $this->mapearTransaccionADTO($pago);
+            $pagosDTO->push($pagoDTO);
+        }
+        
+        return $pagosDTO;
+    }
+
+    protected function mapearTransaccionADTO($transaccion)
+    {
+        $dto = new TransaccionDTO();
+        
+        // Propiedades básicas
+        $dto->Id = $transaccion->TransaccionId ?? $transaccion->Id ?? 0;
+        $dto->Descripcion = $transaccion->Descripcion ?? '';
+        $dto->MontoAbonado = (float)($transaccion->MontoAbonado ?? 0);
+        $dto->MontoDivisaAbonado = (float)($transaccion->MontoDivisaAbonado ?? $transaccion->MontoDivisa ?? 0);
+        $dto->NumeroOperacion = $transaccion->NumeroOperacion ?? '';
+        $dto->Nombre = $transaccion->Nombre ?? '';
+        $dto->Cedula = $transaccion->Cedula ?? '';
+        
+        // IDs y relaciones
+        $dto->CategoriaId = $transaccion->CategoriaId ?? null;
+        $dto->SucursalId = $transaccion->SucursalId ?? null;
+        $dto->SucursalOrigenId = $transaccion->SucursalOrigenId ?? null;
+        $dto->DivisaId = $transaccion->DivisaId ?? 0;
+        $dto->TasaDeCambio = (float)($transaccion->TasaDeCambio ?? 0);
+        $dto->PrestamoId = $transaccion->PrestamoId ?? 0;
+        $dto->FacturaId = $transaccion->FacturaId ?? 0;
+        
+        // Enums (valores numéricos)
+        $dto->Tipo = (int)($transaccion->Tipo ?? 0);
+        $dto->FormaDePago = (int)($transaccion->FormaDePago ?? 0);
+        $dto->Estatus = (int)($transaccion->Estatus ?? 0);
+        
+        // Texto
+        $dto->UrlComprobante = $transaccion->UrlComprobante ?? '';
+        $dto->Observacion = $transaccion->Observacion ?? '';
+        
+        // Fecha
+        $dto->Fecha = Carbon::parse($transaccion->Fecha ?? now());
+        
+        // Arrays vacíos
+        $dto->AbonoVentas = [];
+        
+        // Relaciones (se pueden cargar después si es necesario)
+        $dto->Categoria = null;
+        $dto->Sucursal = null;
+        $dto->SucursalOrigen = null;
+        $dto->Prestamo = null;
+        $dto->Factura = null;
+        $dto->proveedor = null;
+        
+        return $dto;
+    }
+
+    public function buscarPagosPrestamoPorFecha($filtroFecha) 
+    {        
+        // Query base
+        $query = DB::table('Transacciones as t')
+            ->where('t.Tipo', 4); // EnumTipoTransaccion.AbonoPrestamo = 4
+        
+        // Aplicar filtro de fecha si existe
+        if ($filtroFecha) {
+            // En .NET: abonos.Fecha == _filtroFecha.FechaInicio OR abonos.Fecha == _filtroFecha.FechaFin
+            $fechaInicio = $filtroFecha->fechaInicio ?? null;
+            $fechaFin = $filtroFecha->fechaFin ?? null;
+            
+            if ($fechaInicio && $fechaFin) {
+                // Si fechaInicio y fechaFin son iguales (mismo día)
+                if ($fechaInicio->format('Y-m-d') == $fechaFin->format('Y-m-d')) {
+                    // Buscar transacciones de ese día específico
+                    $query->whereDate('t.Fecha', '=', $fechaInicio->format('Y-m-d'));
+                } else {
+                    // Si son diferentes, buscar las que coincidan con cualquiera de las dos fechas
+                    $query->where(function($q) use ($fechaInicio, $fechaFin) {
+                        $q->whereDate('t.Fecha', '=', $fechaInicio->format('Y-m-d'))
+                        ->orWhereDate('t.Fecha', '=', $fechaFin->format('Y-m-d'));
+                    });
+                }
+            }
+        }
+        
+        // Order by fecha descending (como en .NET)
+        $query->orderBy('t.Fecha', 'desc');
+        
+        // Ejecutar consulta
+        $pagos = $query->get();
+        
+        // Convertir a DTOs
+        $pagosDTO = [];
+        
+        foreach ($pagos as $pago) {
+            $pagosDTO[] = $this->mapearTransaccionADTO($pago);
+        }
+        
+        return $pagosDTO;
     }
 }

@@ -343,14 +343,7 @@ class VentasController extends Controller
         DB::beginTransaction(); // Comienza la transacción
 
         try {
-            // Validación de archivos
-            // $request->validate([
-            //     'daily_sales_file' => 'required|file|mimes:xlsx,xls,csv,Xlsx,Xls',
-            //     'sales_by_seller_file' => 'required|file|mimes:xlsx,xls,csv,Xlsx,Xls',
-            //     'sale_date' => 'required|date',
-            //     'exchange_rate' => 'required|numeric|min:0.000001',
-            //     'sucursal_id' => 'required|integer',
-            // ]);
+            
             $request->validate([
                 'daily_sales_file' => [
                     'required',
@@ -651,8 +644,8 @@ class VentasController extends Controller
                                             'VentaId' => $venta->ID,
                                             'ProductoId' => $producto->ID,
                                             'Cantidad' => $cantidad,
-                                            'PrecioVenta' => $precioUnitario,
-                                            'MontoDivisa' => $productoSucursal->PvpDivisa,
+                                            'PrecioVenta' => $cantidad * $precioUnitario,
+                                            'MontoDivisa' => $cantidad * $productoSucursal->PvpDivisa,
                                             'TicketId' => 0,
                                         ]);
                                         
