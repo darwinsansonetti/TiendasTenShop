@@ -946,17 +946,61 @@ class VentasHelper
         return $transaccionesDTO; // 👈 ESTO FALTABA
     }
 
-// Agrega esta función auxiliar en la misma clase
-private static function getTipoDescripcion($tipo)
-{
-    $tipos = [
-        0 => 'Pago Mercancía',
-        2 => 'Gasto Sucursal',
-        3 => 'Gasto Caja Chica',
-        5 => 'Pago Servicio',
-    ];
-    return $tipos[$tipo] ?? 'Desconocido';
-}
+    // Agrega esta función auxiliar en la misma clase
+    private static function getTipoDescripcion($tipo)
+    {
+        $tipos = [
+            0 => 'Pago Mercancía',
+            2 => 'Gasto Sucursal',
+            3 => 'Gasto Caja Chica',
+            5 => 'Pago Servicio',
+        ];
+        return $tipos[$tipo] ?? 'Desconocido';
+    }
+
+    public static function buscarListadoAuditoriasConContabilidadNuevo(int $sucursalId, ParametrosFiltroFecha $filtroFecha, int $tipoEstatus, int $tipoCierre)
+    {
+        $query = CierreDiario::with([
+                'pagosPuntoDeVenta',
+                'sucursal',
+                'divisaValor'
+            ])
+            ->when($sucursalId > 0, fn($q) => $q->where('SucursalId', $sucursalId))
+            ->whereBetween('Fecha', [$filtroFecha->fechaInicio, $filtroFecha->fechaFin])
+            ->where('Tipo', $tipoCierre)  // Tipo siempre se filtra (1)
+            ->when($tipoEstatus != -100, fn($q) => $q->where('Estatus', $tipoEstatus));
+
+        $cierres = $query->get();
+
+        foreach ($cierres as $cierre) {
+
+            // Total punto de venta
+            $totalPDV = $cierre->pagosPuntoDeVenta->sum('Monto');
+            $cierre->PuntoDeVentaBs = number_format($totalPDV, 2, '.', '');
+
+            // Valor de la divisa
+            $divisaValor = $cierre->divisaValor->Valor ?? 1;
+            $cierre->DivisaValor = number_format($divisaValor, 2, '.', '');
+
+            // Conversión a divisa y formateo como string
+            $cierre->EfectivoBsaDivisa      = $divisaValor > 0 ? number_format($cierre->EfectivoBs / $divisaValor, 2, '.', '') : '0.00';
+            $cierre->PagoMovilBsaDivisa     = $divisaValor > 0 ? number_format($cierre->PagoMovilBs / $divisaValor, 2, '.', '') : '0.00';
+            $cierre->TransferenciaBsaDivisa = $divisaValor > 0 ? number_format($cierre->TransferenciaBs / $divisaValor, 2, '.', '') : '0.00';
+            $cierre->PuntoDeVentaBsaDivisa  = $divisaValor > 0 ? number_format($totalPDV / $divisaValor, 2, '.', '') : '0.00';
+
+            $cierre->SucursalNombre = $cierre->sucursal->Nombre ?? 'Sin Sucursal';
+
+            // ✅ Agregar TotalDivisa
+            $cierre->TotalDivisa = (
+                (float)($cierre->EfectivoDivisas ?? 0) +
+                (float)($cierre->TransferenciaDivisas ?? 0) +
+                (float)($cierre->ZelleDivisas ?? 0) +
+                (float)($cierre->PuntoDeVentaDivisas ?? 0)
+            );
+        }
+
+        return $cierres;
+    }
 
     public static function buscarListadoAuditoriasConContabilidad(ParametrosFiltroFecha $filtroFecha, int $sucursalId, int $tipoEstatus, int $tipo)
     {

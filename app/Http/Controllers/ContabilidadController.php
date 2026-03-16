@@ -24,6 +24,7 @@ use App\Models\VentaProducto;
 use App\Models\VentaVendedor;
 use App\Models\Producto;
 use App\Models\ProductoSucursal;
+use App\Models\Sucursal;
 use App\Models\Usuario;
 use App\DTOs\CierreDiarioPeriodoDTO;
 use App\Models\CierreDiario;
@@ -450,193 +451,484 @@ class ContabilidadController extends Controller
         ]);
     }
 
-    public function cerrar_dia_automaticamente(Request $request)
+    public function cerrar_dia_automaticamente(Request $request = null)
     {
+        
+        $ventasService = new VentasService();
+
         $now = Carbon::now('America/Caracas');
-        $ayer = $now->copy()->subDay(2); // Restar 1 día
+        // $ayer = $now->copy()->subDay(); // Restar 1 día
+
+        $ayer = Carbon::parse('2026-03-12', 'America/Caracas');
+        
+        \Log::info("=== INICIO CIERRE AUTOMÁTICO ===");
+        \Log::info("Fecha actual: " . $now->toDateTimeString());
+        \Log::info("Procesando fecha: " . $ayer->format('Y-m-d'));
         
         try {
             // Se busca si hay Cierre del dia anterior
             $cierreExistente = CierreOfp::whereDate('Fecha', $ayer)->first();
+            
+            if ($cierreExistente) {
+                \Log::warning("El día {$ayer->format('Y-m-d')} ya tiene un cierre registrado", [
+                    'cierre_id' => $cierreExistente->CierreOfpId
+                ]);
+                return;
+            }
 
-            // No se ha realizado el cierre de ayer.
-            if (!$cierreExistente) {
+            \Log::info("No hay cierre previo, continuando...");
+
+            // Ok..
+
+            $_oficinaPrincipalDTO = new EDCOficinaPrincipalDTO();
+            $_oficinaPrincipalDTO->Fecha = $ayer;
+
+            // Obtenemos el modelo de la Sucursal tipo Oficina
+            $sucursal = Sucursal::where('Tipo', 0)->first();
+
+            if($sucursal){
+                $_oficinaPrincipalDTO->Sucursal = $sucursal;
+                $_oficinaPrincipalDTO->SucursalId = $sucursal->ID;
+            }
+
+            // Ventas Diarias Totalizadas en la Fecha
+            $user = Auth::user()->load('sucursal');
+            $sucursalActivaId = 0;
+
+            // Si el Usuario es de una Tienda
+            if($user && $user->sucursal->Tipo == 1){
+                $sucursalActivaId = $user->SucursalId;
+            }else{
+                $sucursalActivaId = 0;
+            }
+
+            // $fechaInicio = $ayer;
+            // $fechaFin = $ayer;
+
+            $fechaInicio = $ayer->copy()->startOfDay();  // 2026-03-09 00:00:00
+            $fechaFin = $ayer->copy()->endOfDay();       // 2026-03-09 23:59:59
+
+            $filtroFecha = new ParametrosFiltroFecha(
+                null, null, null, false,
+                $fechaInicio,
+                $fechaFin
+            );
+
+            $filtroFecha = new ParametrosFiltroFecha(
+                null,
+                null,
+                null,
+                false,
+                $fechaInicio,
+                $fechaFin
+            );
+
+            $_oficinaPrincipalDTO->VentasDiariaPeriodo = $ventasService->obtenerVentasDiariasParaCerrarSinTotalizarEnPeriodo(
+                $sucursalActivaId, false, $filtroFecha
+            );
+
+            if(!$_oficinaPrincipalDTO->VentasDiariaPeriodo){
+                return;
+            }
+
+            //cierres diarios
+            $tipoEstatus = -100;
+            $tipoCierre = 1;
+
+            $_oficinaPrincipalDTO->CierreDiario = VentasHelper::buscarListadoAuditoriasConContabilidadNuevo($sucursalActivaId, $filtroFecha, $tipoEstatus, $tipoCierre);
+
+            if(!$_oficinaPrincipalDTO->CierreDiario){
+                return;
+            }
+
+            // Facturas de Mercancia y Servicios
+            $listadoFacturas = [];
+            $totalFacturas = 0;
+
+            $listadoFacturas = VentasHelper::buscarFacturasActivasEnProceso($filtroFecha);
+
+            // Separar facturas por tipo de saldo
+            $facturasMercancia = 0;
+            $totalFacturasMercanciaBs = 0;        
+            $totalFacturasMercanciaDivisa = 0;    
+            $totalFacturasMercanciaPagadoBs = 0;  
+            $totalFacturasMercanciaPagadoDivisa = 0; 
+            $totalFacturasMercanciaPorPagarBs = 0;   
+            $totalFacturasMercanciaPorPagarDivisa = 0; 
+
+            $facturasServicios = 0;
+            $totalFacturasServiciosBs = 0;         
+            $totalFacturasServiciosDivisa = 0;     
+            $totalFacturasServiciosPagadoBs = 0;   
+            $totalFacturasServiciosPagadoDivisa = 0; 
+            $totalFacturasServiciosPorPagarBs = 0;   
+            $totalFacturasServiciosPorPagarDivisa = 0; 
+
+            foreach ($listadoFacturas as $factura) {
+                // La factura es tipo MERCANCIA
+                if($factura['Factura']['Tipo'] == 0){
+                    $totalFacturasMercanciaBs += $factura['TotalBs'] ?? 0;
+                    $totalFacturasMercanciaDivisa += $factura['TotalDivisa'] ?? 0;
+                    $totalFacturasMercanciaPagadoBs += $factura['TotalAbonadoBs'] ?? 0;
+                    $totalFacturasMercanciaPagadoDivisa += $factura['TotalAbonadoDivisa'] ?? 0;
+                    $totalFacturasMercanciaPorPagarBs += $factura['TotalSaldoBs'] ?? 0;      // ← NUEVO
+                    $totalFacturasMercanciaPorPagarDivisa += $factura['TotalSaldoDivisa'] ?? 0;
+                    $facturasMercancia++;
+                }
+
+                // La factura es tipo SERVICIO
+                if($factura['Factura']['Tipo'] == 1){
+                    $totalFacturasServiciosBs += $factura['TotalBs'] ?? 0;
+                    $totalFacturasServiciosDivisa += $factura['TotalDivisa'] ?? 0;
+                    $totalFacturasServiciosPagadoBs += $factura['TotalAbonadoBs'] ?? 0;
+                    $totalFacturasServiciosPagadoDivisa += $factura['TotalAbonadoDivisa'] ?? 0;
+                    $totalFacturasServiciosPorPagarBs += $factura['TotalSaldoBs'] ?? 0;      // ← NUEVO
+                    $totalFacturasServiciosPorPagarDivisa += $factura['TotalSaldoDivisa'] ?? 0;
+                    $facturasServicios++;
+                }
+            }
+
+            // Detalle de facturas (AHORA CON BS Y DIVISA)
+            $detalleFacturas = [
+                'cantidad_facturas_mercancia' => $facturasMercancia,
+                'facturas_mercancia_bs' => round($totalFacturasMercanciaBs, 2),           // ← NUEVO
+                'facturas_mercancia_divisa' => round($totalFacturasMercanciaDivisa, 2),   // ← NUEVO
+                'abonado_mercancia_bs' => round($totalFacturasMercanciaPagadoBs, 2),      // ← NUEVO
+                'abonado_mercancia_divisa' => round($totalFacturasMercanciaPagadoDivisa, 2), // ← NUEVO
+                'pendiente_mercancia_bs' => round($totalFacturasMercanciaPorPagarBs, 2),  // ← NUEVO
+                'pendiente_mercancia_divisa' => round($totalFacturasMercanciaPorPagarDivisa, 2), // ← NUEVO
+                'cantidad_facturas_servicios' => $facturasServicios,
+                'facturas_servicios_bs' => round($totalFacturasServiciosBs, 2),           // ← NUEVO
+                'facturas_servicios_divisa' => round($totalFacturasServiciosDivisa, 2),   // ← NUEVO
+                'abonado_servicios_bs' => round($totalFacturasServiciosPagadoBs, 2),      // ← NUEVO
+                'abonado_servicios_divisa' => round($totalFacturasServiciosPagadoDivisa, 2), // ← NUEVO
+                'pendiente_servicios_bs' => round($totalFacturasServiciosPorPagarBs, 2),  // ← NUEVO
+                'pendiente_servicios_divisa' => round($totalFacturasServiciosPorPagarDivisa, 2), // ← NUEVO
+            ];
+
+            $facturasDetalle = [
+                'MontoBs' => round($totalFacturasMercanciaBs + $totalFacturasServiciosBs, 2),        // ← NUEVO
+                'MontoDivisa' => round($totalFacturasMercanciaDivisa + $totalFacturasServiciosDivisa, 2), // ← NUEVO
+                'Detalle' => $detalleFacturas,
+                'Cantidad' => count($listadoFacturas),
+                'Listado' => $listadoFacturas
+            ];
+
+            // Factura tipo Mercancia
+            $_oficinaPrincipalDTO->FacturasMercancia = array_filter($listadoFacturas, function($factura) {
+                return $factura['Factura']['Tipo'] == 0;
+            });
+
+            // Factura tipo Servicio
+            $_oficinaPrincipalDTO->FacturasServicio = array_filter($listadoFacturas, function($factura) {
+                return $factura['Factura']['Tipo'] == 1;
+            });
+
+            // $ventasArray[$fechaKey]['resumen_facturas'] = [
+            //     'mercancia' => [
+            //         'cantidad' => count($facturasMercanciaArray),
+            //         'total_bs' => round($totalFacturasMercanciaBs, 2),              // ← NUEVO
+            //         'total_divisa' => round($totalFacturasMercanciaDivisa, 2),      // ← NUEVO
+            //         'pagado_bs' => round($totalFacturasMercanciaPagadoBs, 2),       // ← NUEVO
+            //         'pagado_divisa' => round($totalFacturasMercanciaPagadoDivisa, 2), // ← NUEVO
+            //         'pendiente_bs' => round($totalFacturasMercanciaPorPagarBs, 2),  // ← NUEVO
+            //         'pendiente_divisa' => round($totalFacturasMercanciaPorPagarDivisa, 2), // ← NUEVO
+            //         'facturas' => array_values($facturasMercanciaArray)
+            //     ],
+            //     'servicios' => [
+            //         'cantidad' => count($facturasServiciosArray),
+            //         'total_bs' => round($totalFacturasServiciosBs, 2),              // ← NUEVO
+            //         'total_divisa' => round($totalFacturasServiciosDivisa, 2),      // ← NUEVO
+            //         'pagado_bs' => round($totalFacturasServiciosPagadoBs, 2),       // ← NUEVO
+            //         'pagado_divisa' => round($totalFacturasServiciosPagadoDivisa, 2), // ← NUEVO
+            //         'pendiente_bs' => round($totalFacturasServiciosPorPagarBs, 2),  // ← NUEVO
+            //         'pendiente_divisa' => round($totalFacturasServiciosPorPagarDivisa, 2), // ← NUEVO
+            //         'facturas' => array_values($facturasServiciosArray)
+            //     ]
+            // ];
+
+            // // También podemos mantener el listado original si es necesario
+            // $ventasArray[$fechaKey]['listado_facturas_original'] = $listadoFacturas;
+
+
+            //--------------------------------------------------------------//
+            //----------PAGOS DE FACTURAS MERCANCIAS Y SERVICIOS------------//
+            //--------------------------------------------------------------//
+            $listadoPagoServicios = collect();
+            $listadoPagoMercancia = collect();
+
+            // Inicializar variables para servicios
+            $totalPagosServiciosBs = 0;       
+            $totalPagosServiciosDivisa = 0;    
+            $totalPagosServicios = 0;          
+
+            // Inicializar variables para mercancía
+            $totalPagosMercanciaBs = 0;        
+            $totalPagosMercanciaDivisa = 0;    
+            $totalPagosMercancia = 0;           
+
+            $listadoPagoServicios = $ventasService->buscarTransacciones(
+                5, null,
+                ['fecha_inicio' => $filtroFecha->fechaInicio, 'fecha_fin' => $filtroFecha->fechaFin]
+            );
+
+            // foreach ($listadoPagoServicios as $pago) {
+            //     $totalPagosServiciosBs += (float)($pago->MontoAbonado ?? $pago['MontoAbonado'] ?? 0);
+            //     $totalPagosServiciosDivisa += (float)($pago->MontoDivisaAbonado ?? $pago['MontoDivisaAbonado'] ?? 0);
+            // }
+
+
+            // Pagos de mercancía (tipo 0) - Estos SÍ existen
+            $listadoPagoMercancia = $ventasService->buscarTransacciones(
+                0, null,
+                ['fecha_inicio' => $filtroFecha->fechaInicio, 'fecha_fin' => $filtroFecha->fechaFin]
+            );
+
+            // dd($listadoPagoMercancia);
+
+            // foreach ($listadoPagoMercancia as $pago) {
+            //     $totalPagosMercanciaBs += (float)($pago->MontoAbonado ?? $pago['MontoAbonado'] ?? 0);
+            //     $totalPagosMercanciaDivisa += (float)($pago->MontoDivisaAbonado ?? $pago['MontoDivisaAbonado'] ?? 0);
+            // }
+
+            // // Total Egresos
+            // $ventasArray[$fechaKey]['total_egresos'] = round($totalPagosServicios + $totalPagosMercancia, 2);
+
+            // $ventasArray[$fechaKey]['listado_pagos'] = [
+            //     'pagos_mercancia' => [
+            //         'MontoBs' => round($totalPagosMercanciaBs, 2),
+            //         'MontoDivisa' => round($totalPagosMercanciaDivisa, 2),
+            //         'Detalle' => $listadoPagoMercancia,
+            //     ],
+            //     'pagos_servicios' => [
+            //         'MontoBs' => round($totalPagosServiciosBs, 2),
+            //         'MontoDivisa' => round($totalPagosServiciosDivisa, 2),
+            //         'Detalle' => $listadoPagoServicios,
+            //     ]
+            // ];
+            
+            $_oficinaPrincipalDTO->PagosFacturas = $listadoPagoMercancia;
+            $_oficinaPrincipalDTO->PagosServicios = $listadoPagoServicios;
+            
+            //-----------------------------------------------------//
+            //------------------------PRESTAMOS--------------------//
+            //-----------------------------------------------------//
+            $_oficinaPrincipalDTO->Prestamos = $ventasService->BuscarPrestamosActivos($filtroFecha);
+            
+            //-----------------------------------------------------//
+            //--------------------PAGO DE PRESTAMOS----------------//
+            //-----------------------------------------------------//
+            $_oficinaPrincipalDTO->PagosPrestamos = $ventasService->buscarPagosPrestamoPorFecha($filtroFecha);
+
+            //-----------------------------------------------------//
+            //-------------------GASTOS POR SUCURSAL---------------//
+            //-----------------------------------------------------//
+            $listadoGastos = collect(); // Colección vacía por defecto
+            $totalGastos = 0;
+
+            $listadoGastos = $ventasService->buscarTransacciones(
+                2, null,
+                ['fecha_inicio' => $filtroFecha->fechaInicio, 'fecha_fin' => $filtroFecha->fechaFin]
+            );
+
+            // foreach ($listadoGastos as $gasto) {
+            //     $totalGastos += (float)($gasto->MontoDivisaAbonado ?? $gasto['MontoDivisaAbonado'] ?? 0);
+            // }
+
+            // // Total Egresos
+            // $ventasArray[$fechaKey]['total_gastos'] = round($totalGastos, 2);
+
+            $_oficinaPrincipalDTO->GastosSucursal = $listadoGastos;
+
+            // dd(json_encode($_oficinaPrincipalDTO, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+
+
+            DB::beginTransaction();
+            \Log::info("Transacción de base de datos iniciada");
+            
+            try {
+                // Crear el cierre para la fecha específica
+                $_cierreOFP = new CierreOfp();
+                \Log::info("Objeto CierreOfp creado");
+
+                // ========== ABONOS (Préstamos) ==========
+                $pagoPrestamos = collect($_oficinaPrincipalDTO->PagosPrestamos ?? []);
+                $_cierreOFP->AbonosBs = $pagoPrestamos->sum('MontoAbonado');
+                $_cierreOFP->AbonosDivisa = $pagoPrestamos->sum('MontoDivisaAbonado');
+                \Log::info("Abonos asignados", [
+                    'AbonosBs' => $_cierreOFP->AbonosBs,
+                    'AbonosDivisa' => $_cierreOFP->AbonosDivisa
+                ]);
+
+                // dd($_oficinaPrincipalDTO->VentasDiariaPeriodo['ListaVentasDiarias']);
+
+                // ========== VENTAS (Cierre) ==========
+                //$_oficinaPrincipalDTO->VentasDiariaPeriodo['ListaVentasDiarias']
+                $cierresData = $this->procesarCierresDiarios($_oficinaPrincipalDTO->VentasDiariaPeriodo['ListaVentasDiarias'], $_oficinaPrincipalDTO->CierreDiario);
+                \Log::info("Datos de cierres procesados", [
+                    'tiene_cierres' => $cierresData['tiene_cierres'],
+                    'total_bs_periodo' => $cierresData['total_bs_periodo'] ?? 0,
+                    'total_divisa' => $cierresData['total_divisa'] ?? 0
+                ]);
+
+                if ($cierresData['tiene_cierres'] && ($cierresData['total_bs_periodo'] ?? 0) > 0) {
+                    $_cierreOFP->CierreBs = $cierresData['total_bs_periodo'];
+                    $_cierreOFP->CierreDivisa = $cierresData['total_divisa'];
+                }
                 
-                // Se obtiene lo que esta pendiente por cerrar hasta la fecha
-                $ventasAgrupadasPorFecha = $this->listar_cerrar_dia();
+                // else {
+                //     $_cierreOFP->CierreBs = $fechaAyerData['total_bs_dia'] ?? 0;
+                //     $_cierreOFP->CierreDivisa = $fechaAyerData['total_divisa_dia'] ?? 0;
+                // }
+                \Log::info("CierreBs asignado: {$_cierreOFP->CierreBs}, CierreDivisa: {$_cierreOFP->CierreDivisa}");
+
+                // ========== ESTATUS ==========
+                $_cierreOFP->Estatus = 0; // Abierto
+
+                // ========== FECHA ==========
+                $_cierreOFP->Fecha = $_oficinaPrincipalDTO->Fecha;
+
+                // ========== FACTURAS DE MERCANCÍA ==========
+                $_cierreOFP->FacturasBs = $totalFacturasMercanciaBs ?? 0;
+                $_cierreOFP->FacturasDivisa = $totalFacturasMercanciaDivisa ?? 0;
+
+                // ========== GASTOS DE CAJA (Egresos) ==========
+                $_cierreOFP->GastosCajaBs = $cierresData['total_egresos_bs'] ?? 0; 
+                $_cierreOFP->GastosCajaDivisa = $cierresData['total_egresos_divisa'] ?? 0; 
+
+                // ========== GASTOS DE SUCURSAL ==========
+                $gastosSucursal = collect($_oficinaPrincipalDTO->GastosSucursal ?? []);
+                $_cierreOFP->GastosSucursalBs = $gastosSucursal->sum('MontoAbonado');
+                $_cierreOFP->GastosSucursalDivisa = $gastosSucursal->sum('MontoDivisaAbonado');
+
+                \Log::info("Gastos de sucursal procesados", [
+                    'cantidad' => $gastosSucursal->count(),
+                    'total_bs' => $_cierreOFP->GastosSucursalBs,
+                    'total_divisa' => $_cierreOFP->GastosSucursalDivisa
+                ]);
+
+                // ========== PAGOS DE SERVICIOS ==========
+                $listaPagosServicios = collect($_oficinaPrincipalDTO->PagosServicios ?? []);
+                $_cierreOFP->PagoServiciosBs = $listaPagosServicios->sum('MontoAbonado');
+                $_cierreOFP->PagoServiciosDivisa = $listaPagosServicios->sum('MontoDivisaAbonado');  
+
+                // ========== PAGOS DE FACTURAS ==========
+                $listaPagosFacturas = collect($_oficinaPrincipalDTO->PagosFacturas ?? []);
+                $_cierreOFP->PagoFacturasBs = $listaPagosFacturas->sum('MontoAbonado');
+                $_cierreOFP->PagoFacturasDivisa = $listaPagosFacturas->sum('MontoDivisaAbonado');  
+
+                // ========== PRÉSTAMOS ==========
+                $prestamos = collect($_oficinaPrincipalDTO->Prestamos ?? []);
+                $_cierreOFP->PrestamosBs = $prestamos->sum('montoBs');        // ← minúscula
+                $_cierreOFP->PrestamosDivisa = $prestamos->sum('montoDivisa'); // ← minúscula
+
+                \Log::info("Préstamos procesados", [
+                    'cantidad' => $prestamos->count(),
+                    'total_bs' => $_cierreOFP->PrestamosBs,
+                    'total_divisa' => $_cierreOFP->PrestamosDivisa
+                ]);
+
+                // ========== SALDO DE OPERACIÓN BS ==========
+                $totalAbonosBs = $_cierreOFP->AbonosBs ?? 0;
+                $totalCierreBs = $_cierreOFP->CierreBs ?? 0;
+                $totalGastosCajaBs = $_cierreOFP->GastosCajaBs ?? 0;
+                $totalGastosSucursalBs = $_cierreOFP->GastosSucursalBs ?? 0;
+                $totalPagoFacturasBs = $_cierreOFP->PagoFacturasBs ?? 0;
+                $totalPagoServiciosBs = $_cierreOFP->PagoServiciosBs ?? 0;
+                $totalPagosGeneralBs = 0;
+
+                $totalPagosGeneralBs = ($_cierreOFP->PagoServiciosBs ?? 0) + ($_cierreOFP->PagoFacturasBs ?? 0);
+
+                $totalPrestamosBs = $_cierreOFP->PrestamosBs ?? 0;
+
+                $saldoOperacionBs = ($totalAbonosBs + $totalCierreBs) - 
+                                    ($totalGastosCajaBs + 
+                                    $totalGastosSucursalBs + 
+                                    $totalPagoFacturasBs + 
+                                    $totalPagoServiciosBs + 
+                                    $totalPagosGeneralBs + 
+                                    $totalPrestamosBs);
+
+                $_cierreOFP->SaldoOperacionBs = $saldoOperacionBs;
                 
-                // Verificar que hay datos
-                if (!$ventasAgrupadasPorFecha->isEmpty()) {
+                // ========== VENTAS (solo ventas, sin conversiones) ==========
+                // Calcular totales de ventas del día
+                $totalVentasBs = 0;
+                $totalVentasDivisa = 0;
 
-                    // Buscar la fecha específica de ayer en el array
-                    $fechaAyerStr = $ayer->format('Y-m-d');
-                    $fechaAyerData = null;
-                    
-                    foreach ($ventasAgrupadasPorFecha as $fechaKey => $data) {
-                        if ($fechaKey === $fechaAyerStr) {
-                            $fechaAyerData = $data;
-                            break;
-                        }
+                if (isset($_oficinaPrincipalDTO->VentasDiariaPeriodo['ListaVentasDiarias'])) {
+                    foreach ($_oficinaPrincipalDTO->VentasDiariaPeriodo['ListaVentasDiarias'] as $venta) {
+                        $totalVentasBs += $venta->totalBs ?? 0;
+                        $totalVentasDivisa += $venta->totalDivisa ?? 0;
                     }
-                    
-                    // Si hay Cierres Pendientes del dia de ayer, se insertan y se actualizan los de otra
-                    if ($fechaAyerData) {
-                        
-                        DB::beginTransaction();
-                        
-                        try {
-                            // Crear el cierre para la fecha específica
-                            $_cierreOFP = new CierreOfp();
+                }
 
-                            // ========== ABONOS (Préstamos) ==========
-                            $pagoPrestamos = collect($fechaAyerData['pago_prestamos'] ?? []);
-                            $_cierreOFP->AbonosBs = $pagoPrestamos->sum('MontoAbonado'); // 0 (array vacío)
-                            $_cierreOFP->AbonosDivisa = $pagoPrestamos->sum('MontoDivisaAbonado'); // 0
+                // ========== VENTAS (solo ventas) ==========
+                $_cierreOFP->VentaBs = $totalVentasBs;
+                $_cierreOFP->VentaDivisa = $totalVentasDivisa;
 
-                            // ========== VENTAS (Cierre) ==========
-                            //NOTA: Aqui en CierreBs se muestra una dieferencia debido a que se llevan los dolares a bolivares y se suman
-                            $cierresData = $this->procesarCierresDiarios($fechaAyerData['ventas']);
+                // ... más abajo ...
 
-                            if ($cierresData['tiene_cierres'] && $cierresData['total_bs_periodo'] > 0) {
-                                $_cierreOFP->CierreBs = $cierresData['total_bs_periodo'];
-                                $_cierreOFP->CierreDivisa = $cierresData['total_divisa'];
-                            } else {
-                                $_cierreOFP->CierreBs = $fechaAyerData['total_bs_dia'] ?? 0;
-                                $_cierreOFP->CierreDivisa = $fechaAyerData['total_divisa_dia'] ?? 0;
-                            }
+                // ========== SALDO DE OPERACIÓN DIVISAS ==========
+                $totalAbonosDivisa = $_cierreOFP->AbonosDivisa ?? 0;
+                $totalGastosCajaDivisa = $_cierreOFP->GastosCajaDivisa ?? 0;
+                $totalGastosSucursalDivisa = $_cierreOFP->GastosSucursalDivisa ?? 0;
+                $totalPagoFacturasDivisa = $_cierreOFP->PagoFacturasDivisa ?? 0;
+                $totalPagoServiciosDivisa = $_cierreOFP->PagoServiciosDivisa ?? 0;
+                $totalPrestamosDivisa = $_cierreOFP->PrestamosDivisa ?? 0;
 
-                            // ========== ESTATUS ==========
-                            $_cierreOFP->Estatus = 1; // Cerrado
+                $totalPagosGeneralDivisa = $totalPagoFacturasDivisa + $totalPagoServiciosDivisa;
 
-                            // ========== FACTURAS DE MERCANCÍA ==========
-                            $_cierreOFP->FacturasBs = $fechaAyerData['resumen_facturas']['mercancia']['total_bs'] ?? 0;
-                            $_cierreOFP->FacturasDivisa = $fechaAyerData['resumen_facturas']['mercancia']['total_divisa'] ?? 0;
+                $_cierreOFP->SaldoOperacionDivisas = ($totalAbonosDivisa + $totalVentasDivisa) - 
+                                                    ($totalGastosCajaDivisa + 
+                                                    $totalGastosSucursalDivisa + 
+                                                    $totalPagosGeneralDivisa + 
+                                                    $totalPrestamosDivisa); 
 
-                            // ========== FECHA ==========
-                            $_cierreOFP->Fecha = $fechaAyerData['fecha']; // 2026-03-05
+                // ========== SUCURSAL ==========
+                $_cierreOFP->SucursalId = $_oficinaPrincipalDTO->SucursalId ?? 8;
 
-                            // ========== GASTOS DE CAJA (Egresos) ==========
-                            // Usar el total de egresos calculado en procesarCierresDiarios()
-                            $_cierreOFP->GastosCajaBs = $cierresData['total_egresos_bs'] ?? 0;      // En Bs
-                            $_cierreOFP->GastosCajaDivisa = $cierresData['total_egresos_divisa'] ?? 0;  // En Divisas
+                // ========== SERVICIOS (Facturas de Servicios) ==========
+                $_cierreOFP->ServiciosBs = $totalFacturasServiciosBs ?? 0;
+                $_cierreOFP->ServiciosDivisa = $totalFacturasServiciosDivisa ?? 0;
 
-                            // ========== GASTOS DE SUCURSAL (solo de la fecha específica) ==========
-                            $fechaCierre = $fechaAyerData['fecha_objeto'] ?? $fechaAyerData['fecha'];
-                            $fechaCierreStr = is_string($fechaCierre) ? $fechaCierre : $fechaCierre->format('Y-m-d');
+                // 2. AHORA llamar a los métodos de contabilización
+                \Log::info("Iniciando métodos de contabilización");
 
-                            $gastosSucursal = collect($fechaAyerData['listado_gastos'] ?? [])
-                                ->filter(function($gasto) use ($fechaCierreStr) {
-                                    $fechaGasto = $gasto->Fecha instanceof \Carbon\Carbon 
-                                        ? $gasto->Fecha->format('Y-m-d')
-                                        : (is_string($gasto->Fecha) ? substr($gasto->Fecha, 0, 10) : null);
-                                    
-                                    return $fechaGasto === $fechaCierreStr;
-                                });
+                // dd($_cierreOFP);
+                // dd(json_encode($_cierreOFP, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
-                            $_cierreOFP->GastosSucursalBs = $gastosSucursal->sum('MontoAbonado');
-                            $_cierreOFP->GastosSucursalDivisa = $gastosSucursal->sum('MontoDivisaAbonado');
+                // dd($ventasAgrupadasPorFecha);
+                
+                $this->contabilizarAbonosDePrestamo($_oficinaPrincipalDTO);
+                $this->contabilizarCierresDiarios($_oficinaPrincipalDTO);
+                $this->contabilizarGastosDeCaja($_oficinaPrincipalDTO);
+                $this->contabilizarGastosSucursal($_oficinaPrincipalDTO);
+                $this->contabilizarPagoServicios($_oficinaPrincipalDTO);
+                $this->contabilizarPagoFacturas($_oficinaPrincipalDTO);
+                $this->contabilizarPrestamos($_oficinaPrincipalDTO);
+                $this->contabilizarVentas($_oficinaPrincipalDTO);
+                
+                // \Log::info("Métodos de contabilización completados");
 
-                            // ========== PAGOS DE SERVICIOS ==========
-                            $_cierreOFP->PagoServiciosBs = $fechaAyerData['listado_pagos']['pagos_servicios']['MontoBs'] ?? 0;
-                            $_cierreOFP->PagoServiciosDivisa = $fechaAyerData['listado_pagos']['pagos_servicios']['MontoDivisa'] ?? 0;
+                // 3. Guardar el cierre
+                $_cierreOFP->save();
+                \Log::info("Cierre guardado con ID: " . $_cierreOFP->CierreOfpId);
 
-                            // ========== PAGOS DE FACTURAS (Mercancía) ==========
-                            $_cierreOFP->PagoFacturasBs = $fechaAyerData['listado_pagos']['pagos_mercancia']['MontoBs'] ?? 0;
-                            $_cierreOFP->PagoFacturasDivisa = $fechaAyerData['listado_pagos']['pagos_mercancia']['MontoDivisa'] ?? 0;
+                // 4. Actualizar saldos
+                $this->actualizarSaldoCierre($_cierreOFP);
+                \Log::info("Saldos actualizados");
 
-                            // ========== PRÉSTAMOS ==========
-                            $prestamos = collect($fechaAyerData['prestamos'] ?? []);
-                            $_cierreOFP->PrestamosBs = $prestamos->sum('MontoBs'); // 0
-                            $_cierreOFP->PrestamosDivisa = $prestamos->sum('MontoDivisa'); // 0
-
-                            // ========== SALDO DE OPERACIÓN BS ==========
-                            $totalAbonosBs = $_cierreOFP->AbonosBs ?? 0;                 // 0
-                            $totalCierreBs = $_cierreOFP->CierreBs ?? 0;                 // 224,196.55
-
-                            $totalGastosCajaBs = $_cierreOFP->GastosCajaBs ?? 0;         // 0
-                            $totalGastosSucursalBs = $_cierreOFP->GastosSucursalBs ?? 0; // 17,269.98
-                            $totalPagoFacturasBs = $_cierreOFP->PagoFacturasBs ?? 0;     // 0
-                            $totalPagoServiciosBs = $_cierreOFP->PagoServiciosBs ?? 0;   // 0
-                            $totalPagosGeneralBs = 0; // ¿De dónde sale este? 
-                            $totalPrestamosBs = $_cierreOFP->PrestamosBs ?? 0;           // 0
-
-                            // Calcular
-                            $saldoOperacionBs = ($totalAbonosBs + $totalCierreBs) - 
-                                                ($totalGastosCajaBs + 
-                                                $totalGastosSucursalBs + 
-                                                $totalPagoFacturasBs + 
-                                                $totalPagoServiciosBs + 
-                                                $totalPagosGeneralBs + 
-                                                $totalPrestamosBs);
-
-                            $_cierreOFP->SaldoOperacionBs = $saldoOperacionBs;
-                            
-                            // ========== SALDO DE OPERACIÓN DIVISAS ==========
-                            // Obtener valores ya asignados
-                            $totalAbonosDivisa = $_cierreOFP->AbonosDivisa ?? 0;
-                            $totalVentasDivisa = $_cierreOFP->CierreDivisa ?? 0;  // Usamos CierreDivisa (equivale a TotalVentasDivisa)
-
-                            $totalGastosCajaDivisa = $_cierreOFP->GastosCajaDivisa ?? 0;
-                            $totalGastosSucursalDivisa = $_cierreOFP->GastosSucursalDivisa ?? 0;
-                            $totalPagoFacturasDivisa = $_cierreOFP->PagoFacturasDivisa ?? 0;
-                            $totalPagoServiciosDivisa = $_cierreOFP->PagoServiciosDivisa ?? 0;
-                            $totalPrestamosDivisa = $_cierreOFP->PrestamosDivisa ?? 0;
-
-                            // Calcular TotalPagosGeneralDivisa (suma de pagos en divisas)
-                            $totalPagosGeneralDivisa = $totalPagoFacturasDivisa + $totalPagoServiciosDivisa;
-
-                            // Calcular saldo de operación en divisas
-                            $_cierreOFP->SaldoOperacionDivisas = ($totalAbonosDivisa + $totalVentasDivisa) - 
-                                                                ($totalGastosCajaDivisa + 
-                                                                $totalGastosSucursalDivisa + 
-                                                                $totalPagosGeneralDivisa + 
-                                                                $totalPrestamosDivisa);
-
-                            // ========== SUCURSAL ==========
-                            $_cierreOFP->SucursalId = 8; // Oficina principal
-
-                            // ========== SERVICIOS (Facturas de Servicios) ==========
-                            $_cierreOFP->ServiciosBs = $fechaAyerData['resumen_facturas']['servicios']['total_bs'] ?? 0;
-                            $_cierreOFP->ServiciosDivisa = $fechaAyerData['resumen_facturas']['servicios']['total_divisa'] ?? 0;
-
-                            // ========== VENTAS (Cierre) ==========
-                            // Este es el que INCLUYE la conversión de divisas a bolívares
-                            $cierresData = $this->procesarCierresDiarios($fechaAyerData['ventas']);
-
-                            if ($cierresData['tiene_cierres'] && $cierresData['total_bs_periodo'] > 0) {
-                                $_cierreOFP->CierreBs = $cierresData['total_bs_periodo'];      // 224,196.55
-                                $_cierreOFP->CierreDivisa = $cierresData['total_divisa'];       // 5.00
-                            } else {
-                                $_cierreOFP->CierreBs = $fechaAyerData['total_bs_dia'] ?? 0;
-                                $_cierreOFP->CierreDivisa = $fechaAyerData['total_divisa_dia'] ?? 0;
-                            }
-
-                            dd($fechaAyerData);
-
-                            // 2. AHORA llamar a los métodos de contabilización
-                            $this->contabilizarAbonosDePrestamo($fechaAyerData);
-                            $this->contabilizarCierresDiarios($fechaAyerData);
-                            $this->contabilizarGastosDeCaja($fechaAyerData);
-                            $this->contabilizarGastosSucursal($fechaAyerData);
-                            $this->contabilizarPagoServicios($fechaAyerData);
-                            $this->contabilizarPagoFacturas($fechaAyerData);
-                            $this->contabilizarPrestamos($fechaAyerData);
-                            $this->contabilizarVentas($fechaAyerData);
-
-                            // 3. Guardar el cierre (solo una vez)
-                            $_cierreOFP->save();
-
-                            $this->actualizarSaldoCierre($_cierreOFP);
-                            
-                            DB::commit();
-                            
-                        } catch (\Exception $e) {
-                            DB::rollBack();
-                            throw $e;
-                        }
-                        
-                    }
-                }                
+                DB::commit();
+                \Log::info("Transacción commiteada exitosamente");
+                
+                \Log::info("=== CIERRE AUTOMÁTICO COMPLETADO CON ÉXITO ===");
+                
+            } catch (\Exception $e) {
+                DB::rollBack();
+                \Log::error("❌ Error durante el cierre: " . $e->getMessage());
+                \Log::error($e->getTraceAsString());
+                throw $e;
             }
             
         } catch (\Exception $e) {
@@ -645,117 +937,11 @@ class ContabilidadController extends Controller
         }
     }
 
-    private function actualizarSaldoCierre($cierreOFP)
-    {
-        try {
-            // #region Actualizar con el saldo anterior
-            $cierreAnterior = CierreOfp::where('Fecha', '<', $cierreOFP->Fecha)
-                ->orderBy('Fecha', 'desc')
-                ->first();
-            
-            if ($cierreAnterior) {
-                $cierreOFP->SaldoGeneralBs = $cierreAnterior->SaldoGeneralBs + $cierreOFP->SaldoOperacionBs;
-                $cierreOFP->SaldoGeneralDivisas = $cierreAnterior->SaldoGeneralDivisas + $cierreOFP->SaldoOperacionDivisas;
-            } else {
-                $cierreOFP->SaldoGeneralBs = $cierreOFP->SaldoOperacionBs;
-                $cierreOFP->SaldoGeneralDivisas = $cierreOFP->SaldoOperacionDivisas;
-            }
-            
-            // Guardar o actualizar el cierre actual
-            if (!$cierreOFP->CierreOfpId) {
-                $cierreOFP->save();
-            } else {
-                $cierreOFP->update();
-            }
-            // #endregion
-            
-            // #region Actualizar los saldos futuros
-            $cierresSiguientes = CierreOfp::where('Fecha', '>', $cierreOFP->Fecha)
-                ->orderBy('Fecha')
-                ->get();
-            
-            if ($cierresSiguientes->isNotEmpty()) {
-                // El último cierre pasa a ser el cierre recién registrado
-                $cierreAnterior = $cierreOFP;
-                
-                foreach ($cierresSiguientes as $cierre) {
-                    $cierre->SaldoGeneralBs = $cierreAnterior->SaldoGeneralBs + $cierre->SaldoOperacionBs;
-                    $cierre->SaldoGeneralDivisas = $cierreAnterior->SaldoGeneralDivisas + $cierre->SaldoOperacionDivisas;
-                    
-                    $cierre->save();
-                    
-                    // El último cierre pasa a ser el cierre recién actualizado
-                    $cierreAnterior = $cierre;
-                }
-            }
-            // #endregion
-            
-            \Log::info("Saldos actualizados correctamente para cierre ID: {$cierreOFP->CierreOfpId}");
-            
-        } catch (\Exception $e) {
-            \Log::error("Error al actualizar saldos de cierre: " . $e->getMessage());
-            throw $e;
-        }
-    }
-
-    private function contabilizarCierresDiarios($fechaAyerData)
-    {
-        // Recorrer las ventas para acceder a sus cierres diarios
-        foreach ($fechaAyerData['ventas'] as $venta) {
-            if (isset($venta->cierreDiario) && $venta->cierreDiario->isNotEmpty()) {
-                foreach ($venta->cierreDiario as $cierre) {
-                    // Actualizar usando Eloquent
-                    CierreDiario::where('CierreDiarioId', $cierre->CierreDiarioId)
-                        ->update(['Estatus' => 4]); // 4 = Cerrada
-                }
-            }
-        }
-    }
-
-    private function contabilizarGastosDeCaja($fechaAyerData)
-    {
-        $this->contabilizarTransacciones($fechaAyerData['listado_gastos'] ?? []);
-    }
-
-    private function contabilizarGastosSucursal($fechaAyerData)
-    {
-        $this->contabilizarTransacciones($fechaAyerData['listado_gastos'] ?? []);
-    }
-
-    private function contabilizarAbonosDePrestamo($fechaAyerData)
-    {
-        $this->contabilizarTransacciones($fechaAyerData['pago_prestamos'] ?? []);
-    }
-
-    private function contabilizarPagoServicios($fechaAyerData)
-    {
-        $pagos = $fechaAyerData['listado_pagos']['pagos_servicios']['Detalle'] ?? [];
-        $this->contabilizarTransacciones($pagos);
-    }
-
-    private function contabilizarPagoFacturas($fechaAyerData)
-    {
-        $pagos = $fechaAyerData['listado_pagos']['pagos_mercancia']['Detalle'] ?? [];
-        $this->contabilizarTransacciones($pagos);
-    }
-
-    private function contabilizarPrestamos($fechaAyerData)
-    {
-        // $prestamos = $fechaAyerData['prestamos'] ?? [];
-        
-        // foreach ($prestamos as $prestamo) {
-        //     $id = $prestamo->Id ?? $prestamo['Id'] ?? null;
-        //     if ($id) {
-        //         // Actualizar el estatus del préstamo
-        //         DB::table('Prestamos')
-        //             ->where('ID', $id)
-        //             ->update(['Estatus' => 3]); // Ajusta el valor según tu EnumPrestamo.Cerrada
-        //     }
-        // }
-    }
-
     private function contabilizarTransacciones($transacciones)
     {
+        $contador = 0;
+        $idsActualizados = [];
+        
         foreach ($transacciones as $transaccion) {
             $id = null;
             if (is_object($transaccion)) {
@@ -768,24 +954,222 @@ class ContabilidadController extends Controller
                 DB::table('Transacciones')
                     ->where('ID', $id)
                     ->update(['Estatus' => 4]);
+                
+                $contador++;
+                $idsActualizados[] = $id;
             }
         }
+        
+        \Log::info("contabilizarTransacciones ejecutado", [
+            'total_transacciones_procesadas' => count($transacciones),
+            'total_actualizadas' => $contador,
+            'ids' => $idsActualizados
+        ]);
     }
 
-    private function contabilizarVentas($fechaAyerData)
+    private function contabilizarAbonosDePrestamo($_oficinaPrincipalDTO)
     {
-        $ventas = $fechaAyerData['ventas'] ?? [];
+        $total = count($_oficinaPrincipalDTO->PagosPrestamos ?? []);
+        \Log::info("contabilizarAbonosDePrestamo iniciado", [
+            'total_abonos' => $total
+        ]);
         
+        $this->contabilizarTransacciones($_oficinaPrincipalDTO->PagosPrestamos ?? []);
+        
+        \Log::info("contabilizarAbonosDePrestamo completado");
+    }
+
+    private function contabilizarCierresDiarios($_oficinaPrincipalDTO)
+    {
+        \Log::info("contabilizarCierresDiarios iniciado");
+        
+        $contador = 0;
+        $idsActualizados = [];
+        
+        // Obtener la colección de cierres diarios del DTO
+        $cierresDiarios = $_oficinaPrincipalDTO->CierreDiario ?? collect();
+        
+        foreach ($cierresDiarios as $cierre) {
+            // Actualizar usando Eloquent
+            CierreDiario::where('CierreDiarioId', $cierre->CierreDiarioId)
+                ->update(['Estatus' => 4]); // 4 = Cerrada
+            
+            $contador++;
+            $idsActualizados[] = $cierre->CierreDiarioId;
+            
+            \Log::info("Cierre diario actualizado", [
+                'CierreDiarioId' => $cierre->CierreDiarioId,
+                'sucursal' => $cierre->SucursalId ?? 'N/A'
+            ]);
+        }
+        
+        \Log::info("contabilizarCierresDiarios completado", [
+            'total_cierres_actualizados' => $contador,
+            'ids' => $idsActualizados
+        ]);
+    }
+
+    private function contabilizarGastosDeCaja($_oficinaPrincipalDTO)
+    {
+        $total = count($_oficinaPrincipalDTO->GastosSucursal ?? []);
+        \Log::info("contabilizarGastosDeCaja iniciado", [
+            'total_gastos' => $total
+        ]);
+        
+        $this->contabilizarTransacciones($_oficinaPrincipalDTO->GastosSucursal ?? []);
+        
+        \Log::info("contabilizarGastosDeCaja completado");
+    }
+
+    private function contabilizarGastosSucursal($_oficinaPrincipalDTO)
+    {
+        $total = count($_oficinaPrincipalDTO->GastosSucursal ?? []);
+        \Log::info("contabilizarGastosSucursal iniciado", [
+            'total_gastos' => $total
+        ]);
+        
+        $this->contabilizarTransacciones($_oficinaPrincipalDTO->GastosSucursal ?? []);
+        
+        \Log::info("contabilizarGastosSucursal completado");
+    }
+
+    private function contabilizarPagoServicios($_oficinaPrincipalDTO)
+    {
+        $pagos = $_oficinaPrincipalDTO->PagosServicios ?? [];
+        $total = count($pagos);
+        
+        \Log::info("contabilizarPagoServicios iniciado", [
+            'total_pagos_servicios' => $total
+        ]);
+        
+        $this->contabilizarTransacciones($pagos);
+        
+        \Log::info("contabilizarPagoServicios completado");
+    }
+
+    private function contabilizarPagoFacturas($_oficinaPrincipalDTO)
+    {        
+        $pagos = $_oficinaPrincipalDTO->PagosFacturas ?? [];
+        $total = count($pagos);
+        
+        \Log::info("contabilizarPagoFacturas iniciado", [
+            'total_pagos_facturas' => $total
+        ]);
+        
+        $this->contabilizarTransacciones($pagos);
+        
+        \Log::info("contabilizarPagoFacturas completado");
+    }
+
+    private function contabilizarPrestamos($_oficinaPrincipalDTO)
+    {
+        \Log::info("contabilizarPrestamos iniciado (comentado en .NET)");
+        
+        // $prestamos = $fechaAyerData['prestamos'] ?? [];
+        // $contador = 0;
+        
+        // foreach ($prestamos as $prestamo) {
+        //     $id = $prestamo->Id ?? $prestamo['Id'] ?? null;
+        //     if ($id) {
+        //         // Actualizar el estatus del préstamo
+        //         DB::table('Prestamos')
+        //             ->where('ID', $id)
+        //             ->update(['Estatus' => 3]); // Ajusta el valor según tu EnumPrestamo.Cerrada
+        //         $contador++;
+                
+        //         \Log::info("Préstamo actualizado", [
+        //             'PrestamoId' => $id
+        //         ]);
+        //     }
+        // }
+        
+        \Log::info("contabilizarPrestamos completado (sin cambios)");
+    }
+
+    // private function contabilizarVentas($_oficinaPrincipalDTO)
+    // {
+    //     $ventas = $fechaAyerData['ventas'] ?? [];
+    //     $totalVentas = count($ventas);
+        
+    //     \Log::info("=== INICIO contabilizarVentas ===", [
+    //         'total_ventas' => $totalVentas
+    //     ]);
+        
+    //     $contador = 0;
+    //     foreach ($ventas as $venta) {
+    //         $contador++;
+    //         $ventaId = $venta->id ?? $venta['id'] ?? 'N/A';
+    //         $sucursalId = $venta->sucursalId ?? $venta['sucursalId'] ?? null;
+            
+    //         \Log::info("Procesando venta {$contador}/{$totalVentas}", [
+    //             'venta_id' => $ventaId,
+    //             'sucursal_id' => $sucursalId
+    //         ]);
+            
+    //         // 1. Cambiar estatus de la venta a Cerrada (3)
+    //         $this->cambiarEstatusVenta($venta);
+            
+    //         // 2. Cerrar recepciones de la sucursal
+    //         if ($sucursalId) {
+    //             $this->cerrarRecepciones($sucursalId, $fechaAyerData['fecha']);
+    //         } else {
+    //             \Log::warning("Venta sin sucursalId", ['venta_id' => $ventaId]);
+    //         }
+    //     }
+        
+    //     \Log::info("=== FIN contabilizarVentas ===");
+    // }
+
+    private function contabilizarVentas($_oficinaPrincipalDTO)
+    {
+        \Log::info("=== INICIO contabilizarVentas ===");
+        
+        // Validar que existan los datos (como en .NET)
+        if (!$_oficinaPrincipalDTO || 
+            !isset($_oficinaPrincipalDTO->VentasDiariaPeriodo['ListaVentasDiarias']) || 
+            empty($_oficinaPrincipalDTO->VentasDiariaPeriodo['ListaVentasDiarias'])) {
+            
+            \Log::warning("No hay ventas para contabilizar");
+            return;
+        }
+        
+        $ventas = $_oficinaPrincipalDTO->VentasDiariaPeriodo['ListaVentasDiarias'];
+        $totalVentas = count($ventas);
+        
+        \Log::info("Total ventas a procesar", ['total' => $totalVentas]);
+        
+        $contador = 0;
         foreach ($ventas as $venta) {
+            $contador++;
+            $ventaId = $venta->id ?? 'N/A';
+            $sucursalId = $venta->sucursalId ?? null;
+            
+            \Log::info("Procesando venta {$contador}/{$totalVentas}", [
+                'venta_id' => $ventaId,
+                'sucursal_id' => $sucursalId
+            ]);
+            
             // 1. Cambiar estatus de la venta a Cerrada (3)
             $this->cambiarEstatusVenta($venta);
             
-            // 2. Cerrar recepciones de la sucursal
-            $this->cerrarRecepciones(
-                $venta->sucursalId ?? $venta['sucursalId'] ?? null,
-                $fechaAyerData['fecha']
+            // 2. Crear filtro de fecha (como en .NET)
+            $filtroFecha = new ParametrosFiltroFecha(
+                null, null, null, false,
+                Carbon::parse($venta->fecha)->startOfDay(),
+                Carbon::parse($venta->fecha)->endOfDay()
             );
+            
+            // 3. Cerrar recepciones de la sucursal
+            if ($sucursalId) {
+                $this->cerrarRecepciones($sucursalId, $venta->fecha);
+            } else {
+                \Log::warning("Venta sin sucursalId", ['venta_id' => $ventaId]);
+            }
         }
+        
+        \Log::info("=== FIN contabilizarVentas ===", [
+            'total_procesadas' => $contador
+        ]);
     }
 
     private function cambiarEstatusVenta($venta)
@@ -793,23 +1177,35 @@ class ContabilidadController extends Controller
         $id = $venta->id ?? $venta['id'] ?? null;
         
         if ($id) {
-            DB::table('Ventas') // Ajusta el nombre de tu tabla
+            DB::table('Ventas')
                 ->where('ID', $id)
-                ->update(['Estatus' => 3]); // 3 = Cerrada
+                ->update(['Estatus' => 4]); // 4 = Cerrada
             
-            \Log::info("Venta {$id} actualizada a estatus 3");
+            \Log::info("Venta actualizada", [
+                'id' => $id,
+                'estatus' => 3
+            ]);
+        } else {
+            \Log::warning("Intento de actualizar venta sin ID");
         }
     }
 
     private function cerrarRecepciones($sucursalId, $fecha)
     {
+        \Log::info("--- INICIO cerrarRecepciones ---", [
+            'sucursal_id' => $sucursalId,
+            'fecha' => $fecha
+        ]);
+        
         if (!$sucursalId || !$fecha) {
+            \Log::warning("cerrarRecepciones llamado sin datos", [
+                'sucursal_id' => $sucursalId,
+                'fecha' => $fecha
+            ]);
             return;
         }
         
-        \Log::info("Iniciando CerrarRecepciones para sucursal {$sucursalId} fecha {$fecha}");
-        
-        // Crear fechas basadas en el parámetro $fecha (como en .NET)
+        // Crear fechas basadas en el parámetro $fecha
         $fechaInicio = Carbon::parse($fecha)->startOfDay();
         $fechaFin = Carbon::parse($fecha)->endOfDay();
 
@@ -819,50 +1215,415 @@ class ContabilidadController extends Controller
         );
         
         // #region Transferencias de la sucursal
+        \Log::info("Buscando transferencias para sucursal {$sucursalId}");
         $transferencias = $this->buscarTransferenciasParaCerrar($sucursalId, $filtroFecha);
+        \Log::info("Transferencias encontradas", ['cantidad' => count($transferencias)]);
         
         if (!empty($transferencias)) {
-            // Ordenar por fecha como en .NET
             $transferenciasOrdenadas = collect($transferencias)->sortBy('Fecha')->values();
+            $transfCount = 0;
             
             foreach ($transferenciasOrdenadas as $transferencia) {
-                $this->abonarDeudaSucursal($sucursalId, $transferencia, $filtroFecha);
+                $transfCount++;
+                \Log::info("Procesando transferencia {$transfCount}/" . count($transferencias), [
+                    'transferencia_id' => $transferencia->TransferenciaId,
+                    'fecha' => $transferencia->Fecha,
+                    'saldo' => $transferencia->Saldo
+                ]);
+                
+                $this->abonarDeudaSucursalTransferencia($sucursalId, $transferencia, $filtroFecha);
             }
         }
         // #endregion
         
         // Buscar ventas diarias para cerrar
+        \Log::info("Buscando ventas diarias para sucursal {$sucursalId}");
+        $ventasService = new VentasService();
         $ventasPeriodo = $ventasService->obtenerListadoVentasDiariasParaCerrarSinTotalizar($filtroFecha, $sucursalId, true);
-
+        
+        $cantidadVentas = isset($ventasPeriodo['ListaVentasDiarias']) ? count($ventasPeriodo['ListaVentasDiarias']) : 0;
+        \Log::info("Ventas diarias encontradas", ['cantidad' => $cantidadVentas]);
         
         if (!empty($ventasPeriodo['ListaVentasDiarias'])) {
-            // Ordenar por fecha como en .NET
             $ventasOrdenadas = collect($ventasPeriodo['ListaVentasDiarias'])->sortBy('Fecha')->values();
+            $ventaCount = 0;
             
             foreach ($ventasOrdenadas as $venta) {
-                $this->abonarDeudaSucursal($sucursalId, $venta, $filtroFecha);
+                $ventaCount++;
+                \Log::info("Procesando venta diaria {$ventaCount}/{$cantidadVentas}", [
+                    'venta_id' => $venta->id ?? 'N/A',
+                    'fecha' => $venta->fecha ?? 'N/A'
+                ]);
+                
+                $this->abonarDeudaSucursalVenta($sucursalId, $venta, $filtroFecha);
             }
         }
         
-        \Log::info("Finalizado CerrarRecepciones para sucursal {$sucursalId}");
+        \Log::info("--- FIN cerrarRecepciones para sucursal {$sucursalId} ---");
     }
 
-    private function abonarDeudaSucursal($sucursalId, $transferencia, $filtroFecha)
+    private function buscarTransferenciasParaCerrar($sucursalId, $filtroFecha)
     {
+        \Log::info("Buscando transferencias para cerrar", [
+            'sucursal_id' => $sucursalId,
+            'fecha_fin' => $filtroFecha->fechaFin ?? 'N/A'
+        ]);
+        
+        try {
+            $fechaFin = $filtroFecha->fechaFin ?? $filtroFecha['fecha_fin'] ?? now();
+            
+            $transferencias = DB::table('Transferencias')
+                ->where('SucursalOrigenId', $sucursalId)
+                ->where('Fecha', '<=', $fechaFin)
+                ->where('Saldo', '>', 0)
+                ->orderBy('Fecha')
+                ->get();
+            
+            \Log::info("Transferencias encontradas", ['cantidad' => $transferencias->count()]);
+            
+            $transferenciasDTO = [];
+            foreach ($transferencias as $item) {
+                $transferenciasDTO[] = $this->mapearTransferenciaADTO($item);
+            }
+            
+            return $transferenciasDTO;
+            
+        } catch (\Exception $e) {
+            \Log::error("Error en buscarTransferenciasParaCerrar: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    private function abonarDeudaSucursalTransferencia($sucursalId, $transferencia, $filtroFecha)
+    {
+        \Log::info(">>> INICIO abonarDeudaSucursalTransferencia (PRODUCCIÓN)");
+        \Log::info("Sucursal: $sucursalId, Transferencia ID: " . ($transferencia->TransferenciaId ?? 'N/A') . ", Saldo: " . ($transferencia->Saldo ?? 0));
+
+        // 1. Generar transacción de abono
+        $nuevoAbono = $this->generarTransaccionAbonoTransferencia($transferencia);
+        $nuevoAbono['Observacion'] = "TRANSFERENCIA {$transferencia->TransferenciaId} FECHA: " . Carbon::parse($transferencia->Fecha)->format('Y-m-d');
+
+        $esCerrarOperacion = false;
+        $operacionId = 0;
+        $montoTransferenciaDivisa = $transferencia->Saldo ?? 0;
+
+        // 2. Buscar recepciones
+        $listaRecepciones = $this->buscarRecepcionesSucursalParaCerrar($sucursalId, $filtroFecha);
+
+        if (!empty($listaRecepciones)) {
+            $recepcionesFiltradas = collect($listaRecepciones)
+                ->filter(function($r) use ($filtroFecha) {
+                    return $r->FechaCreacion <= $filtroFecha->fechaFin;
+                })
+                ->sortBy('FechaCreacion')
+                ->values();
+
+            foreach ($recepcionesFiltradas as $recepcion) {
+                if ($recepcion->SaldoDivisa > 0) {
+                    // Asignar descripción específica
+                    $nuevoAbono['Descripcion'] = "ABONO POR TRANSFERENCIA - {$recepcion->Numero}";
+
+                    // Asignar monto del abono
+                    $resultado = $this->asignarMontoAbono(
+                        $nuevoAbono,
+                        $montoTransferenciaDivisa,
+                        $recepcion
+                    );
+
+                    $montoTransferenciaDivisa = $resultado['monto_restante'];
+                    $esCerrarOperacion = $resultado['es_cerrar'];
+                    $operacionId = $recepcion->RecepcionId;
+                    $nuevoAbono = $resultado['nuevo_abono'];
+
+                    try {
+                        // Guardar abono
+                        $nuevoAbono = $this->guardarAbonoRecepcion(
+                            $sucursalId,
+                            $nuevoAbono,
+                            $esCerrarOperacion,
+                            $operacionId
+                        );
+
+                        // Actualizar saldo de la transferencia
+                        DB::table('Transferencias')
+                            ->where('TransferenciaId', $transferencia->TransferenciaId)
+                            ->update(['Saldo' => $montoTransferenciaDivisa]);
+
+                        \Log::info("Saldo de transferencia actualizado", [
+                            'transferencia_id' => $transferencia->TransferenciaId,
+                            'nuevo_saldo' => $montoTransferenciaDivisa
+                        ]);
+
+                        if ($montoTransferenciaDivisa <= 0) {
+                            \Log::info("Pago completado, saliendo del ciclo");
+                            return;
+                        }
+
+                    } catch (\Exception $e) {
+                        \Log::error("Error al guardar abono: " . $e->getMessage());
+                        throw $e;
+                    }
+                }
+            }
+        }
+
+        \Log::info("<<< FIN abonarDeudaSucursalTransferencia (monto restante: $montoTransferenciaDivisa)");
+    }
+
+    private function generarTransaccionAbonoTransferencia($transferencia)
+    {
+        return [
+            'Cedula' => null,
+            'DivisaId' => null,
+            'Estatus' => 2, // Pagada
+            'Fecha' => $transferencia->Fecha,
+            'FormaDePago' => 0, // Efectivo
+            'MontoAbonado' => 0,
+            'MontoDivisaAbonado' => $transferencia->Saldo,
+            'Nombre' => null,
+            'Descripcion' => 'ABONO POR TRANSFERENCIA',
+            'NumeroOperacion' => 'ABT' . Carbon::parse($transferencia->Fecha)->format('Ymd') . '-' . $transferencia->TransferenciaId,
+            'Observacion' => '',
+            'SucursalId' => $transferencia->SucursalOrigenId,
+            'SucursalOrigenId' => $transferencia->SucursalOrigenId,
+            'TasaDeCambio' => 0,
+            'Tipo' => 7, // AbonoDeuda
+            'UrlComprobante' => null
+        ];
+    }
+
+    private function abonarDeudaSucursalVenta($sucursalId, $venta, $filtroFecha)
+    {
+        \Log::info(">>> INICIO abonarDeudaSucursalVenta (PRODUCCIÓN)");
+        \Log::info("Sucursal: $sucursalId, Venta ID: " . ($venta->id ?? 'N/A') . ", TotalDivisa: " . ($venta->totalDivisa ?? 0));
+
+        // 1. Generar transacción de abono
+        $nuevoAbono = $this->generarTransaccionAbonoVenta($venta);
+
+        $esCerrarOperacion = false;
+        $operacionId = 0;
+        $montoVentaDivisa = $venta->totalDivisa ?? 0;
+
+        // 2. Buscar recepciones
+        $listaRecepciones = $this->buscarRecepcionesSucursalParaCerrar($sucursalId, $filtroFecha);
+
+        if (!empty($listaRecepciones)) {
+            $recepcionesFiltradas = collect($listaRecepciones)
+                ->filter(function($r) use ($filtroFecha) {
+                    return $r->FechaCreacion <= $filtroFecha->fechaFin;
+                })
+                ->sortBy('FechaCreacion')
+                ->values();
+
+            foreach ($recepcionesFiltradas as $recepcion) {
+                if ($recepcion->SaldoDivisa > 0) {
+                    $nuevoAbono['Descripcion'] = "ABONO POR VENTA - {$recepcion->Numero}";
+
+                    $resultado = $this->asignarMontoAbono(
+                        $nuevoAbono,
+                        $montoVentaDivisa,
+                        $recepcion
+                    );
+
+                    $montoVentaDivisa = $resultado['monto_restante'];
+                    $esCerrarOperacion = $resultado['es_cerrar'];
+                    $operacionId = $recepcion->RecepcionId;
+                    $nuevoAbono = $resultado['nuevo_abono'];
+
+                    try {
+                        // Guardar abono en recepción
+                        $nuevoAbono = $this->guardarAbonoRecepcion(
+                            $sucursalId,
+                            $nuevoAbono,
+                            $esCerrarOperacion,
+                            $operacionId
+                        );
+
+                        if ($montoVentaDivisa <= 0) {
+                            \Log::info("Venta pagada completamente, saliendo del ciclo de recepciones");
+                            return;
+                        }
+
+                    } catch (\Exception $e) {
+                        \Log::error("Error al guardar abono en recepción: " . $e->getMessage());
+                        throw $e;
+                    }
+                }
+            }
+        }
+
+        // 3. Buscar gastos (si quedó saldo)
+        if ($montoVentaDivisa > 0) {
+            \Log::info("Buscando gastos para sucursal {$sucursalId} (saldo restante: $montoVentaDivisa)");
+
+            $listaGastos = $this->buscarGastosParaCerrar($sucursalId, $filtroFecha);
+
+            if (!empty($listaGastos)) {
+                $gastosFiltrados = collect($listaGastos)
+                    ->filter(function($g) use ($filtroFecha) {
+                        return $g->Fecha <= $filtroFecha->fechaFin;
+                    })
+                    ->sortBy('Fecha')
+                    ->values();
+
+                foreach ($gastosFiltrados as $gasto) {
+                    if ($gasto->SaldoDivisa > 0 && $montoVentaDivisa > 0) {
+                        $nuevoAbono['Descripcion'] = "ABONO POR VENTA - G{$gasto->NumeroOperacion}";
+
+                        // Asignar monto (misma lógica que en recepciones)
+                        if ($gasto->SaldoDivisa <= $montoVentaDivisa) {
+                            $montoVentaDivisa -= $gasto->SaldoDivisa;
+                            $nuevoAbono['MontoDivisaAbonado'] = $gasto->SaldoDivisa;
+                            $esCerrarOperacion = true;
+                        } else {
+                            $nuevoAbono['MontoDivisaAbonado'] = $montoVentaDivisa;
+                            $montoVentaDivisa = 0;
+                            $esCerrarOperacion = false;
+                        }
+
+                        try {
+                            // Guardar abono en gasto (necesitamos guardarAbonoGasto)
+                            $nuevoAbono = $this->guardarAbonoGasto(
+                                $sucursalId,
+                                $nuevoAbono,
+                                $esCerrarOperacion,
+                                $gasto->Id
+                            );
+
+                            if ($montoVentaDivisa <= 0) {
+                                \Log::info("Venta pagada completamente, saliendo del ciclo de gastos");
+                                return;
+                            }
+
+                        } catch (\Exception $e) {
+                            \Log::error("Error al guardar abono en gasto: " . $e->getMessage());
+                            throw $e;
+                        }
+                    }
+                }
+            } else {
+                \Log::info("No hay gastos para procesar.");
+            }
+        }
+
+        \Log::info("<<< FIN abonarDeudaSucursalVenta (monto restante: $montoVentaDivisa)");
+    }
+
+    private function guardarAbonoGasto($sucursalId, $nuevoAbono, $esCerrarOperacion, $gastoId)
+    {
+        \Log::info("Guardando abono de gasto", [
+            'sucursal_id' => $sucursalId,
+            'gasto_id' => $gastoId,
+            'monto' => $nuevoAbono['MontoDivisaAbonado'],
+            'cerrar_operacion' => $esCerrarOperacion
+        ]);
+
+        // 1. Insertar transacción (igual que en guardarAbonoRecepcion)
+        $transaccionId = DB::table('Transacciones')->insertGetId([
+            'Cedula' => $nuevoAbono['Cedula'] ?? null,
+            'DivisaId' => $nuevoAbono['DivisaId'] ?? null,
+            'Estatus' => $nuevoAbono['Estatus'] ?? 2,
+            'Fecha' => $nuevoAbono['Fecha'] ?? now(),
+            'FormaDePago' => $nuevoAbono['FormaDePago'] ?? 0,
+            'MontoAbonado' => $nuevoAbono['MontoAbonado'] ?? 0,
+            'MontoDivisaAbonado' => $nuevoAbono['MontoDivisaAbonado'],
+            'Nombre' => $nuevoAbono['Nombre'] ?? null,
+            'Descripcion' => $nuevoAbono['Descripcion'] ?? '',
+            'NumeroOperacion' => $nuevoAbono['NumeroOperacion'] ?? '',
+            'Observacion' => $nuevoAbono['Observacion'] ?? '',
+            'SucursalId' => $nuevoAbono['SucursalId'] ?? $sucursalId,
+            'SucursalOrigenId' => $nuevoAbono['SucursalOrigenId'] ?? $sucursalId,
+            'TasaDeCambio' => $nuevoAbono['TasaDeCambio'] ?? 0,
+            'Tipo' => $nuevoAbono['Tipo'] ?? 7,
+            'UrlComprobante' => $nuevoAbono['UrlComprobante'] ?? null
+        ]);
+
+        \Log::info("Transacción insertada", ['transaccion_id' => $transaccionId]);
+
+        // 2. Insertar relación TransaccionesGastos
+        DB::table('TransaccionesGastos')->insert([
+            'GastoId' => $gastoId,
+            'TransaccionId' => $transaccionId
+        ]);
+
+        \Log::info("Relación TransaccionesGastos insertada");
+
+        // 3. Si corresponde, actualizar estatus del gasto
+        if ($esCerrarOperacion) {
+            DB::table('Transacciones')
+                ->where('ID', $gastoId)
+                ->update(['Estatus' => 5]); // PagadaAbono (según .NET)
+
+            \Log::info("Gasto actualizado a PagadaAbono", ['gasto_id' => $gastoId]);
+        }
+
+        $nuevoAbono['Id'] = $transaccionId;
+
+        \Log::info("Abono guardado exitosamente");
+
+        return $nuevoAbono;
+    }
+
+    private function generarTransaccionAbonoVenta($venta)
+    {
+        return [
+            'Cedula' => null,
+            'DivisaId' => null,
+            'Estatus' => 2, // Pagada
+            'Fecha' => $venta->fecha,
+            'FormaDePago' => 0, // Efectivo
+            'MontoAbonado' => 0,
+            'MontoDivisaAbonado' => $venta->totalDivisa ?? 0,
+            'Nombre' => null,
+            'Descripcion' => 'ABONO POR VENTA',
+            'NumeroOperacion' => 'ABV' . Carbon::parse($venta->fecha)->format('Ymd') . '-' . $venta->id,
+            'Observacion' => "VENTA {$venta->id} FECHA: " . Carbon::parse($venta->fecha)->format('Y-m-d'),
+            'SucursalId' => $venta->sucursalId,
+            'SucursalOrigenId' => $venta->sucursalId,
+            'TasaDeCambio' => $venta->tasaDeCambio ?? 0,
+            'Tipo' => 7, // AbonoDeuda
+            'UrlComprobante' => null
+        ];
+    }
+
+    private function abonarDeudaSucursal($sucursalId, $item, $filtroFecha)
+    {
+        $tipo = property_exists($item, 'TransferenciaId') ? 'transferencia' : 'venta';
+        
+        \Log::info(">>> INICIO abonarDeudaSucursal", [
+            'sucursal_id' => $sucursalId,
+            'tipo' => $tipo,
+            'id' => $item->TransferenciaId ?? $item->id ?? 'N/A',
+            'saldo_inicial' => $item->Saldo ?? $item->totalDivisa ?? 0
+        ]);
+        
         // Generar transacción de abono
-        $nuevoAbono = $this->generarTransaccionAbono($transferencia);
+        $nuevoAbono = $this->generarTransaccionAbono($item);
         
         $esCerrarOperacion = false;
         $operacionId = 0;
-        $montoTransferenciaDivisa = $transferencia->Saldo;
-        $nuevoAbono['Observacion'] = "TRANSFERENCIA {$transferencia->TransferenciaId} FECHA: " . 
-                                    Carbon::parse($transferencia->Fecha)->format('Y-m-d');
+        $montoTransferenciaDivisa = $item->Saldo ?? $item->totalDivisa ?? 0;
+        
+        // 🔴 CORREGIDO: Usar $item en lugar de $transferencia
+        if ($tipo === 'transferencia') {
+            $nuevoAbono['Observacion'] = "TRANSFERENCIA {$item->TransferenciaId} FECHA: " . 
+                                        Carbon::parse($item->Fecha)->format('Y-m-d');
+        } else {
+            $nuevoAbono['Observacion'] = "VENTA {$item->id} FECHA: " . 
+                                        Carbon::parse($item->fecha)->format('Y-m-d');
+        }
+        
+        \Log::info("Abono generado", [
+            'monto' => $nuevoAbono['MontoDivisaAbonado'],
+            'tipo' => $nuevoAbono['Tipo']
+        ]);
         
         // Buscar recepciones de la sucursal para cerrar
+        \Log::info("Buscando recepciones para cerrar");
         $listaRecepciones = $this->buscarRecepcionesSucursalParaCerrar($sucursalId, $filtroFecha);
+        \Log::info("Recepciones encontradas", ['cantidad' => count($listaRecepciones)]);
         
         if (!empty($listaRecepciones)) {
-            // Filtrar y ordenar como en .NET
             $recepcionesFiltradas = collect($listaRecepciones)
                 ->filter(function($r) use ($filtroFecha) {
                     return $r->FechaCreacion <= $filtroFecha->fechaFin;
@@ -870,7 +1631,17 @@ class ContabilidadController extends Controller
                 ->sortBy('FechaCreacion')
                 ->values();
             
+            \Log::info("Recepciones filtradas", ['cantidad' => count($recepcionesFiltradas)]);
+            
+            $recepcionCount = 0;
             foreach ($recepcionesFiltradas as $recepcion) {
+                $recepcionCount++;
+                \Log::info("Procesando recepción {$recepcionCount}/" . count($recepcionesFiltradas), [
+                    'recepcion_id' => $recepcion->RecepcionId,
+                    'saldo_divisa' => $recepcion->SaldoDivisa,
+                    'monto_disponible' => $montoTransferenciaDivisa
+                ]);
+                
                 if ($recepcion->SaldoDivisa > 0) {
                     $nuevoAbono['Descripcion'] = "ABONO POR TRANSFERENCIA - {$recepcion->Numero}";
                     
@@ -886,6 +1657,12 @@ class ContabilidadController extends Controller
                     $operacionId = $recepcion->RecepcionId;
                     $nuevoAbono = $resultado['nuevo_abono'];
                     
+                    \Log::info("Monto asignado", [
+                        'abono_realizado' => $nuevoAbono['MontoDivisaAbonado'],
+                        'monto_restante' => $montoTransferenciaDivisa,
+                        'cerrar_operacion' => $esCerrarOperacion
+                    ]);
+                    
                     try {
                         // Guardar abono
                         $nuevoAbono = $this->guardarAbonoRecepcion(
@@ -895,42 +1672,258 @@ class ContabilidadController extends Controller
                             $operacionId
                         );
                         
-                        // Actualizar saldo de la transferencia
-                        DB::table('Transferencias')
-                            ->where('TransferenciaId', $transferencia->TransferenciaId)
-                            ->update(['Saldo' => $montoTransferenciaDivisa]);
+                        // 🔴 CORREGIDO: Verificar si es transferencia antes de actualizar
+                        if ($tipo === 'transferencia') {
+                            DB::table('Transferencias')
+                                ->where('TransferenciaId', $item->TransferenciaId)
+                                ->update(['Saldo' => $montoTransferenciaDivisa]);
+                            
+                            \Log::info("Saldo de transferencia actualizado", [
+                                'transferencia_id' => $item->TransferenciaId,
+                                'nuevo_saldo' => $montoTransferenciaDivisa
+                            ]);
+                        }
+                        
+                        \Log::info("Abono guardado", [
+                            'transaccion_id' => $nuevoAbono['Id'] ?? 'N/A'
+                        ]);
                         
                         // Si se terminó el pago, salir
                         if ($montoTransferenciaDivisa <= 0) {
+                            \Log::info("Pago completado, saliendo del ciclo");
                             return;
                         }
                         
                     } catch (\Exception $e) {
+                        \Log::error("Error al guardar abono: " . $e->getMessage());
                         throw $e;
                     }
                 }
             }
         }
+        
+        \Log::info("<<< FIN abonarDeudaSucursal", [
+            'monto_final_restante' => $montoTransferenciaDivisa
+        ]);
     }
 
-    private function generarTransaccionAbono($transferencia)
+    private function mapearTransferenciaADTO($transferencia)
     {
+        \Log::info("Mapeando transferencia a DTO", [
+            'transferencia_id' => $transferencia->id ?? 'N/A'
+        ]);
+        
+        $detallesDTO = [];
+        if (isset($transferencia->detalles) && $transferencia->detalles->isNotEmpty()) {
+            foreach ($transferencia->detalles as $detalle) {
+                $productoDTO = null;
+                if (isset($detalle->producto)) {
+                    $productoDTO = new ProductoDTO([
+                        'ProductoId' => $detalle->producto->id,
+                        'Descripcion' => $detalle->producto->Descripcion,
+                        'CodigoBarras' => $detalle->producto->CodigoBarras,
+                        'CostoDivisa' => $detalle->producto->CostoDivisa,
+                        'CostoBs' => $detalle->producto->CostoBs,
+                        'Referencia' => $detalle->producto->Referencia,
+                    ]);
+                }
+                
+                $detallesDTO[] = new TransferenciaDetalleDTO([
+                    'TransferenciaDetalleId' => $detalle->id,
+                    'TransferenciaId' => $transferencia->id,
+                    'SucursalId' => $detalle->SucursalId ?? $transferencia->SucursalOrigenId,
+                    'ProductoId' => $detalle->ProductoId,
+                    'CantidadEmitida' => $detalle->CantidadEmitida,
+                    'CantidadRecibida' => $detalle->CantidadRecibida ?? 0,
+                    'CostoDivisa' => $detalle->CostoDivisa ?? 0,
+                    'CostoBs' => $detalle->CostoBs ?? 0,
+                    'Producto' => $productoDTO
+                ]);
+            }
+        }
+        
+        return new TransferenciaDTO([
+            'TransferenciaId' => $transferencia->id,
+            'Numero' => $transferencia->Numero ?? '',
+            'Fecha' => Carbon::parse($transferencia->Fecha),
+            'Estatus' => $transferencia->Estatus,
+            'SucursalOrigenId' => $transferencia->SucursalOrigenId,
+            'SucursalDestinoId' => $transferencia->SucursalDestinoId,
+            'Observacion' => $transferencia->Observacion ?? '',
+            'Saldo' => $transferencia->Saldo ?? 0,
+            'Tipo' => $transferencia->Tipo ?? 0,
+            'Detalles' => $detallesDTO,
+            'CantidadItems' => count($detallesDTO)
+        ]);
+    }
+
+    private function actualizarSaldoCierre($cierreOFP)
+    {
+        \Log::info("=== INICIO actualizarSaldoCierre ===", [
+            'cierre_id' => $cierreOFP->CierreOfpId ?? 'nuevo',
+            'fecha' => $cierreOFP->Fecha,
+            'saldo_operacion_bs' => $cierreOFP->SaldoOperacionBs,
+            'saldo_operacion_divisas' => $cierreOFP->SaldoOperacionDivisas
+        ]);
+        
+        try {
+            // #region Actualizar con el saldo anterior
+            $cierreAnterior = CierreOfp::where('Fecha', '<', $cierreOFP->Fecha)
+                ->orderBy('Fecha', 'desc')
+                ->first();
+            
+            if ($cierreAnterior) {
+                \Log::info("Cierre anterior encontrado", [
+                    'cierre_anterior_id' => $cierreAnterior->CierreOfpId,
+                    'saldo_anterior_bs' => $cierreAnterior->SaldoGeneralBs,
+                    'saldo_anterior_divisas' => $cierreAnterior->SaldoGeneralDivisas
+                ]);
+                
+                $cierreOFP->SaldoGeneralBs = $cierreAnterior->SaldoGeneralBs + $cierreOFP->SaldoOperacionBs;
+                $cierreOFP->SaldoGeneralDivisas = $cierreAnterior->SaldoGeneralDivisas + $cierreOFP->SaldoOperacionDivisas;
+            } else {
+                \Log::info("No hay cierre anterior, es el primero");
+                $cierreOFP->SaldoGeneralBs = $cierreOFP->SaldoOperacionBs;
+                $cierreOFP->SaldoGeneralDivisas = $cierreOFP->SaldoOperacionDivisas;
+            }
+            
+            \Log::info("Saldos calculados", [
+                'nuevo_saldo_bs' => $cierreOFP->SaldoGeneralBs,
+                'nuevo_saldo_divisas' => $cierreOFP->SaldoGeneralDivisas
+            ]);
+            
+            // Guardar o actualizar el cierre actual
+            if (!$cierreOFP->CierreOfpId) {
+                $cierreOFP->save();
+                \Log::info("Cierre guardado", ['nuevo_id' => $cierreOFP->CierreOfpId]);
+            } else {
+                $cierreOFP->update();
+                \Log::info("Cierre actualizado");
+            }
+            // #endregion
+            
+            // #region Actualizar los saldos futuros
+            $cierresSiguientes = CierreOfp::where('Fecha', '>', $cierreOFP->Fecha)
+                ->orderBy('Fecha')
+                ->get();
+            
+            if ($cierresSiguientes->isNotEmpty()) {
+                \Log::info("Actualizando cierres futuros", [
+                    'cantidad' => $cierresSiguientes->count()
+                ]);
+                
+                $cierreAnterior = $cierreOFP;
+                $contador = 0;
+                
+                foreach ($cierresSiguientes as $cierre) {
+                    $contador++;
+                    $cierre->SaldoGeneralBs = $cierreAnterior->SaldoGeneralBs + $cierre->SaldoOperacionBs;
+                    $cierre->SaldoGeneralDivisas = $cierreAnterior->SaldoGeneralDivisas + $cierre->SaldoOperacionDivisas;
+                    
+                    $cierre->save();
+                    
+                    \Log::info("Cierre futuro {$contador} actualizado", [
+                        'cierre_id' => $cierre->CierreOfpId,
+                        'nuevo_saldo_bs' => $cierre->SaldoGeneralBs,
+                        'nuevo_saldo_divisas' => $cierre->SaldoGeneralDivisas
+                    ]);
+                    
+                    $cierreAnterior = $cierre;
+                }
+            } else {
+                \Log::info("No hay cierres futuros para actualizar");
+            }
+            // #endregion
+            
+            \Log::info("=== FIN actualizarSaldoCierre OK ===");
+            
+        } catch (\Exception $e) {
+            \Log::error("Error en actualizarSaldoCierre: " . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    // private function generarTransaccionAbono($transferencia)
+    // {
+    //     return [
+    //         'Cedula' => null,
+    //         'DivisaId' => null,
+    //         'Estatus' => 2,
+    //         'Fecha' => $transferencia->Fecha,
+    //         'FormaDePago' => 0,
+    //         'MontoAbonado' => 0,
+    //         'MontoDivisaAbonado' => $transferencia->Saldo,
+    //         'Nombre' => null,
+    //         'Descripcion' => 'ABONO DEUDA X TRANSFERENCIA',
+    //         'NumeroOperacion' => 'ABT' . Carbon::parse($transferencia->Fecha)->format('Ymd') . '-' . $transferencia->TransferenciaId,
+    //         'Observacion' => 'ABONO DEUDA X TRANSFERENCIA',
+    //         'SucursalId' => $transferencia->SucursalOrigenId,
+    //         'SucursalOrigenId' => $transferencia->SucursalOrigenId,
+    //         'TasaDeCambio' => 0,
+    //         'Tipo' => 7,
+    //         'UrlComprobante' => null
+    //     ];
+    // }
+
+    private function buscarGastosParaCerrar($sucursalId, $filtroFecha)
+    {
+        // Similar a buscarRecepciones, pero para gastos (tipo 2)
+        return Transaccion::where('SucursalId', $sucursalId)
+            ->where('Tipo', 2) // Tipo Gasto
+            ->where('Fecha', '<=', $filtroFecha->fechaFin)
+            ->where('Estatus', '!=', 4) // No contabilizados
+            ->get();
+    }
+
+    private function generarTransaccionAbono($item)
+    {
+        // Determinar si es transferencia o venta
+        $fecha = null;
+        $transferenciaId = null;
+        $sucursalOrigenId = null;
+        $saldo = 0;
+        
+        if (property_exists($item, 'TransferenciaId')) {
+            // Es una transferencia
+            $fecha = $item->Fecha;
+            $transferenciaId = $item->TransferenciaId;
+            $sucursalOrigenId = $item->SucursalOrigenId;
+            $saldo = $item->Saldo;
+            $tipoOperacion = 'TRANSFERENCIA';
+            $idParaNumero = $item->TransferenciaId;
+        } else {
+            // Es una venta
+            $fecha = $item->fecha; // Nota: minúscula
+            $transferenciaId = $item->id ?? 'VENTA';
+            $sucursalOrigenId = $item->sucursalId ?? $item->sucursalIdOrigen ?? null;
+            $saldo = $item->totalDivisa ?? $item->saldo ?? 0;
+            $tipoOperacion = 'VENTA';
+            $idParaNumero = $item->id ?? '0';
+        }
+        
+        \Log::info("Generando transacción abono", [
+            'tipo' => $tipoOperacion,
+            'id' => $transferenciaId,
+            'fecha' => $fecha,
+            'monto' => $saldo
+        ]);
+        
         return [
             'Cedula' => null,
             'DivisaId' => null,
-            'Estatus' => 2, // self::ENUM_TRANSACCION_PAGADA
-            'Fecha' => $transferencia->Fecha,
-            'FormaDePago' => 0, // self::ENUM_FORMA_PAGO_EFECTIVO
+            'Estatus' => 2,
+            'Fecha' => $fecha,
+            'FormaDePago' => 0,
             'MontoAbonado' => 0,
-            'MontoDivisaAbonado' => $transferencia->Saldo,
+            'MontoDivisaAbonado' => $saldo,
             'Nombre' => null,
-            'Descripcion' => 'ABONO DEUDA X TRANSFERENCIA',
-            'NumeroOperacion' => 'ABT' . Carbon::parse($transferencia->Fecha)->format('Ymd') . '-' . $transferencia->TransferenciaId,
-            'Observacion' => 'ABONO DEUDA X TRANSFERENCIA',
-            'SucursalId' => $transferencia->SucursalOrigenId,
-            'SucursalOrigenId' => $transferencia->SucursalOrigenId,
+            'Descripcion' => "ABONO DEUDA X {$tipoOperacion}",
+            'NumeroOperacion' => "ABO" . Carbon::parse($fecha)->format('Ymd') . "-{$idParaNumero}",
+            'Observacion' => "{$tipoOperacion} {$transferenciaId} FECHA: " . Carbon::parse($fecha)->format('Y-m-d'),
+            'SucursalId' => $sucursalOrigenId,
+            'SucursalOrigenId' => $sucursalOrigenId,
             'TasaDeCambio' => 0,
-            'Tipo' => 7, // self::ENUM_TIPO_TRANSACCION_ABONO_DEUDA
+            'Tipo' => 7,
             'UrlComprobante' => null
         ];
     }
@@ -938,38 +1931,60 @@ class ContabilidadController extends Controller
     private function buscarRecepcionesSucursalParaCerrar($sucursalId, $filtroFecha)
     {
         try {
+            // DEBUG: Ver filtro de fecha
+            \Log::info("DEBUG - Buscando recepciones para sucursal {$sucursalId}", [
+                'fecha_fin' => $filtroFecha->fechaFin->toDateTimeString()
+            ]);
+
             $recepciones = DB::table('Recepciones as r')
+                ->leftJoin('RecepcionesDetalles as rd', 'r.RecepcionId', '=', 'rd.RecepcionId')
                 ->leftJoin('TransaccionesRecepciones as tr', 'r.RecepcionId', '=', 'tr.RecepcionId')
                 ->leftJoin('Transacciones as t', 'tr.TransaccionId', '=', 't.ID')
                 ->where('r.SucursalDestinoId', $sucursalId)
                 ->whereNotIn('r.Estatus', [7, 8])
                 ->where('r.FechaCreacion', '<=', $filtroFecha->fechaFin)
                 ->select(
-                    'r.*',
+                    'r.RecepcionId',
+                    'r.Numero',
+                    'r.SucursalDestinoId',
+                    'r.FechaCreacion',
+                    'r.Estatus',
+                    'rd.CantidadRecibida',
+                    'rd.CostoDivisa',
                     't.ID as TransaccionId',
                     't.MontoDivisaAbonado',
                     't.Fecha as TransaccionFecha'
                 )
                 ->orderBy('r.FechaCreacion')
                 ->get();
-            
-            // Agrupar por recepción
+
+            // DEBUG: Ver cuántas filas trajo la consulta
+            \Log::info("DEBUG - Filas obtenidas: " . $recepciones->count());
+
+            // Agrupar por recepción y calcular TotalRecepcionDivisas y abonos
             $recepcionesAgrupadas = [];
             foreach ($recepciones as $item) {
                 $recepcionId = $item->RecepcionId;
-                
+
                 if (!isset($recepcionesAgrupadas[$recepcionId])) {
                     $recepcionesAgrupadas[$recepcionId] = [
                         'RecepcionId' => $item->RecepcionId,
                         'Numero' => $item->Numero,
                         'SucursalDestinoId' => $item->SucursalDestinoId,
                         'FechaCreacion' => $item->FechaCreacion,
-                        'SaldoDivisa' => $item->SaldoDivisa,
                         'Estatus' => $item->Estatus,
+                        'TotalRecepcionDivisas' => 0,
                         'AbonoVentas' => []
                     ];
                 }
-                
+
+                // Sumar CostoDivisa * CantidadRecibida para TotalRecepcionDivisas
+                if ($item->CantidadRecibida && $item->CostoDivisa) {
+                    $recepcionesAgrupadas[$recepcionId]['TotalRecepcionDivisas'] += 
+                        $item->CantidadRecibida * $item->CostoDivisa;
+                }
+
+                // Agregar abonos si existen
                 if ($item->TransaccionId) {
                     $recepcionesAgrupadas[$recepcionId]['AbonoVentas'][] = [
                         'TransaccionId' => $item->TransaccionId,
@@ -978,17 +1993,30 @@ class ContabilidadController extends Controller
                     ];
                 }
             }
-            
-            // Filtrar solo las que tienen saldo > 0 y convertir a objetos
+
+            // DEBUG: Ver recepciones agrupadas
+            \Log::info("DEBUG - Recepciones agrupadas: " . count($recepcionesAgrupadas));
+
             $resultado = [];
-            foreach ($recepcionesAgrupadas as $recepcion) {
-                if ($recepcion['SaldoDivisa'] > 0) {
-                    $resultado[] = (object)$recepcion;
+            foreach ($recepcionesAgrupadas as $id => $rec) {
+                // Calcular TotalAbonadoDivisa
+                $totalAbonado = collect($rec['AbonoVentas'])->sum('MontoDivisaAbonado');
+
+                // Calcular SaldoDivisa (como en .NET)
+                $saldoDivisa = $rec['TotalRecepcionDivisas'] - $totalAbonado;
+
+                \Log::info("   → Recepción ID: {$id}, TotalRecepcionDivisas: {$rec['TotalRecepcionDivisas']}, TotalAbonado: {$totalAbonado}, SaldoDivisa: {$saldoDivisa}");
+
+                if ($saldoDivisa > 0) {
+                    $rec['SaldoDivisa'] = $saldoDivisa;
+                    $resultado[] = (object)$rec;
                 }
             }
-            
+
+            \Log::info("DEBUG - Recepciones con saldo > 0: " . count($resultado));
+
             return $resultado;
-            
+
         } catch (\Exception $e) {
             \Log::error("Error en buscarRecepcionesSucursalParaCerrar: " . $e->getMessage());
             return [];
@@ -999,17 +2027,30 @@ class ContabilidadController extends Controller
     {
         $operacionId = $recepcion->RecepcionId;
         
+        \Log::info("Asignando monto de abono", [
+            'recepcion_id' => $operacionId,
+            'saldo_recepcion' => $recepcion->SaldoDivisa,
+            'monto_disponible' => $montoTransferenciaDivisa
+        ]);
+        
         if ($recepcion->SaldoDivisa > 0 && $recepcion->SaldoDivisa <= $montoTransferenciaDivisa) {
             $montoTransferenciaDivisa -= $recepcion->SaldoDivisa;
             $nuevoAbono['MontoDivisaAbonado'] = $recepcion->SaldoDivisa;
             $esCerrarOperacion = true;
+            \Log::info("Caso 1: Abono completo", [
+                'abono' => $recepcion->SaldoDivisa,
+                'restante' => $montoTransferenciaDivisa
+            ]);
         } else {
             $nuevoAbono['MontoDivisaAbonado'] = $montoTransferenciaDivisa;
             $montoTransferenciaDivisa = 0;
             $esCerrarOperacion = false;
+            \Log::info("Caso 2: Abono parcial", [
+                'abono' => $nuevoAbono['MontoDivisaAbonado'],
+                'restante' => 0
+            ]);
         }
         
-        // Agregar abono a la recepción
         if (!isset($recepcion->AbonoVentas)) {
             $recepcion->AbonoVentas = [];
         }
@@ -1030,7 +2071,13 @@ class ContabilidadController extends Controller
 
     private function guardarAbonoRecepcion($sucursalId, $nuevoAbono, $esCerrarOperacion, $operacionId)
     {
-        // Insertar transacción
+        \Log::info("Guardando abono de recepción", [
+            'sucursal_id' => $sucursalId,
+            'operacion_id' => $operacionId,
+            'monto' => $nuevoAbono['MontoDivisaAbonado'],
+            'cerrar_operacion' => $esCerrarOperacion
+        ]);
+        
         $transaccionId = DB::table('Transacciones')->insertGetId([
             'Cedula' => $nuevoAbono['Cedula'],
             'DivisaId' => $nuevoAbono['DivisaId'],
@@ -1047,135 +2094,46 @@ class ContabilidadController extends Controller
             'SucursalOrigenId' => $nuevoAbono['SucursalOrigenId'],
             'TasaDeCambio' => $nuevoAbono['TasaDeCambio'],
             'Tipo' => $nuevoAbono['Tipo'],
-            'UrlComprobante' => $nuevoAbono['UrlComprobante'],
-            'created_at' => now(),
-            'updated_at' => now()
+            'UrlComprobante' => $nuevoAbono['UrlComprobante']
         ]);
         
-        // Insertar relación TransaccionesRecepciones
+        \Log::info("Transacción insertada", ['transaccion_id' => $transaccionId]);
+        
         DB::table('TransaccionesRecepciones')->insert([
             'RecepcionId' => $operacionId,
             'TransaccionId' => $transaccionId,
-            'SucursalId' => $sucursalId,
-            'created_at' => now(),
-            'updated_at' => now()
+            'SucursalId' => $sucursalId
         ]);
         
+        \Log::info("Relación TransaccionesRecepciones insertada");
+        
         if ($esCerrarOperacion) {
-            // Obtener la recepción
             $recepcion = DB::table('Recepciones')
                 ->where('RecepcionId', $operacionId)
                 ->first();
             
-            // Determinar nuevo estatus
+            $estatusAnterior = $recepcion->Estatus;
             if ($recepcion->Estatus == 6) {
                 $nuevoEstatus = 8;
             } else {
                 $nuevoEstatus = 7;
             }
             
-            // Actualizar recepción
             DB::table('Recepciones')
                 ->where('RecepcionId', $operacionId)
                 ->update(['Estatus' => $nuevoEstatus]);
+            
+            \Log::info("Recepción actualizada", [
+                'estatus_anterior' => $estatusAnterior,
+                'nuevo_estatus' => $nuevoEstatus
+            ]);
         }
         
-        // Actualizar el ID en el array del abono
         $nuevoAbono['Id'] = $transaccionId;
         
-        return $nuevoAbono;
-    }
-
-    private function buscarTransferenciasParaCerrar($sucursalId, $filtroFecha)
-    {
-        try {
-            // Obtener la fecha fin del filtro
-            $fechaFin = $filtroFecha->fechaFin ?? $filtroFecha['fecha_fin'] ?? now();
-            
-            // Buscar transferencias (igual que en .NET)
-            $transferencias = DB::table('Transferencias')
-                ->where('SucursalOrigenId', $sucursalId)
-                ->where('Fecha', '<=', $fechaFin)
-                ->where('Saldo', '>', 0)
-                ->orderBy('Fecha')
-                ->get();
-            
-            // Convertir a DTOs (como el _mapper.Map en .NET)
-            $transferenciasDTO = [];
-            foreach ($transferencias as $item) {
-                $transferenciasDTO[] = $this->mapearTransferenciaADTO($item);
-            }
-            
-            return $transferenciasDTO;
-            
-        } catch (\Exception $e) {
-            \Log::error("Error en buscarTransferenciasParaCerrar: " . $e->getMessage());
-            return [];
-        }
-    }
-
-    private function mapearTransferenciaADTO($transferencia)
-    {
-        // Mapear detalles si existen
-        $detallesDTO = [];
-        if (isset($transferencia->detalles) && $transferencia->detalles->isNotEmpty()) {
-            foreach ($transferencia->detalles as $detalle) {
-                // Crear ProductoDTO si existe relación
-                $productoDTO = null;
-                if (isset($detalle->producto)) {
-                    $productoDTO = new ProductoDTO([
-                        'ProductoId' => $detalle->producto->id,
-                        'Descripcion' => $detalle->producto->Descripcion,
-                        'CodigoBarras' => $detalle->producto->CodigoBarras,
-                        'CostoDivisa' => $detalle->producto->CostoDivisa,
-                        'CostoBs' => $detalle->producto->CostoBs,
-                        'Referencia' => $detalle->producto->Referencia,
-                        'Serial' => $detalle->producto->Serial,
-                        'Modelo' => $detalle->producto->Modelo,
-                        'CategoriaId' => $detalle->producto->CategoriaId,
-                        'MarcaId' => $detalle->producto->MarcaId,
-                        'ProveedorId' => $detalle->producto->ProveedorId,
-                        'Estatus' => $detalle->producto->Estatus,
-                    ]);
-                }
-                
-                $detallesDTO[] = new TransferenciaDetalleDTO([
-                    'TransferenciaDetalleId' => $detalle->id,
-                    'TransferenciaId' => $transferencia->id,
-                    'SucursalId' => $detalle->SucursalId ?? $transferencia->SucursalOrigenId,
-                    'ProductoId' => $detalle->ProductoId,
-                    'CantidadEmitida' => $detalle->CantidadEmitida,
-                    'CantidadRecibida' => $detalle->CantidadRecibida ?? 0,
-                    'CostoDivisa' => $detalle->CostoDivisa ?? 0,
-                    'CostoBs' => $detalle->CostoBs ?? 0,
-                    'CostoUnitario' => $detalle->CostoUnitario ?? 0,
-                    'Producto' => $productoDTO
-                ]);
-            }
-        }
+        \Log::info("Abono guardado exitosamente");
         
-        // Crear y retornar el DTO de transferencia
-        return new TransferenciaDTO([
-            'TransferenciaId' => $transferencia->id,
-            'Numero' => $transferencia->Numero ?? '',
-            'Fecha' => Carbon::parse($transferencia->Fecha),
-            'Estatus' => $transferencia->Estatus,
-            'SucursalOrigenId' => $transferencia->SucursalOrigenId,
-            'SucursalDestinoId' => $transferencia->SucursalDestinoId,
-            'Observacion' => $transferencia->Observacion ?? '',
-            'Saldo' => $transferencia->Saldo ?? 0,
-            'Tipo' => $transferencia->Tipo ?? 0,
-            'PasoOperacion' => $transferencia->PasoOperacion ?? 0,
-            'Detalles' => $detallesDTO,
-            'CantidadItems' => count($detallesDTO),
-            
-            // Propiedades que vienen de los detalles (se calculan automáticamente en el DTO)
-            'CantidadEmitida' => collect($detallesDTO)->sum('CantidadEmitida'),
-            'CantidadRecibida' => collect($detallesDTO)->sum('CantidadRecibida'),
-            'CantidadDisponible' => collect($detallesDTO)->sum(function($d) {
-                return $d->CantidadDisponible; // Usa el getter del DTO
-            }),
-        ]);
+        return $nuevoAbono;
     }
 
     public function enviar_listado_cerrar_dia(Request $request)
@@ -1519,7 +2477,7 @@ class ContabilidadController extends Controller
         return $ventasAgrupadasPorFecha;
     }
 
-    private function procesarCierresDiarios($ventas)
+    private function procesarCierresDiarios($ventas, $cierresDiarios)
     {
         $totales = [
             'total_bs_facturados' => 0,
@@ -1531,10 +2489,18 @@ class ContabilidadController extends Controller
             'total_divisa' => 0,
             'tiene_cierres' => false
         ];
+
+        // PASO 1: Crear un mapa de cierres por sucursal para búsqueda rápida
+        $cierresPorSucursal = [];
+        foreach ($cierresDiarios as $cierre) {
+            $cierresPorSucursal[$cierre->SucursalId] = $cierre;
+        }
         
         foreach ($ventas as $venta) {
-            if (isset($venta->cierreDiario) && $venta->cierreDiario->isNotEmpty()) {
-                $cierre = $venta->cierreDiario->first();
+            $sucursalId = $venta->sucursalId;            
+
+            if (isset($cierresPorSucursal[$sucursalId])) {
+                $cierre = $cierresPorSucursal[$sucursalId];
                 $totales['tiene_cierres'] = true;
                 
                 // Calcular TotalCobradoBs (código existente)
@@ -1558,14 +2524,8 @@ class ContabilidadController extends Controller
                 // TotalBsFacturados
                 $bsFacturados = $cobradoBs + $convertidosBs;
                 
-                // Gastos en Bs (código existente)
-                $egresosBs = 0;
-                if (isset($cierre->relations['gastosCierreDiario']) && $cierre->gastosCierreDiario->isNotEmpty()) {
-                    foreach ($cierre->gastosCierreDiario as $gasto) {
-                        $egresosBs += floatval($gasto->MontoAbonado ?? 0);
-                    }
-                }
-                
+                // Gastos en Bs (código existente)                
+                $egresosBs = floatval($cierre->EgresoBs ?? 0);
                 // Gastos en Divisas (NUEVO)
                 $egresosDivisa = floatval($cierre->EgresoDivisas ?? 0);
                 

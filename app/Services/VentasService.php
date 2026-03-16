@@ -202,6 +202,7 @@ class VentasService
 
     public function buscarTransacciones(int $tipoTransaccion, ?int $sucursalId, array $filtroFecha, ?int $proveedorId = null, ?string $estatusTransaccion = null) 
     {
+
         // Extraer y parsear las fechas del array
         $fechaInicio = isset($filtroFecha['fecha_inicio']) 
             ? Carbon::parse($filtroFecha['fecha_inicio'])->startOfDay() 
@@ -211,16 +212,33 @@ class VentasService
             ? Carbon::parse($filtroFecha['fecha_fin'])->endOfDay() 
             : null;
 
+        \Log::info("FILTRO EN buscarTransacciones", [
+            'tipo' => $tipoTransaccion,
+            'fecha_inicio' => $fechaInicio ? $fechaInicio->toDateTimeString() : null,
+            'fecha_fin' => $fechaFin ? $fechaFin->toDateTimeString() : null
+        ]);
+
         $query = Transaccion::query()
             ->where('Tipo', $tipoTransaccion);
 
         // Aplicar filtro de fechas si ambas existen
+        // if ($fechaInicio && $fechaFin) {
+        //     $query->whereBetween('Fecha', [$fechaInicio, $fechaFin]);
+        // } elseif ($fechaInicio) {
+        //     $query->where('Fecha', '>=', $fechaInicio);
+        // } elseif ($fechaFin) {
+        //     $query->where('Fecha', '<=', $fechaFin);
+        // }
+
         if ($fechaInicio && $fechaFin) {
-            $query->whereBetween('Fecha', [$fechaInicio, $fechaFin]);
+            $query->where(function($q) use ($fechaInicio, $fechaFin) {
+                $q->whereDate('Fecha', '=', $fechaInicio)
+                ->orWhereDate('Fecha', '=', $fechaFin);
+            });
         } elseif ($fechaInicio) {
-            $query->where('Fecha', '>=', $fechaInicio);
+            $query->whereDate('Fecha', '=', $fechaInicio);
         } elseif ($fechaFin) {
-            $query->where('Fecha', '<=', $fechaFin);
+            $query->whereDate('Fecha', '=', $fechaFin);
         }
 
         if ($sucursalId) {
@@ -237,7 +255,25 @@ class VentasService
             $query->where('Estatus', $estatusTransaccion);
         }
 
-        return $query->get();
+        \Log::info("SQL ejecutado", [
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings()
+        ]);
+
+        $resultados = $query->get();
+
+        \Log::info("RESULTADOS buscarTransacciones tipo {$tipoTransaccion}", [
+            'total' => $resultados->count(),
+            'ids' => $resultados->pluck('ID')->toArray(),
+            'fechas' => $resultados->map(function($item) {
+                return [
+                    'id' => $item->ID,
+                    'fecha' => $item->Fecha ? Carbon::parse($item->Fecha)->toDateTimeString() : null
+                ];
+            })->toArray()
+        ]);
+
+        return $resultados;
     }
 
     public function borrarVentaDiaria(int $ventaId): bool
@@ -836,6 +872,35 @@ class VentasService
 
         return $facturaDTO;
     }
+
+    public function obtenerVentasDiariasParaCerrarSinTotalizarEnPeriodo($sucursalId, $incluirGastos, $filtro)
+    {
+        
+        $fechaInicio = $filtro instanceof ParametrosFiltroFecha 
+            ? $filtro->fechaInicio 
+            : Carbon::parse($filtro['fecha_inicio'] ?? $filtro);
+        
+        $fechaFin = $filtro instanceof ParametrosFiltroFecha 
+            ? $filtro->fechaFin 
+            : Carbon::parse($filtro['fecha_fin'] ?? $filtro);
+        
+        $ventas = VentaDiariaTotalizada::with('sucursal')
+            ->when($sucursalId, fn($q) => $q->where('SucursalId', $sucursalId))
+            ->whereBetween('Fecha', [$fechaInicio, $fechaFin]) 
+            ->where('Saldo', '>', 0)
+            ->where(function ($q) {
+                $q->whereNull('Estatus')
+                ->orWhere('Estatus', '!=', 4);
+            })
+            ->orderBy('Fecha')
+            ->get();
+
+        $detalle = $this->obtenerDetallesPorVentasBalance($sucursalId, $ventas);
+
+        return [
+            'ListaVentasDiarias' => $detalle
+        ];
+    }
     
     public function obtenerVentasDiariasParaCerrarSinTotalizar($sucursalId, $incluirGastos)
     {
@@ -903,7 +968,8 @@ class VentasService
         // Filtro por fechas (como en .NET: Fecha >= inicio AND Fecha <= fin)
         if ($filtroFecha && isset($filtroFecha->fechaInicio) && isset($filtroFecha->fechaFin)) {
             $fechaInicio = $filtroFecha->fechaInicio->startOfDay();
-            $fechaFin = $filtroFecha->fechaFin->startOfDay();
+            $fechaFin = $filtroFecha->fechaFin->endOfDay();
+            // $fechaFin = $filtroFecha->fechaFin->startOfDay();            
             
             $query->where('Fecha', '>=', $fechaInicio)
                   ->where('Fecha', '<=', $fechaFin);

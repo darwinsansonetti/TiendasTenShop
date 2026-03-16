@@ -11,9 +11,9 @@ use App\Http\Controllers\MensajesController;
 use App\Http\Controllers\SucursalController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\CuadreController;
-
 use App\Http\Controllers\VentasController;
 use App\Http\Controllers\ContabilidadController;
+use App\Http\Controllers\EmpleadosController;
 
 /*
 |--------------------------------------------------------------------------
@@ -166,6 +166,12 @@ Route::middleware('auth')->group(function() {
 
     // Probar Cerrar Dia
     Route::get('/cpanel/contabilidad/probar/cerrar', [ContabilidadController::class, 'cerrar_dia_automaticamente'])->name('cpanel.contabilidad.probar_cerrar_dia');
+
+    // Ventas Diarias - Empleados
+    Route::get('/cpanel/empleados/ventas', [EmpleadosController::class, 'listado_empleados'])->name('cpanel.empelados.ventas_diarias');
+
+    // Detalles de venta
+    Route::get('/detalles-venta/{id}/{vti}', [EmpleadosController::class, 'detallesVenta'])->name('detalles-venta');
 });
 
 

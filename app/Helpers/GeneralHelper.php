@@ -288,6 +288,48 @@ class GeneralHelper
         return $ranking;
     }
 
+    public static function ObtenerRankingVendedoresSinAgrupar(ParametrosFiltroFecha $filtroFecha, $usuarioId = null, $sucursalId = null): Collection
+    {
+        // Si sucursalId es 0, tratarlo como null
+        $sucursalId = $sucursalId ?: null;
+        
+        // Obtener totales de ventas por usuario y sucursal
+        $ranking = VentaVendedoresTotalizada::query()
+            ->whereBetween('Fecha', [$filtroFecha->fechaInicio, $filtroFecha->fechaFin])
+            ->when($sucursalId, fn($q) => $q->where('SucursalId', $sucursalId))
+            ->orderBy('Fecha', 'desc')
+            ->get();
+
+        // Cargar información de Usuario y Sucursal
+        $ranking->transform(function ($item, $index) {
+            // Datos del usuario activo
+            $usuario = Usuario::where('UsuarioId', $item->UsuarioId)
+                ->where('EsActivo', 1)
+                ->first();
+
+            $item->Vendedor = $usuario ? [
+                'UsuarioId' => $usuario->UsuarioId,
+                'NombreCompleto' => $usuario->NombreCompleto,
+                'VendedorId' => $usuario->VendedorId,
+                'SucursalId' => $usuario->SucursalId,
+                'FotoPerfil' => $usuario->FotoPerfil
+            ] : null;
+
+            // Nombre de la sucursal
+            if ($item->SucursalId) {
+                $sucursal = Sucursal::find($item->SucursalId);
+                $item->SucursalNombre = $sucursal ? $sucursal->Nombre : null;
+            }
+
+            // Ranking numérico
+            $item->ranking = $index + 1;
+
+            return $item;
+        });
+
+        return $ranking;
+    }
+
     // Obtener informacion a mostrar en Resumen de ventas
     public static function generarDatosVentas(ParametrosFiltroFecha $filtro)
     {
