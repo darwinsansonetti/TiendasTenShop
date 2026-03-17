@@ -122,6 +122,24 @@ class EmpleadosController extends Controller
                 ->where('ID', $vti)
                 ->orderBy('ProductoId')
                 ->get();
+
+            // ============================================
+            // OBTENER RANGO DE FECHAS DE LOS REGISTROS
+            // ============================================
+            if ($detallesVenta->isNotEmpty()) {
+                // Obtener todas las fechas y convertir a Carbon
+                $fechas = $detallesVenta->pluck('Fecha')->map(function($fecha) {
+                    return Carbon::parse($fecha);
+                });
+                
+                // Obtener la fecha mínima y máxima
+                $fechaInicio = $fechas->min();
+                $fechaFin = $fechas->max();
+            } else {
+                // Si no hay registros, usar fechas actuales
+                $fechaInicio = Carbon::now('America/Caracas');
+                $fechaFin = Carbon::now('America/Caracas');
+            }
             
             // Obtener IDs de productos para cargar TODOS sus datos
             $productoIds = $detallesVenta->pluck('ProductoId')->unique()->toArray();
@@ -201,11 +219,196 @@ class EmpleadosController extends Controller
                 'detallesVenta',
                 'totales',
                 'sucursal',
-                'vti'
+                'vti',
+                'fechaInicio',
+                'fechaFin'
             ));
             
         } catch (\Exception $e) {
             return back()->with('error', 'Error al cargar los detalles: ' . $e->getMessage());
+        }
+    }
+
+    public function listado_ranking(Request $request)
+    {
+        // 🚀 Aquí: usar fechas del request si existen
+        $fechaInicio = $request->input('fecha_inicio')
+            ? Carbon::parse($request->input('fecha_inicio'))->startOfDay()
+            : Carbon::now('America/Caracas')->startOfMonth();  // Primer día del mes
+
+        $fechaFin = $request->input('fecha_fin')
+            ? Carbon::parse($request->input('fecha_fin'))->endOfDay()
+            : Carbon::now('America/Caracas')->endOfMonth();    // Último día del mes
+
+        // $fechaInicio = Carbon::parse('2026-03-15', 'America/Caracas');
+        // $fechaFin = Carbon::parse('2026-03-15', 'America/Caracas');
+
+        $filtroFecha = new ParametrosFiltroFecha(
+            null,   // tipoFiltroFecha
+            null,   // mesSeleccionado
+            null,   // año
+            false,  // añoAnterior
+            $fechaInicio,
+            $fechaFin
+        );
+
+        $sucursalId = session('sucursal_id', 0);
+        // Si es 0, convertirlo a null
+        $sucursalId = $sucursalId ?: null;
+
+        // Obtener ranking según el filtro de fechas
+        $rankingVendedor = GeneralHelper::ObtenerRankingVendedores($filtroFecha);
+
+        // dd($rankingVendedor);
+
+        session([
+            'menu_active' => 'Empleados',
+            'submenu_active' => 'Ranking General'
+        ]);
+
+        return view('cpanel.empleados.listado_ranking_empleados', [
+            'rankingVendedor' => $rankingVendedor,
+            'fecha_inicio' => $fechaInicio->format('Y-m-d'),
+            'fecha_fin' => $fechaFin->format('Y-m-d'),
+        ]);
+    }
+
+    public function ventasVendedor(Request $request, $id)
+    {
+        try {
+            // $id = UsuarioId del vendedor
+            
+            // Obtener fechas del request o usar el período actual
+            $fechaInicio = $request->input('fecha_inicio')
+                ? Carbon::parse($request->input('fecha_inicio'))->startOfDay()
+                : Carbon::now('America/Caracas')->startOfMonth();
+
+            $fechaFin = $request->input('fecha_fin')
+                ? Carbon::parse($request->input('fecha_fin'))->endOfDay()
+                : Carbon::now('America/Caracas')->endOfMonth();
+
+            // Crear filtro de fechas
+            $filtroFecha = new ParametrosFiltroFecha(
+                null, null, null, false,
+                $fechaInicio,
+                $fechaFin
+            );
+
+            // Obtener información del vendedor
+            $vendedor = Usuario::where('UsuarioId', $id)
+                ->where('EsActivo', 1)
+                ->first();
+
+            if (!$vendedor) {
+                return back()->with('error', 'Vendedor no encontrado');
+            }
+
+            // Obtener los detalles de TODAS las ventas del vendedor en el rango de fechas
+            $detallesVenta = DB::table('VentaVendedoresView')
+                ->select([
+                    'ID',
+                    'ID as VentaId',
+                    'Fecha',
+                    'SucursalId',
+                    'ProductoId',
+                    'Cantidad',
+                    'PrecioVenta',
+                    'MontoDivisa',
+                    'UsuarioId',
+                    'CostoDivisa',
+                    'Costo',
+                    'Existencia'
+                ])
+                ->where('UsuarioId', $id)
+                ->whereBetween('Fecha', [$fechaInicio, $fechaFin])  
+                ->orderBy('Fecha', 'desc')
+                ->orderBy('ProductoId')
+                ->get();
+            
+            // Obtener IDs de productos para cargar TODOS sus datos
+            $productoIds = $detallesVenta->pluck('ProductoId')->unique()->toArray();
+            
+            // Cargar TODA la información de productos (no solo nombre y código)
+            $productos = Producto::whereIn('ID', $productoIds)
+                ->get()
+                ->keyBy('ID');
+            
+            // Enriquecer detalles con TODOS los datos del producto
+            $detallesVenta->transform(function ($item) use ($productos) {
+                $producto = $productos->get($item->ProductoId);
+                
+                if ($producto) {
+                    // Asignar TODOS los campos del producto
+                    $item->ProductoNombre = $producto->Nombre;
+                    $item->ProductoCodigo = $producto->Codigo;
+                    $item->ProductoDescripcion = $producto->Descripcion ?? '';
+                    $item->ProductoUrlFoto = $producto->UrlFoto ?? '';
+                    $item->ProductoCategoria = $producto->Categoria ?? '';
+                    $item->ProductoMarca = $producto->Marca ?? '';
+                    $item->ProductoModelo = $producto->Modelo ?? '';
+                    $item->ProductoProveedorId = $producto->ProveedorId ?? null;
+                    $item->ProductoEstatus = $producto->Estatus ?? 1;
+                    $item->ProductoFechaRegistro = $producto->FechaRegistro ?? null;
+                    $item->ProductoPrecioCompra = $producto->PrecioCompra ?? 0;
+                    $item->ProductoPrecioVenta = $producto->PrecioVenta ?? 0;
+                    $item->ProductoStock = $producto->Stock ?? 0;
+                    $item->ProductoStockMinimo = $producto->StockMinimo ?? 0;
+                    $item->ProductoUbicacion = $producto->Ubicacion ?? '';
+                } else {
+                    // Valores por defecto si no se encuentra el producto
+                    $item->ProductoNombre = 'Producto no encontrado';
+                    $item->ProductoCodigo = 'N/A';
+                    $item->ProductoDescripcion = '';
+                    $item->ProductoUrlFoto = '';
+                    $item->ProductoCategoria = '';
+                    $item->ProductoMarca = '';
+                    $item->ProductoModelo = '';
+                    $item->ProductoProveedorId = null;
+                    $item->ProductoEstatus = 0;
+                    $item->ProductoFechaRegistro = null;
+                    $item->ProductoPrecioCompra = 0;
+                    $item->ProductoPrecioVenta = 0;
+                    $item->ProductoStock = 0;
+                    $item->ProductoStockMinimo = 0;
+                    $item->ProductoUbicacion = '';
+                }
+                
+                // Calcular subtotales (estos ya los tenías)
+                $item->SubtotalDivisa = $item->Cantidad * $item->PrecioVenta;
+                $item->SubtotalBs = $item->SubtotalDivisa * ($item->TasaDeCambio ?? 1);
+                
+                return $item;
+            });
+
+            // Calcular totales de la venta
+            $totales = (object) [
+                'totalCantidad' => $detallesVenta->sum('Cantidad'),
+                'totalDivisa' => $detallesVenta->sum('MontoDivisa'),
+                'totalBs' => $detallesVenta->sum(function ($item) {
+                    return $item->Cantidad * $item->PrecioVenta * ($item->TasaDeCambio ?? 1);
+                })
+            ];
+            
+            // Obtener información de la sucursal
+            $sucursal = null;
+            if ($vendedor->SucursalId) {
+                $sucursal = Sucursal::find($vendedor->SucursalId);
+            }
+            
+            // Puedes hacer un dd para verificar que ahora tienes todos los campos
+            // dd($detallesVenta->first());
+            
+            return view('cpanel.empleados.detalles_venta', compact(
+                'vendedor',
+                'detallesVenta',
+                'totales',
+                'sucursal',
+                'fechaInicio',
+                'fechaFin'
+            ));
+
+        } catch (\Exception $e) {
+            return back()->with('error', 'Error al cargar las ventas: ' . $e->getMessage());
         }
     }
 }

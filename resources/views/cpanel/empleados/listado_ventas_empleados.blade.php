@@ -35,7 +35,7 @@
         <!-- Card de filtros -->
         <div class="card card-primary card-outline mb-4">
             <div class="card-body">
-                <form action="{{ route('cpanel.empelados.ventas_diarias') }}" method="GET" id="filtroForm">
+                <form action="{{ route('cpanel.empleados.ventas_diarias') }}" method="GET" id="filtroForm">
                     @csrf
                     <div class="row g-3">
                         <div class="col-md-4">

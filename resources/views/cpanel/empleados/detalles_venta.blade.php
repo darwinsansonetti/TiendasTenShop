@@ -86,7 +86,7 @@
                             <tr>
                                 <td><strong>Fecha:</strong></td>
                                 <td class="text-end">
-                                    {{ $detallesVenta->first()->Fecha ?? '' }}
+                                    {{ $fechaInicio->format('d/m/Y') }} - {{ $fechaFin->format('d/m/Y') }}
                                 </td>
                             </tr>
                             <tr>

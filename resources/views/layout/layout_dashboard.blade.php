@@ -637,9 +637,17 @@
                 </a>
                 <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.empelados.ventas_diarias') }}" class="nav-link {{ session('submenu_active') == 'Ventas Diarias' ? 'active' : '' }}">
+                    <a href="{{ route('cpanel.empleados.ventas_diarias') }}" class="nav-link {{ session('submenu_active') == 'Ventas Diarias' ? 'active' : '' }}">
                       <i class="nav-icon bi bi-circle"></i>
                       <p>Ventas Diarias</p>
+                    </a>
+                  </li>
+                </ul>
+                <ul class="nav nav-treeview">
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.empleados.ranking') }}" class="nav-link {{ session('submenu_active') == 'Ranking General' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-circle"></i>
+                      <p>Ranking General</p>
                     </a>
                   </li>
                 </ul>

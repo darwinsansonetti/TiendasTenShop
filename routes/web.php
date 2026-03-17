@@ -168,10 +168,16 @@ Route::middleware('auth')->group(function() {
     Route::get('/cpanel/contabilidad/probar/cerrar', [ContabilidadController::class, 'cerrar_dia_automaticamente'])->name('cpanel.contabilidad.probar_cerrar_dia');
 
     // Ventas Diarias - Empleados
-    Route::get('/cpanel/empleados/ventas', [EmpleadosController::class, 'listado_empleados'])->name('cpanel.empelados.ventas_diarias');
+    Route::get('/cpanel/empleados/ventas', [EmpleadosController::class, 'listado_empleados'])->name('cpanel.empleados.ventas_diarias');
 
     // Detalles de venta
     Route::get('/detalles-venta/{id}/{vti}', [EmpleadosController::class, 'detallesVenta'])->name('detalles-venta');
+
+    // Ventas Diarias - Empleados
+    Route::get('/cpanel/empleados/ranking', [EmpleadosController::class, 'listado_ranking'])->name('cpanel.empleados.ranking');
+
+    // Ventas de un vendedor en un periodo
+    Route::get('/cpanel/empleados/ventas-vendedor/{id}', [EmpleadosController::class, 'ventasVendedor'])->name('cpanel.empleados.ventas.vendedor');
 });
 
 
