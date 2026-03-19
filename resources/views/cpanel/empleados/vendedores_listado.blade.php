@@ -1,6 +1,6 @@
 @extends('layout.layout_dashboard')
 
-@section('title', 'TiendasTenShop | Ranking Vendedores')
+@section('title', 'TiendasTenShop | Vendedores')
 
 @php
     use App\Helpers\FileHelper;
@@ -14,11 +14,11 @@
   <div class="container-fluid">
     <!--begin::Row-->
     <div class="row">
-      <div class="col-sm-6"><h3 class="mb-0">Ranking Vendedores</h3></div>
+      <div class="col-sm-6"><h3 class="mb-0">Vendedores</h3></div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
           <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Ranking Vendedores</li>
+          <li class="breadcrumb-item active" aria-current="page">Vendedores</li>
         </ol>
       </div>
     </div>
@@ -31,93 +31,66 @@
 <!--begin::App Content-->
 <div class="app-content">
     <div class="container-fluid">  
-        
-        <!-- Card de filtros -->
-        <div class="card card-primary card-outline mb-4">
-            <div class="card-body">
-                <form action="{{ route('cpanel.empleados.ranking') }}" method="GET" id="filtroForm">
-                    @csrf
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label for="fecha_inicio" class="form-label">
-                                <i class="fas fa-calendar-alt me-1"></i>Fecha Inicio
-                            </label>
-                            <div class="input-group">
-                                <input type="date" 
-                                    class="form-control" 
-                                    id="fecha_inicio" 
-                                    name="fecha_inicio"
-                                    value="{{ request('fecha_inicio', $fecha_inicio ?? now()->startOfMonth()->format('Y-m-d')) }}"
-                                    required>
-                            </div>
-                        </div>
-                        
-                        <div class="col-md-4">
-                            <label for="fecha_fin" class="form-label">
-                                <i class="fas fa-calendar-alt me-1"></i>Fecha Fin
-                            </label>
-                            <div class="input-group">
-                                <input type="date" 
-                                    class="form-control" 
-                                    id="fecha_fin" 
-                                    name="fecha_fin"
-                                    value="{{ request('fecha_fin', $fecha_fin ?? now()->format('Y-m-d')) }}"
-                                    required>
-                            </div>
-                        </div>
-                        
-                        <div class="col-md-4 d-flex align-items-end">
-                            <button type="submit" class="btn btn-primary w-100">
-                                <i class="fas fa-search me-2"></i>Buscar
-                            </button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </div> 
 
-        @if($rankingVendedor && $rankingVendedor->count() > 0)
+    @if($vendedores && $vendedores->count() > 0)
         <!-- Card de tabla -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h3 class="card-title mb-0">
-                    <i class="fas fa-box me-2"></i>Ranking Vendedores (Ordenado por Unidades Vendidas)
+                    <i class="fas fa-users me-2"></i>Listado de Vendedores
                 </h3>
                 
-                <div class="btn-group ms-auto">  <!-- ms-auto empuja a la derecha -->
-                    <button type="button"
-                            class="btn btn-outline-secondary btn-sm"
-                            onclick="pdfTablaRanking()">
-                        <i class="fas fa-print me-1"></i>PDF
-                    </button>
-                    <button type="button"
-                            class="btn btn-outline-secondary btn-sm"
-                            onclick="exportarExcelRanking()">
-                        <i class="fas fa-file-excel me-1"></i>Excel
-                    </button>
+                <!-- Contenedor derecho con ms-auto para empujar a la derecha -->
+                <div class="d-flex gap-2 ms-auto">
+                    <!-- Botón Agregar Vendedor -->
+                    <a href="{{ route('cpanel.empleados.agregar') }}" 
+                    class="btn btn-success btn-sm">
+                        <i class="fas fa-plus-circle me-1"></i>+ Nuevo Vendedor
+                    </a>
+                    
+                    <!-- Botones de exportación -->
+                    <div class="btn-group">
+                        <button type="button"
+                                class="btn btn-outline-secondary btn-sm"
+                                onclick="pdfTablaVendedores()">
+                            <i class="fas fa-print me-1"></i>PDF
+                        </button>
+                        <button type="button"
+                                class="btn btn-outline-secondary btn-sm"
+                                onclick="exportarExcelVendedores()">
+                            <i class="fas fa-file-excel me-1"></i>Excel
+                        </button>
+                    </div>
                 </div>
             </div>
+            
             <div class="card-body p-0">
                 <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
-                    <table class="table table-hover mb-0" id="tablaRankingVendedores">
+                    <table class="table table-hover mb-0" id="tablaVendedores">
                         <thead class="table-light">
                             <tr>
-                                <th width="60" class="text-center">Pos.</th>
                                 <th width="80" class="text-center">Foto</th>
-                                <th>Vendedor</th>
+                                <th width="250">Vendedor</th>
                                 <th width="200">Sucursal</th>
-                                <th width="120" class="text-center">Unidades</th>
-                                <th width="140" class="text-end">Ventas USD</th>
-                                <th width="120" class="text-center">Valoración</th>
-                                <th width="100" class="text-center">Acción</th>
+                                <th width="250">Dirección</th>
+                                <th width="120" class="text-center">Ingreso</th>
+                                <th width="120" class="text-center">Acción</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach($rankingVendedor as $index => $vendedor)
+                            @foreach($vendedores as $index => $vendedor)
                                 @php
-                                    $fotoPerfil = $vendedor->Vendedor['FotoPerfil'] ?? '';
-                                    $promedioVenta = $vendedor->total_ventas / $vendedor->total_unidades;
-
+                                    // Usar sintaxis de objeto (->) en lugar de array ([])
+                                    $id = $vendedor->id ?? '';
+                                    $vendedorId = $vendedor->vendedor_id ?? $vendedor->VendedorId ?? '';
+                                    $nombre = $vendedor->nombre ?? $vendedor->NombreCompleto ?? 'N/A';
+                                    $email = $vendedor->email ?? $vendedor->Email ?? '';
+                                    $direccion = $vendedor->direccion ?? $vendedor->Direccion ?? 'N/A';
+                                    $sucursalNombre = $vendedor->sucursal_nombre ?? 'N/A';
+                                    $fotoPerfil = $vendedor->foto ?? $vendedor->FotoPerfil ?? '';
+                                    $fechaIngreso = $vendedor->fecha_creacion ?? $vendedor->FechaCreacion ?? null;
+                                    $origen = $vendedor->origen ?? 'pos';
+                                    
                                     $imgSrc = FileHelper::getOrDownloadFile(
                                         'images/usuarios/',
                                         $fotoPerfil,
@@ -125,133 +98,75 @@
                                     );
                                 @endphp
                                 <tr class="align-middle">
-                                    <!-- Ranking estilo tarjeta -->
-                                <td class="text-center">
-                                    @if($vendedor->ranking == 1)
-                                        <div class="card border-0 shadow-lg d-inline-block" style="width: 60px; background: linear-gradient(145deg, #ffd700, #ffb347);">
-                                            <div class="card-body p-2 text-center">
-                                                <i class="fas fa-crown fa-2x text-dark"></i>
-                                                <h5 class="mb-0 text-dark fw-bold">1</h5>
-                                            </div>
-                                        </div>
-                                    @elseif($vendedor->ranking == 2)
-                                        <div class="card border-0 shadow d-inline-block" style="width: 60px; background: linear-gradient(145deg, #e8e8e8, #c0c0c0);">
-                                            <div class="card-body p-2 text-center">
-                                                <i class="fas fa-medal fa-2x" style="color: #cd7f32;"></i>
-                                                <h5 class="mb-0 text-dark fw-bold">2</h5>
-                                            </div>
-                                        </div>
-                                    @elseif($vendedor->ranking == 3)
-                                        <div class="card border-0 shadow d-inline-block" style="width: 60px; background: linear-gradient(145deg, #b06d2e, #cd7f32);">
-                                            <div class="card-body p-2 text-center">
-                                                <i class="fas fa-medal fa-2x" style="color: #ffd700;"></i>
-                                                <h5 class="mb-0 text-white fw-bold">3</h5>
-                                            </div>
-                                        </div>
-                                    @else
-                                        <span class="badge bg-light text-dark fs-5 p-3 rounded-circle shadow-sm" 
-                                            style="width: 50px; height: 50px; display: inline-flex; align-items: center; justify-content: center;">
-                                            {{ $vendedor->ranking }}
-                                        </span>
-                                    @endif
-                                </td>
-
                                     <!-- Foto -->
                                     <td class="text-center">
                                         <img src="{{ $imgSrc }}" 
-                                            alt="{{ $vendedor->Vendedor['NombreCompleto'] ?? 'N/A' }}"
+                                            alt="{{ $nombre }}"
                                             class="rounded-circle border border-success img-zoomable" 
                                             style="width: 60px; height: 60px; object-fit: cover; cursor: zoom-in;"
                                             onclick="zoomImagen(this)"
                                             data-full-image="{{ $imgSrc }}"
-                                            data-description="{{ $vendedor->SucursalNombre }}">
+                                            data-description="{{ $nombre }}">
                                     </td>
 
-                                    <!-- Nombre y código -->
+                                    <!-- Vendedor -->
                                     <td>
-                                        <strong>{{ $vendedor->Vendedor['NombreCompleto'] ?? 'N/A' }}</strong>
+                                        <strong>{{ $nombre }}</strong>
                                         <br>
                                         <small class="text-muted">
-                                            <i class="fas fa-id-badge me-1"></i>{{ $vendedor->Vendedor['VendedorId'] ?? 'N/A' }}
+                                            <i class="fas fa-id-badge me-1"></i>{{ $vendedorId }}
                                         </small>
                                     </td>
 
                                     <!-- Sucursal -->
                                     <td>
                                         <span class="badge bg-warning text-white p-2">
-                                            <i class="fas fa-store me-1"></i>{{ $vendedor->SucursalNombre ?? 'N/A' }}
+                                            <i class="fas fa-store me-1"></i>{{ $sucursalNombre }}
                                         </span>
                                     </td>
 
-                                    <!-- Total Unidades -->
-                                    <td class="text-center fw-bold">
-                                        <span class="badge bg-primary text-white fs-7">
-                                            {{ number_format($vendedor->total_unidades, 0, ',', '.') }}
+                                    <!-- Dirección -->
+                                    <td>
+                                        <span class="text-muted">
+                                            <i class="fas fa-map-marker-alt me-1 text-secondary"></i>
+                                            {{ $direccion }}
                                         </span>
                                     </td>
 
-                                    <!-- Total Ventas USD -->
-                                    <td class="text-end fw-bold text-success fs-6">
-                                        $ {{ number_format($vendedor->total_ventas, 2, ',', '.') }}
-                                    </td>
-
-                                    <!-- Valoración (estrellas según ranking) -->
+                                    <!-- Ingreso -->
                                     <td class="text-center">
-                                        @php
-                                            // Calcular estrellas según ranking
-                                            $estrellas = 0;
-                                            if ($vendedor->ranking == 1) {
-                                                $estrellas = 5;
-                                            } elseif ($vendedor->ranking == 2) {
-                                                $estrellas = 4.5;
-                                            } elseif ($vendedor->ranking == 3) {
-                                                $estrellas = 4;
-                                            } elseif ($vendedor->ranking <= 5) {
-                                                $estrellas = 3.5;
-                                            } elseif ($vendedor->ranking <= 10) {
-                                                $estrellas = 3;
-                                            } elseif ($vendedor->ranking <= 15) {
-                                                $estrellas = 2.5;
-                                            } elseif ($vendedor->ranking <= 20) {
-                                                $estrellas = 2;
-                                            } else {
-                                                $estrellas = 1;
-                                            }
-                                        @endphp
-                                        
-                                        <!-- Estrellas con Bootstrap Icons -->
-                                        <div class="text-warning">
-                                            @for($i = 1; $i <= 5; $i++)
-                                                @if($i <= floor($estrellas))
-                                                    <i class="bi bi-star-fill"></i>
-                                                @elseif($i == ceil($estrellas) && $estrellas - floor($estrellas) >= 0.5)
-                                                    <i class="bi bi-star-half"></i>
-                                                @else
-                                                    <i class="bi bi-star"></i>
-                                                @endif
-                                            @endfor
-                                        </div>
+                                        @if($fechaIngreso)
+                                            @php
+                                                $fecha = is_string($fechaIngreso) 
+                                                    ? \Carbon\Carbon::parse($fechaIngreso) 
+                                                    : \Carbon\Carbon::instance($fechaIngreso);
+                                            @endphp
+                                            <span class="badge bg-light text-dark p-2">
+                                                <i class="far fa-calendar-alt me-1"></i>
+                                                {{ $fecha->format('d/m/Y') }}
+                                            </span>
+                                        @else
+                                            <span class="text-muted">N/A</span>
+                                        @endif
                                     </td>
 
-                                    <!-- Detalle (botón para ver ventas del vendedor) -->
+                                    <!-- Acción -->
                                     <td class="text-center">
                                         <div class="btn-group" role="group">
-                                            <!-- Botón Ver (existente) -->
-                                            <a href="{{ route('cpanel.empleados.ventas.vendedor', [
-                                                    'id' => $vendedor->UsuarioId
-                                                ]) }}?fecha_inicio={{ request('fecha_inicio') }}&fecha_fin={{ request('fecha_fin') }}"
-                                                class="btn btn-sm btn-outline-primary"
-                                                title="Ver ventas del vendedor"
-                                                data-bs-toggle="tooltip">
-                                                <i class="bi bi-eye"></i>
+                                            <!-- Botón Editar -->
+                                            <a href="{{ route('cpanel.empleados.vendedor.editar', ['id' => $id]) }}"
+                                            class="btn btn-sm btn-outline-warning"
+                                            title="Editar vendedor"
+                                            data-bs-toggle="tooltip">
+                                                <i class="bi bi-pencil"></i>
                                             </a>
                                             
-                                            <!-- Botón Editar (nuevo) -->
-                                            <a href="{{ route('cpanel.empleados.vendedor.editar', ['id' => $vendedor->UsuarioId]) }}"
-                                                class="btn btn-sm btn-outline-warning"
-                                                title="Editar ventas del vendedor"
+                                            <!-- Botón Historial -->
+                                            <a href="{{ route('cpanel.empleados.ventas.vendedor', ['id' => $id]) }}?fecha_inicio={{ request('fecha_inicio') }}&fecha_fin={{ request('fecha_fin') }}"
+                                                class="btn btn-sm btn-outline-info"
+                                                title="Historial del vendedor"
                                                 data-bs-toggle="tooltip">
-                                                <i class="bi bi-pencil"></i>
+                                                <i class="bi bi-clock-history"></i>
                                             </a>
                                         </div>
                                     </td>
@@ -262,43 +177,42 @@
                 </div>
             </div>
             
-            <!-- Resumen del período -->
+            <!-- Resumen -->
             <div class="card-footer">
                 <div class="row">
                     <div class="col-md-4">
                         <small class="text-muted">
-                            <i class="fas fa-calendar-alt me-1"></i>
-                            Período: {{ \Carbon\Carbon::parse($fecha_inicio)->format('d/m/Y') }} 
-                            al {{ \Carbon\Carbon::parse($fecha_fin)->format('d/m/Y') }}
+                            <i class="fas fa-users me-1"></i>
+                            Total Vendedores: {{ $vendedores->count() }}
                         </small>
                     </div>
                     <div class="col-md-4 text-center">
                         <small class="text-muted">
-                            <i class="fas fa-users me-1"></i>
-                            Total Vendedores: {{ $rankingVendedor->count() }}
+                            <i class="fas fa-store me-1"></i>
+                            POS: {{ $vendedores->where('origen', 'pos')->count() }} | 
+                            Identity: {{ $vendedores->where('origen', 'identity')->count() }}
                         </small>
                     </div>
                     <div class="col-md-4 text-end">
                         <small class="text-muted">
-                            <i class="fas fa-chart-line me-1"></i>
-                            Vendedor destacado: {{ $rankingVendedor->first()->Vendedor['NombreCompleto'] ?? 'N/A' }}
+                            <i class="fas fa-calendar-alt me-1"></i>
+                            Actualizado: {{ now()->format('d/m/Y H:i') }}
                         </small>
                     </div>
                 </div>
             </div>
         </div>
-        
     @else
         <!-- Card vacío -->
         <div class="card">
             <div class="card-body text-center py-5">
                 <div class="empty-state">
                     <div class="empty-state-icon">
-                        <i class="fas fa-chart-bar fa-4x text-muted"></i>
+                        <i class="fas fa-users fa-4x text-muted"></i>
                     </div>
-                    <h3 class="empty-state-title mt-3">No hay ventas para mostrar</h3>
+                    <h3 class="empty-state-title mt-3">No hay vendedores para mostrar</h3>
                     <p class="empty-state-subtitle">
-                        No se encontraron ventas para el período seleccionado.
+                        No se encontraron vendedores activos en el sistema.
                     </p>
                 </div>
             </div>
@@ -917,6 +831,30 @@
 
     .bg-bronze {
         background-color: #cd7f32 !important;
+    }
+
+    .table td {
+        vertical-align: middle;
+        padding: 0.75rem 0.5rem;
+    }
+    
+    .badge.bg-warning {
+        background-color: #ffc107 !important;
+        font-size: 0.85rem;
+        padding: 0.5rem 0.75rem !important;
+    }
+    
+    .btn-group .btn {
+        padding: 0.25rem 0.5rem;
+        margin: 0 2px;
+    }
+    
+    .btn-group .btn i {
+        font-size: 0.9rem;
+    }
+    
+    .text-muted small {
+        font-size: 0.75rem;
     }
 </style>
 @endsection

@@ -178,6 +178,36 @@ Route::middleware('auth')->group(function() {
 
     // Ventas de un vendedor en un periodo
     Route::get('/cpanel/empleados/ventas-vendedor/{id}', [EmpleadosController::class, 'ventasVendedor'])->name('cpanel.empleados.ventas.vendedor');
+
+    // Listado de Vendedores
+    Route::get('/cpanel/empleados/vendedores', [EmpleadosController::class, 'listado_vendedores'])->name('cpanel.empleados.vendedores');
+
+    // Editar Informacion del Vendedor
+    Route::get('/cpanel/empleados/vendedor/editar/{id}', [EmpleadosController::class, 'editarVendedor'])->name('cpanel.empleados.vendedor.editar');
+
+    // Ruta para ACTUALIZAR vendedor (PUT/PATCH)
+    Route::put('/cpanel/empleados/vendedor/actualizar/{id}', [EmpleadosController::class, 'actualizarVendedor'])->name('cpanel.empleados.vendedor.actualizar');
+
+    // Listado de Personal Interno
+    Route::get('/cpanel/empleados', [EmpleadosController::class, 'listado_personal'])->name('cpanel.empleados.personal');
+
+    // Editar Empleado Interno
+    Route::get('/cpanel/empleados/internos/editar/{id}', [EmpleadosController::class, 'editarEmpleadoInterno'])->name('cpanel.empleados.internos.editar');
+
+    // Actualizar Empleado Interno
+    Route::put('/cpanel/empleados/internos/actualizar/{id}', [EmpleadosController::class, 'actualizarEmpleadoInterno'])->name('cpanel.empleados.internos.actualizar');
+
+    // Vista para cambiar contraseña
+    Route::get('/cpanel/empleados/internos/password/{id}', [EmpleadosController::class, 'cambiarPassword'])->name('cpanel.empleados.internos.password');
+    
+    // Procesar cambio de contraseña
+    Route::put('/cpanel/empleados/internospassword/{id}', [EmpleadosController::class, 'actualizarPassword'])->name('cpanel.empleados.internos.password.update');
+
+    // Vista para agregar empleado
+    Route::get('/cpanel/empleados/agregar', [EmpleadosController::class, 'agregarEmpleado'])->name('cpanel.empleados.agregar');
+
+    // Guardar nuevo empleado
+    Route::post('/cpanel/empleados/internos/store', [EmpleadosController::class, 'guardarEmpleado'])->name('cpanel.empleados.internos.guardar');
 });
 
 

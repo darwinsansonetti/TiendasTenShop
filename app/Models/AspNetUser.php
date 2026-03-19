@@ -14,6 +14,8 @@ class AspNetUser extends Authenticatable
     protected $primaryKey = 'Id';
     protected $keyType = 'string';
 
+    public $incrementing = false;
+
     protected $fillable = [
         'Id',
         'UserName',

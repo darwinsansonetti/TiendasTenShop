@@ -39,6 +39,7 @@ class FileHelper
 
         // Si existe localmente → devolver URL
         if (Storage::exists($internalFile)) {
+            $timestamp = '?v=' . Storage::lastModified($internalFile);
             return asset('storage/' . $folder . $filename);
         }
 
@@ -51,6 +52,8 @@ class FileHelper
 
             if ($response->successful()) {
                 Storage::put($internalFile, $response->body());
+
+                $timestamp = '?v=' . time();
                 return asset('storage/' . $folder . $filename);
             }
         } catch (\Exception $e) {
