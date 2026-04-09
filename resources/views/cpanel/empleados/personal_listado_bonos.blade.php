@@ -12,11 +12,11 @@
 <div class="app-content-header">
     <div class="container-fluid">
         <div class="row">
-            <div class="col-sm-6"><h3 class="mb-0">Empleados</h3></div>
+            <div class="col-sm-6"><h3 class="mb-0">Bonos</h3></div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-end">
                     <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
-                    <li class="breadcrumb-item active" aria-current="page">Empleados</li>
+                    <li class="breadcrumb-item active" aria-current="page">Bonos</li>
                 </ol>
             </div>
         </div>
@@ -28,17 +28,14 @@
     <div class="container-fluid">  
 
     @if($empleados && $empleados->count() > 0)
-        <!-- Card de tabla -->
         <div class="card">
             <div class="card-header">
                 <div class="row align-items-center">
-                    <!-- Título y Buscador (Izquierda) -->
                     <div class="col-md-6 d-flex align-items-center gap-3">
                         <h3 class="card-title mb-0">
                             <i class="fas fa-users me-2"></i>Listado de Empleados
                         </h3>
                         
-                        <!-- Buscador -->
                         <div class="input-group input-group-sm" style="width: 250px;">
                             <span class="input-group-text">
                                 <i class="fas fa-search"></i>
@@ -54,16 +51,8 @@
                         </div>
                     </div>
                     
-                    <!-- Botones (Derecha) -->
                     <div class="col-md-6 text-end">
                         <div class="d-flex gap-2 justify-content-end">
-                            <!-- Botón Agregar Empleado -->
-                            <a href="{{ route('cpanel.empleados.agregar') }}" 
-                                class="btn btn-success btn-sm">
-                                <i class="fas fa-plus-circle me-1"></i>+ Nuevo Empleado
-                            </a>
-                            
-                            <!-- Botones de exportación -->
                             <div class="btn-group">
                                 <button type="button"
                                         class="btn btn-outline-secondary btn-sm"
@@ -87,36 +76,70 @@
                         <thead class="table-light">
                             <tr>
                                 <th width="80" class="text-center">Foto</th>
-                                <th width="250" class="sortable" data-col="nombre">Empleado <span class="sort-icon">↕️</span></th>
-                                <th width="250" class="sortable" data-col="cargo">Cargo <span class="sort-icon">↕️</span></th>
-                                <th width="200" class="sortable" data-col="sucursal">Sucursal <span class="sort-icon">↕️</span></th>
-                                <th width="120" class="text-center sortable" data-col="ingreso">Ingreso <span class="sort-icon">↕️</span></th>
-                                <th width="120" class="text-center">Acción</th>
+                                <th width="200" class="sortable" data-col="nombre">Empleado <span class="sort-icon">↕️</span></th>
+                                <th width="150" class="sortable" data-col="sucursal">Sucursal <span class="sort-icon">↕️</span></th>
+                                <th width="180" class="text-center sortable" data-col="ultimo_bono">Último Bono <span class="sort-icon">↕️</span></th>
+                                <th width="100" class="text-center">Asignar</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach($empleados as $index => $vendedor)
+                            @foreach($empleados as $index => $empleado)
                                 @php
-                                    $id = $vendedor->Id ?? '';
-                                    $nombre = $vendedor->NombreCompleto ?? 'N/A';
-                                    $email = $vendedor->Email ?? '';
-                                    $rol = $vendedor->rol_nombre ?? 'N/A';
-                                    $sucursalNombre = $vendedor->sucursal_nombre ?? 'N/A';
-                                    $fotoPerfil = $vendedor->FotoPerfil ?? '';
-                                    $fechaIngreso = $vendedor->FechaCreacion ?? null;
+                                    // 🔧 CORREGIDO: usar las propiedades correctas
+                                    $id = $empleado->id ?? '';
+                                    $nombre = $empleado->nombre_completo ?? 'N/A';
+                                    $email = $empleado->email ?? '';
+                                    $rol = $empleado->rol_nombre ?? 'N/A';
+                                    $sucursalNombre = $empleado->sucursal_nombre ?? 'N/A';
+                                    $fotoPerfil = $empleado->foto_perfil ?? '';
+                                    $fechaIngreso = $empleado->fecha_creacion ?? null;
+                                    $origen = $empleado->origen ?? 'Usuario';
+                                    $vendedorId = $empleado->vendedor_id ?? 'N/A';
+                                    
+                                    // Información del último bono
+                                    $ultimoBonoFecha = $empleado->ultimo_bono_fecha ?? null;
+                                    $ultimoBonoMontoDivisa = $empleado->ultimo_bono_monto_divisa ?? null;
+                                    $ultimoBonoMontoBs = $empleado->ultimo_bono_monto_bs ?? null;
+                                    $ultimoBonoTipo = $empleado->ultimo_bono_tipo ?? null;
+                                    $ultimoBonoPagado = $empleado->ultimo_bono_pagado ?? null;
+                                    
+                                    // Determinar estado del bono
+                                    $bonoEstatus = 'Sin bono';
+                                    $bonoEstatusColor = 'secondary';
+                                    if ($ultimoBonoFecha) {
+                                        if ($ultimoBonoPagado == 0) {
+                                            $bonoEstatus = 'Pendiente';
+                                            $bonoEstatusColor = 'warning';
+                                        } else {
+                                            $bonoEstatus = 'Pagado';
+                                            $bonoEstatusColor = 'success';
+                                        }
+                                    }
                                     
                                     // Determinar color según el rol
                                     $rolColor = 'secondary';
                                     $rolIcon = 'user';
+                                    $rolNombreMostrar = $rol;
+                                    
                                     if ($rol == 'ADMIN') {
                                         $rolColor = 'danger';
                                         $rolIcon = 'crown';
                                     } elseif ($rol == 'SUPERVISOR') {
                                         $rolColor = 'info';
                                         $rolIcon = 'user-cog';
-                                    } elseif ($rol == 'VENDEDORES') {
+                                    } elseif ($rol == 'DEPOSITARIO') {
+                                        $rolColor = 'primary';
+                                        $rolIcon = 'warehouse';
+                                    } elseif ($rol == 'VENDEDOR' || $rol == 'VENDEDORES') {
                                         $rolColor = 'success';
                                         $rolIcon = 'user-tie';
+                                    } elseif ($origen == 'Usuario' && $rol == 'VENDEDOR') {
+                                        $rolColor = 'success';
+                                        $rolIcon = 'user-tie';
+                                    } elseif ($origen == 'Usuario') {
+                                        $rolColor = 'secondary';
+                                        $rolIcon = 'user';
+                                        $rolNombreMostrar = 'Vendedor Temporal';
                                     }
                                     
                                     $imgSrc = FileHelper::getOrDownloadFile(
@@ -125,7 +148,7 @@
                                         'assets/img/adminlte/img/default.png'
                                     );
                                 @endphp
-                                <tr class="align-middle">
+                                <tr class="align-middle" data-origen="{{ $origen }}" data-vendedor-id="{{ $vendedorId }}">
                                     <!-- Foto -->
                                     <td class="text-center">
                                         <img src="{{ $imgSrc }}" 
@@ -141,59 +164,67 @@
                                     <td data-order="{{ $nombre }}">
                                         <strong>{{ $nombre }}</strong>
                                         <br>
-                                        <small class="text-muted">
-                                            <i class="fas fa-envelope me-1"></i>{{ $email }}
+                                        <small class="badge bg-{{ $rolColor }} mt-1">
+                                            <i class="fas fa-{{ $rolIcon }} me-1"></i>{{ $rolNombreMostrar }}
                                         </small>
-                                    </td>
-
-                                    <!-- Cargo -->
-                                    <td>
-                                        <span class="text-muted">
-                                            <i class="fas fa-map-marker-alt me-1 text-secondary"></i>
-                                            {{ $rol }}
-                                        </span>
+                                        @if($origen == 'Usuario')
+                                            <br>
+                                            <small class="text-muted">
+                                                <i class="fas fa-id-badge me-1"></i>{{ $vendedorId }}
+                                            </small>
+                                        @endif
                                     </td>
 
                                     <!-- Sucursal -->
                                     <td data-order="{{ $sucursalNombre }}">
-                                        <span class="badge bg-warning text-white p-2">
+                                        <span class="badge bg-warning text-dark p-2">
                                             <i class="fas fa-store me-1"></i>{{ $sucursalNombre }}
                                         </span>
                                     </td>
 
-                                    <!-- Ingreso -->
-                                    <td class="text-center" data-order="{{ $fechaIngreso ? strtotime($fechaIngreso) : 0 }}">
-                                        @if($fechaIngreso)
+                                    <!-- Último Bono -->
+                                    <td class="text-center" data-order="{{ $ultimoBonoFecha ? strtotime($ultimoBonoFecha) : 0 }}">
+                                        @if($ultimoBonoFecha)
                                             @php
-                                                $fecha = is_string($fechaIngreso) 
-                                                    ? \Carbon\Carbon::parse($fechaIngreso) 
-                                                    : \Carbon\Carbon::instance($fechaIngreso);
+                                                $fechaBono = \Carbon\Carbon::parse($ultimoBonoFecha);
+                                                $bonoEstatusColor = $ultimoBonoPagado == 0 ? 'warning' : 'success';
                                             @endphp
-                                            <span class="badge bg-light text-dark p-2">
-                                                <i class="far fa-calendar-alt me-1"></i>
-                                                {{ $fecha->format('d/m/Y') }}
-                                            </span>
+
+                                            <div class="card bg-light p-1 m-0" style="border-radius: 8px;">
+                                                <div class="d-flex align-items-center justify-content-between">
+                                                    <div class="text-start ps-2">
+                                                        <small class="text-muted">Último bono</small>
+                                                        <div class="fw-bold">{{ number_format($ultimoBonoMontoDivisa, 2) }} USD</div>
+                                                    </div>
+                                                    <div class="text-end pe-2">
+                                                        <small class="text-muted">{{ $fechaBono->format('d/m/Y') }}</small>
+                                                        <div>
+                                                            <span class="badge bg-{{ $bonoEstatusColor }}">{{ $bonoEstatus }}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         @else
-                                            <span class="text-muted">N/A</span>
+                                            <span class="text-muted">
+                                                <i class="fas fa-gift me-1"></i>
+                                                Sin bonos asignados
+                                            </span>
                                         @endif
                                     </td>
 
                                     <!-- Acción -->
                                     <td class="text-center">
                                         <div class="btn-group" role="group">
-                                            <!-- Botón Editar -->
-                                            <a href="{{ route('cpanel.empleados.internos.editar', $id) }}"
-                                            class="btn btn-sm btn-outline-warning"
-                                            title="Editar empleado"
+                                            
+                                            <!-- Botón Asignar Bono -->
+                                            <a href="{{ route('cpanel.empleados.bonos.asignar', [
+                                                'tipo' => $origen == 'AspNetUser' ? 'sistema' : 'temporal',
+                                                'id' => $id
+                                            ]) }}"
+                                            class="btn btn-sm btn-outline-success"
+                                            title="Asignar bono"
                                             data-bs-toggle="tooltip">
-                                                <i class="bi bi-pencil"></i>
-                                            </a>
-        
-                                            <a href="{{ route('cpanel.empleados.internos.password', $id) }}"
-                                            class="btn btn-sm btn-outline-danger"
-                                            title="Cambiar contraseña"
-                                            data-bs-toggle="tooltip">
-                                                <i class="bi bi-key"></i>
+                                                <i class="bi bi-cash-stack"></i>
                                             </a>
                                         </div>
                                     </td>
@@ -204,7 +235,6 @@
                 </div>
             </div>
             
-            <!-- Resumen -->
             <div class="card-footer">
                 <div class="row">
                     <div class="col-md-4">
@@ -213,17 +243,22 @@
                             Total Empleados: {{ $empleados->count() }}
                         </small>
                     </div>
+                    <div class="col-md-4">
+                        <small class="text-muted">
+                            <i class="fas fa-desktop me-1"></i>
+                            Sistema: {{ $empleados->where('origen', 'AspNetUser')->count() }}
+                        </small>
+                    </div>
                     <div class="col-md-4 text-end">
                         <small class="text-muted">
-                            <i class="fas fa-calendar-alt me-1"></i>
-                            Actualizado: {{ now()->format('d/m/Y H:i') }}
+                            <i class="fas fa-clock me-1"></i>
+                            Temporales: {{ $empleados->where('origen', 'Usuario')->count() }}
                         </small>
                     </div>
                 </div>
             </div>
         </div>
     @else
-        <!-- Card vacío -->
         <div class="card">
             <div class="card-body text-center py-5">
                 <div class="empty-state">

@@ -208,6 +208,42 @@ Route::middleware('auth')->group(function() {
 
     // Guardar nuevo empleado
     Route::post('/cpanel/empleados/internos/store', [EmpleadosController::class, 'guardarEmpleado'])->name('cpanel.empleados.internos.guardar');
+
+    // Obtener siguiente codigo de vendedor a asignar
+    Route::get('/cpanel/empleados/obtener-proximo-vendedor-id/{sucursalId}', [EmpleadosController::class, 'obtenerProximoVendedorId'])->name('cpanel.empleados.obtener.proximo.vendedor.id');
+
+    // Listado de liberalidad
+    Route::get('/cpanel/empleados/liberalidad', [EmpleadosController::class, 'listado_liberalidad'])->name('cpanel.empleados.lista_liberalidad');
+
+    // Detalles de LiberalidadDTO
+    Route::get('/empleado/liberalidad-detalle/{id}', [EmpleadosController::class, 'verDetalleLiberalidad'])->name('liberalidad.detalle');
+
+    // Listado de empleados con bonos
+    Route::get('/cpanel/empleados/listado/bonos', [EmpleadosController::class, 'listado_empleados_bonos'])->name('cpanel.empleados.lista_empleados_bonos');
+
+    // Asignar Bonos
+    Route::get('/cpanel/empleados/bonos/asignar/{tipo}/{id}', [EmpleadosController::class, 'asignarBono'])->name('cpanel.empleados.bonos.asignar');
+
+    // Guardar Bonos
+    Route::post('/cpanel/empleados/bonos/guardar', [EmpleadosController::class, 'guardarBono'])->name('cpanel.empleados.bonos.guardar');
+
+    // Eliminar Bono
+    Route::delete('/cpanel/empleados/bonos/eliminar', [EmpleadosController::class, 'eliminarBono'])->name('cpanel.empleados.bonos.eliminar');
+
+    // Listado de empleados con deducciones
+    Route::get('/cpanel/empleados/listado/deducciones', [EmpleadosController::class, 'listado_empleados_deducciones'])->name('cpanel.empleados.lista_empleados_deducciones');
+
+    // Asignar Deducciones
+    Route::get('/cpanel/empleados/deducciones/asignar/{tipo}/{id}', [EmpleadosController::class, 'asignarDeduccion'])->name('cpanel.empleados.deduccion.asignar');
+
+    // Guardar Deduccion
+    Route::post('/cpanel/empleados/deduccion/guardar', [EmpleadosController::class, 'guardarDeduccion'])->name('cpanel.empleados.deducciones.guardar');
+
+    // Eliminar Deduccion
+    Route::delete('/cpanel/empleados/deduccion/eliminar', [EmpleadosController::class, 'eliminarDeduccion'])->name('cpanel.empleados.deducciones.eliminar');
+
+    // Listado de empleados con prestamos
+    Route::get('/cpanel/empleados/listado/prestamos', [EmpleadosController::class, 'listado_empleados_prestamos'])->name('cpanel.empleados.lista_empleados_prestamos');
 });
 
 

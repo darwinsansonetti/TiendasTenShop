@@ -70,7 +70,7 @@
 
     <!-- Enlace "Ver todos" -->
     <div class="mt-3 text-center">
-        <a href="#" class="btn btn-outline-success btn-sm">
+        <a href="{{ route('cpanel.empleados.ranking') }}" class="btn btn-outline-success btn-sm">
             <i class="fas fa-list me-1"></i>Ver todos los vendedores
         </a>
     </div>

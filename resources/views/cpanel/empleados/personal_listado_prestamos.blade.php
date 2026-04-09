@@ -1,6 +1,6 @@
 @extends('layout.layout_dashboard')
 
-@section('title', 'TiendasTenShop | Empleados')
+@section('title', 'TiendasTenShop | Préstamos de Empleados')
 
 @php
     use App\Helpers\FileHelper;
@@ -12,11 +12,11 @@
 <div class="app-content-header">
     <div class="container-fluid">
         <div class="row">
-            <div class="col-sm-6"><h3 class="mb-0">Empleados</h3></div>
+            <div class="col-sm-6"><h3 class="mb-0">Préstamos de Empleados</h3></div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-end">
                     <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
-                    <li class="breadcrumb-item active" aria-current="page">Empleados</li>
+                    <li class="breadcrumb-item active" aria-current="page">Préstamos</li>
                 </ol>
             </div>
         </div>
@@ -28,17 +28,14 @@
     <div class="container-fluid">  
 
     @if($empleados && $empleados->count() > 0)
-        <!-- Card de tabla -->
         <div class="card">
             <div class="card-header">
                 <div class="row align-items-center">
-                    <!-- Título y Buscador (Izquierda) -->
                     <div class="col-md-6 d-flex align-items-center gap-3">
                         <h3 class="card-title mb-0">
-                            <i class="fas fa-users me-2"></i>Listado de Empleados
+                            <i class="fas fa-hand-holding-usd me-2"></i>Listado de Empleados
                         </h3>
                         
-                        <!-- Buscador -->
                         <div class="input-group input-group-sm" style="width: 250px;">
                             <span class="input-group-text">
                                 <i class="fas fa-search"></i>
@@ -54,16 +51,8 @@
                         </div>
                     </div>
                     
-                    <!-- Botones (Derecha) -->
                     <div class="col-md-6 text-end">
                         <div class="d-flex gap-2 justify-content-end">
-                            <!-- Botón Agregar Empleado -->
-                            <a href="{{ route('cpanel.empleados.agregar') }}" 
-                                class="btn btn-success btn-sm">
-                                <i class="fas fa-plus-circle me-1"></i>+ Nuevo Empleado
-                            </a>
-                            
-                            <!-- Botones de exportación -->
                             <div class="btn-group">
                                 <button type="button"
                                         class="btn btn-outline-secondary btn-sm"
@@ -86,37 +75,65 @@
                     <table class="table table-hover mb-0" id="tablaEmpleados">
                         <thead class="table-light">
                             <tr>
-                                <th width="80" class="text-center">Foto</th>
-                                <th width="250" class="sortable" data-col="nombre">Empleado <span class="sort-icon">↕️</span></th>
-                                <th width="250" class="sortable" data-col="cargo">Cargo <span class="sort-icon">↕️</span></th>
-                                <th width="200" class="sortable" data-col="sucursal">Sucursal <span class="sort-icon">↕️</span></th>
-                                <th width="120" class="text-center sortable" data-col="ingreso">Ingreso <span class="sort-icon">↕️</span></th>
-                                <th width="120" class="text-center">Acción</th>
+                                <th width="60" class="text-center">Foto</th>
+                                <th width="200" class="sortable" data-col="nombre">Empleado <span class="sort-icon">↕️</span></th>
+                                <th width="120" class="sortable" data-col="sucursal">Sucursal <span class="sort-icon">↕️</span></th>
+                                <th width="120" class="text-center sortable" data-col="total_prestamo">Total Prestamos <span class="sort-icon">↕️</span></th>
+                                <th width="120" class="text-center sortable" data-col="total_abonado">Abonado <span class="sort-icon">↕️</span></th>
+                                <th width="120" class="text-center sortable" data-col="total_pendiente">Pendiente <span class="sort-icon">↕️</span></th>
+                                <th width="100" class="text-center">Acción</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach($empleados as $index => $vendedor)
+                            @foreach($empleados as $index => $empleado)
                                 @php
-                                    $id = $vendedor->Id ?? '';
-                                    $nombre = $vendedor->NombreCompleto ?? 'N/A';
-                                    $email = $vendedor->Email ?? '';
-                                    $rol = $vendedor->rol_nombre ?? 'N/A';
-                                    $sucursalNombre = $vendedor->sucursal_nombre ?? 'N/A';
-                                    $fotoPerfil = $vendedor->FotoPerfil ?? '';
-                                    $fechaIngreso = $vendedor->FechaCreacion ?? null;
+                                    // Propiedades del empleado
+                                    $id = $empleado->id ?? '';
+                                    $nombre = $empleado->nombre_completo ?? 'N/A';
+                                    $email = $empleado->email ?? '';
+                                    $rol = $empleado->rol_nombre ?? 'N/A';
+                                    $sucursalNombre = $empleado->sucursal_nombre ?? 'N/A';
+                                    $fotoPerfil = $empleado->foto_perfil ?? '';
+                                    $origen = $empleado->origen ?? 'Usuario';
+                                    $vendedorId = $empleado->vendedor_id ?? 'N/A';
+                                    
+                                    // Totales de préstamos
+                                    $totalPrestamos = $empleado->total_prestamos ?? 0;
+                                    $totalDivisa = $empleado->monto_total_prestamo ?? 0;
+                                    
+                                    // Calcular total abonado y pendiente
+                                    $totalAbonado = 0;
+                                    if ($empleado->prestamos && $empleado->prestamos->count() > 0) {
+                                        foreach ($empleado->prestamos as $prestamo) {
+                                            $totalAbonado += $prestamo->total_pagado_divisa ?? 0;
+                                        }
+                                    }
+                                    $totalPendiente = $totalDivisa - $totalAbonado;
                                     
                                     // Determinar color según el rol
                                     $rolColor = 'secondary';
                                     $rolIcon = 'user';
+                                    $rolNombreMostrar = $rol;
+                                    
                                     if ($rol == 'ADMIN') {
                                         $rolColor = 'danger';
                                         $rolIcon = 'crown';
                                     } elseif ($rol == 'SUPERVISOR') {
                                         $rolColor = 'info';
                                         $rolIcon = 'user-cog';
-                                    } elseif ($rol == 'VENDEDORES') {
+                                    } elseif ($rol == 'DEPOSITARIO') {
+                                        $rolColor = 'primary';
+                                        $rolIcon = 'warehouse';
+                                    } elseif ($rol == 'VENDEDOR' || $rol == 'VENDEDORES') {
                                         $rolColor = 'success';
                                         $rolIcon = 'user-tie';
+                                    } elseif ($origen == 'Usuario' && $rol == 'VENDEDOR') {
+                                        $rolColor = 'success';
+                                        $rolIcon = 'user-tie';
+                                    } elseif ($origen == 'Usuario') {
+                                        $rolColor = 'secondary';
+                                        $rolIcon = 'user';
+                                        $rolNombreMostrar = 'Vendedor Temporal';
                                     }
                                     
                                     $imgSrc = FileHelper::getOrDownloadFile(
@@ -125,13 +142,13 @@
                                         'assets/img/adminlte/img/default.png'
                                     );
                                 @endphp
-                                <tr class="align-middle">
+                                <tr class="align-middle" data-origen="{{ $origen }}" data-vendedor-id="{{ $vendedorId }}">
                                     <!-- Foto -->
                                     <td class="text-center">
                                         <img src="{{ $imgSrc }}" 
                                             alt="{{ $nombre }}"
                                             class="rounded-circle border border-success img-zoomable" 
-                                            style="width: 60px; height: 60px; object-fit: cover; cursor: zoom-in;"
+                                            style="width: 50px; height: 50px; object-fit: cover; cursor: zoom-in;"
                                             onclick="zoomImagen(this)"
                                             data-full-image="{{ $imgSrc }}"
                                             data-description="{{ $nombre }}">
@@ -141,61 +158,79 @@
                                     <td data-order="{{ $nombre }}">
                                         <strong>{{ $nombre }}</strong>
                                         <br>
-                                        <small class="text-muted">
-                                            <i class="fas fa-envelope me-1"></i>{{ $email }}
+                                        <small class="badge bg-{{ $rolColor }} mt-1">
+                                            <i class="fas fa-{{ $rolIcon }} me-1"></i>{{ $rolNombreMostrar }}
                                         </small>
-                                    </td>
-
-                                    <!-- Cargo -->
-                                    <td>
-                                        <span class="text-muted">
-                                            <i class="fas fa-map-marker-alt me-1 text-secondary"></i>
-                                            {{ $rol }}
-                                        </span>
+                                        @if($origen == 'Usuario' && $vendedorId != 'N/A')
+                                            <br>
+                                            <small class="text-muted">
+                                                <i class="fas fa-id-badge me-1"></i>{{ $vendedorId }}
+                                            </small>
+                                        @endif
                                     </td>
 
                                     <!-- Sucursal -->
                                     <td data-order="{{ $sucursalNombre }}">
-                                        <span class="badge bg-warning text-white p-2">
+                                        <span class="badge bg-warning text-dark p-2">
                                             <i class="fas fa-store me-1"></i>{{ $sucursalNombre }}
                                         </span>
                                     </td>
 
-                                    <!-- Ingreso -->
-                                    <td class="text-center" data-order="{{ $fechaIngreso ? strtotime($fechaIngreso) : 0 }}">
-                                        @if($fechaIngreso)
-                                            @php
-                                                $fecha = is_string($fechaIngreso) 
-                                                    ? \Carbon\Carbon::parse($fechaIngreso) 
-                                                    : \Carbon\Carbon::instance($fechaIngreso);
-                                            @endphp
-                                            <span class="badge bg-light text-dark p-2">
-                                                <i class="far fa-calendar-alt me-1"></i>
-                                                {{ $fecha->format('d/m/Y') }}
-                                            </span>
+                                    <!-- Total Divisa -->
+                                    <td class="text-center" data-order="{{ $totalDivisa }}">
+                                        @if($totalDivisa > 0)
+                                            <strong class="text-success">
+                                                ${{ number_format($totalDivisa, 2) }}
+                                            </strong>
                                         @else
-                                            <span class="text-muted">N/A</span>
+                                            <span class="text-muted">$0.00</span>
                                         @endif
                                     </td>
 
-                                    <!-- Acción -->
+                                    <!-- Total Abonado -->
+                                    <td class="text-center" data-order="{{ $totalAbonado }}">
+                                        @if($totalAbonado > 0)
+                                            <span class="text-primary">
+                                                ${{ number_format($totalAbonado, 2) }}
+                                            </span>
+                                        @else
+                                            <span class="text-muted">$0.00</span>
+                                        @endif
+                                    </td>
+
+                                    <!-- Total Pendiente -->
+                                    <td class="text-center" data-order="{{ $totalPendiente }}">
+                                        @if($totalPendiente > 0)
+                                            <span class="text-danger fw-bold">
+                                                ${{ number_format($totalPendiente, 2) }}
+                                            </span>
+                                        @elseif($totalPendiente == 0 && $totalPrestamos > 0)
+                                            <span class="badge bg-success">
+                                                <i class="fas fa-check-circle me-1"></i>Pagado
+                                            </span>
+                                        @else
+                                            <span class="text-muted">$0.00</span>
+                                        @endif
+                                    </td>
+
+                                    <!-- Acción Ver Detalles -->
                                     <td class="text-center">
-                                        <div class="btn-group" role="group">
-                                            <!-- Botón Editar -->
-                                            <a href="{{ route('cpanel.empleados.internos.editar', $id) }}"
-                                            class="btn btn-sm btn-outline-warning"
-                                            title="Editar empleado"
-                                            data-bs-toggle="tooltip">
-                                                <i class="bi bi-pencil"></i>
-                                            </a>
-        
-                                            <a href="{{ route('cpanel.empleados.internos.password', $id) }}"
-                                            class="btn btn-sm btn-outline-danger"
-                                            title="Cambiar contraseña"
-                                            data-bs-toggle="tooltip">
-                                                <i class="bi bi-key"></i>
-                                            </a>
-                                        </div>
+                                        @if($totalPrestamos > 0)
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-info"
+                                                    onclick="verDetallesPrestamos('{{ $id }}', '{{ addslashes($nombre) }}')"
+                                                    title="Ver detalles de préstamos"
+                                                    data-bs-toggle="tooltip">
+                                                <i class="fas fa-eye me-1"></i> Ver
+                                            </button>
+                                        @else
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-secondary"
+                                                    disabled
+                                                    title="Sin préstamos">
+                                                <i class="fas fa-eye me-1"></i> Ver
+                                            </button>
+                                        @endif
                                     </td>
                                 </tr>
                             @endforeach
@@ -204,7 +239,6 @@
                 </div>
             </div>
             
-            <!-- Resumen -->
             <div class="card-footer">
                 <div class="row">
                     <div class="col-md-4">
@@ -213,17 +247,22 @@
                             Total Empleados: {{ $empleados->count() }}
                         </small>
                     </div>
+                    <div class="col-md-4">
+                        <small class="text-muted">
+                            <i class="fas fa-hand-holding-usd me-1"></i>
+                            Con préstamos: {{ $empleados->where('total_prestamos', '>', 0)->count() }}
+                        </small>
+                    </div>
                     <div class="col-md-4 text-end">
                         <small class="text-muted">
-                            <i class="fas fa-calendar-alt me-1"></i>
-                            Actualizado: {{ now()->format('d/m/Y H:i') }}
+                            <i class="fas fa-check-circle me-1"></i>
+                            Sin préstamos: {{ $empleados->where('total_prestamos', 0)->count() }}
                         </small>
                     </div>
                 </div>
             </div>
         </div>
     @else
-        <!-- Card vacío -->
         <div class="card">
             <div class="card-body text-center py-5">
                 <div class="empty-state">
@@ -241,6 +280,31 @@
     </div>
 </div>
 
+<!-- Modal para ver detalles de préstamos -->
+<div class="modal fade" id="modalDetallesPrestamos" tabindex="-1" aria-labelledby="modalDetallesPrestamosLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="modalDetallesPrestamosLabel">
+                    <i class="fas fa-hand-holding-usd me-2"></i>Detalles de Préstamos
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="modalDetallesPrestamosBody">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-info" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p class="mt-2">Cargando información de préstamos...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @endsection
 
 @section('js')
@@ -252,6 +316,8 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
+    let prestamosData = @json($empleados);
+
     document.addEventListener("DOMContentLoaded", function() {
         // Tooltips
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
@@ -274,9 +340,7 @@
                 let filasVisibles = 0;
                 
                 filas.forEach(fila => {
-                    // Buscar en la columna de empleado (índice 1 o 2, ajusta según tu tabla)
-                    // Por lo general el nombre del empleado está en la segunda columna
-                    const celdaEmpleado = fila.children[1]; // Ajusta el índice según tu estructura
+                    const celdaEmpleado = fila.children[1];
                     
                     if (celdaEmpleado) {
                         const textoEmpleado = celdaEmpleado.textContent.toLowerCase();
@@ -290,7 +354,6 @@
                     }
                 });
                 
-                // Mostrar mensaje si no hay resultados
                 let mensajeNoResultados = document.getElementById('mensajeNoResultadosEmpleados');
                 
                 if (filasVisibles === 0 && textoBusqueda !== '') {
@@ -312,10 +375,8 @@
                 }
             }
             
-            // Evento de búsqueda mientras escribe
             buscadorEmpleados.addEventListener('input', filtrarTablaEmpleados);
             
-            // Botón limpiar
             if (limpiarBtnEmpleados) {
                 limpiarBtnEmpleados.addEventListener('click', function() {
                     buscadorEmpleados.value = '';
@@ -324,7 +385,6 @@
                 });
             }
             
-            // Tecla ESC para limpiar
             buscadorEmpleados.addEventListener('keydown', function(e) {
                 if (e.key === 'Escape') {
                     buscadorEmpleados.value = '';
@@ -351,12 +411,10 @@
                 th.addEventListener('click', () => {
                     const colIndex = Array.from(th.parentNode.children).indexOf(th);
                     
-                    // Resetear íconos
                     document.querySelectorAll('.sort-icon').forEach(icon => {
                         icon.innerHTML = '↕️';
                     });
                     
-                    // Cambiar dirección si es la misma columna
                     if (columnaActual === colIndex) {
                         ordenAscendente = !ordenAscendente;
                     } else {
@@ -364,12 +422,10 @@
                         columnaActual = colIndex;
                     }
                     
-                    // Actualizar ícono
                     const icono = th.querySelector('.sort-icon');
                     if (icono) {
                         icono.innerHTML = ordenAscendente ? '⬆️' : '⬇️';
                     } else {
-                        // Si no hay icono, agregar clases visuales
                         ths.forEach(t => t.classList.remove('sort-asc', 'sort-desc'));
                         th.classList.add(ordenAscendente ? 'sort-asc' : 'sort-desc');
                     }
@@ -379,7 +435,6 @@
             });
 
             function ordenarTabla(tabla, index, asc = true) {
-                // Obtener solo las filas visibles (no ocultas por el buscador)
                 const filas = Array.from(tbody.querySelectorAll('tr:not([style*="display: none"]):not(.no-results-message)'));
                 
                 filas.sort((a, b) => {
@@ -388,11 +443,9 @@
                     
                     if (!tdA || !tdB) return 0;
 
-                    // Usar data-order si existe
-                    const valorA = tdA.dataset.order || extraerValorCelda(tdA);
-                    const valorB = tdB.dataset.order || extraerValorCelda(tdB);
+                    const valorA = tdA.dataset.order || parseFloat(tdA.textContent.replace(/[^0-9.-]/g, '')) || tdA.textContent;
+                    const valorB = tdB.dataset.order || parseFloat(tdB.textContent.replace(/[^0-9.-]/g, '')) || tdB.textContent;
 
-                    // Detectar si es número
                     const numA = parseFloat(valorA);
                     const numB = parseFloat(valorB);
 
@@ -405,199 +458,169 @@
                     }
                 });
 
-                // Guardar el mensaje de "no resultados" si existe
                 const mensajeNoResultados = document.getElementById('mensajeNoResultadosEmpleados');
                 
-                // Limpiar tbody
                 while (tbody.firstChild) {
                     tbody.removeChild(tbody.firstChild);
                 }
                 
-                // Agregar filas ordenadas
                 filas.forEach(fila => tbody.appendChild(fila));
                 
-                // Reagregar el mensaje de no resultados si existía
                 if (mensajeNoResultados) {
                     tbody.appendChild(mensajeNoResultados);
                 }
             }
-
-            function extraerValorCelda(td) {
-                // Para badges
-                const badge = td.querySelector('.badge');
-                if (badge) {
-                    return badge.textContent.trim().replace(/[$,]/g, '');
-                }
-                
-                // Para texto con strong
-                const strong = td.querySelector('strong');
-                if (strong) {
-                    return strong.textContent.trim();
-                }
-                
-                return td.textContent.trim().replace(/[$,]/g, '');
-            }
         })();
     });
 
-    // ============================================
-    // EXPORTAR A EXCEL
-    // ============================================
     function exportarExcelEmpleados() {
         const tabla = document.getElementById('tablaEmpleados');
-        if (!tabla) {
-            alert('No se encontró la tabla para exportar');
-            return;
-        }
+        if (!tabla) return;
 
-        const datos = [];
+        const datos = [['Empleado', 'Cargo', 'Sucursal', 'Total Préstamos', 'Total Divisa', 'Total Abonado', 'Total Pendiente']];
 
-        // Encabezados
-        const headers = ['Empleado', 'Email', 'Cargo', 'Sucursal', 'Ingreso'];
-        datos.push(headers);
-
-        // Filas
         tabla.querySelectorAll('tbody tr').forEach(fila => {
             const celdas = fila.querySelectorAll('td');
+            const nombre = celdas[1]?.querySelector('strong')?.textContent.trim() || '';
+            const cargo = celdas[1]?.querySelector('.badge')?.textContent.trim() || '';
+            const sucursal = celdas[2]?.querySelector('.badge')?.textContent.trim() || '';
+            const totalPrestamos = celdas[3]?.textContent.trim().replace(/[^0-9]/g, '') || '0';
+            const totalDivisa = celdas[4]?.textContent.trim().replace('$', '').replace(',', '') || '0';
+            const totalAbonado = celdas[5]?.textContent.trim().replace('$', '').replace(',', '') || '0';
+            const totalPendiente = celdas[6]?.textContent.trim().replace('$', '').replace(',', '') || '0';
             
-            // Empleado y Email (columna 1)
-            const empleadoCell = celdas[1];
-            const nombreEmpleado = empleadoCell.querySelector('strong')?.textContent.trim() || '';
-            const emailEmpleado = empleadoCell.querySelector('small')?.textContent.replace('@', '').trim() || '';
-            
-            // Cargo (columna 2)
-            const cargoCell = celdas[2];
-            const cargo = cargoCell.querySelector('.badge')?.textContent.trim() || '';
-            
-            // Sucursal (columna 3)
-            const sucursalCell = celdas[3];
-            const sucursal = sucursalCell.querySelector('.badge')?.textContent.trim() || '';
-            
-            // Ingreso (columna 4)
-            const ingresoCell = celdas[4];
-            const ingreso = ingresoCell.querySelector('.badge')?.textContent.trim() || 'N/A';
-            
-            datos.push([
-                nombreEmpleado,
-                emailEmpleado,
-                cargo,
-                sucursal,
-                ingreso
-            ]);
+            datos.push([nombre, cargo, sucursal, totalPrestamos, totalDivisa, totalAbonado, totalPendiente]);
         });
 
-        // Crear Excel
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.aoa_to_sheet(datos);
-
-        // Auto ancho columnas
-        const maxColLengths = [];
-        datos.forEach(row => {
-            row.forEach((cell, colIndex) => {
-                const length = String(cell).length;
-                maxColLengths[colIndex] = Math.max(maxColLengths[colIndex] || 10, length);
-            });
-        });
-        ws['!cols'] = maxColLengths.map(l => ({ wch: Math.min(l, 50) }));
-
-        XLSX.utils.book_append_sheet(wb, ws, 'Empleados');
-        
-        const fecha = new Date().toISOString().split('T')[0];
-        XLSX.writeFile(wb, `Empleados_${fecha}.xlsx`);
+        XLSX.utils.book_append_sheet(wb, ws, 'Prestamos');
+        XLSX.writeFile(wb, `Prestamos_${new Date().toISOString().split('T')[0]}.xlsx`);
     }
 
-    // ============================================
-    // EXPORTAR A PDF
-    // ============================================
     function pdfTablaEmpleados() {
-        const tabla = document.getElementById('tablaEmpleados');
-        if (!tabla) {
-            alert('No se encontró la tabla para exportar');
-            return;
-        }
-
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('landscape');
 
-        // Título
         doc.setFontSize(16);
         doc.setTextColor(41, 128, 185);
-        doc.text('Listado de Empleados', 14, 15);
+        doc.text('Listado de Préstamos por Empleado', 14, 15);
         
-        // Fecha
         doc.setFontSize(10);
         doc.setTextColor(100, 100, 100);
         doc.text(`Generado: ${new Date().toLocaleString('es-VE')}`, 14, 22);
 
-        // Preparar datos
-        const headers = [['Empleado', 'Email', 'Cargo', 'Sucursal', 'Ingreso']];
+        const headers = [['Empleado', 'Cargo', 'Sucursal', 'Total Préstamos', 'Total Divisa', 'Total Abonado', 'Total Pendiente']];
         const datos = [];
 
-        tabla.querySelectorAll('tbody tr').forEach(fila => {
-            const celdas = fila.querySelectorAll('td');
-            
-            // Empleado y Email
-            const empleadoCell = celdas[1];
-            const nombreEmpleado = empleadoCell.querySelector('strong')?.textContent.trim() || '';
-            const emailEmpleado = empleadoCell.querySelector('small')?.textContent.replace('@', '').trim() || '';
-            
-            // Cargo
-            const cargoCell = celdas[2];
-            const cargo = cargoCell.querySelector('.badge')?.textContent.trim() || '';
-            
-            // Sucursal
-            const sucursalCell = celdas[3];
-            const sucursal = sucursalCell.querySelector('.badge')?.textContent.trim() || '';
-            
-            // Ingreso
-            const ingresoCell = celdas[4];
-            const ingreso = ingresoCell.querySelector('.badge')?.textContent.trim() || 'N/A';
-            
-            datos.push([
-                nombreEmpleado,
-                emailEmpleado,
-                cargo,
-                sucursal,
-                ingreso
-            ]);
-        });
+        const tabla = document.getElementById('tablaEmpleados');
+        if (tabla) {
+            tabla.querySelectorAll('tbody tr').forEach(fila => {
+                const celdas = fila.querySelectorAll('td');
+                const nombre = celdas[1]?.querySelector('strong')?.textContent.trim() || '';
+                const cargo = celdas[1]?.querySelector('.badge')?.textContent.trim() || '';
+                const sucursal = celdas[2]?.querySelector('.badge')?.textContent.trim() || '';
+                const totalPrestamos = celdas[3]?.textContent.trim() || '0';
+                const totalDivisa = celdas[4]?.textContent.trim() || '$0.00';
+                const totalAbonado = celdas[5]?.textContent.trim() || '$0.00';
+                const totalPendiente = celdas[6]?.textContent.trim() || '$0.00';
+                
+                datos.push([nombre, cargo, sucursal, totalPrestamos, totalDivisa, totalAbonado, totalPendiente]);
+            });
+        }
 
-        // Generar PDF
         doc.autoTable({
             head: headers,
             body: datos,
             startY: 30,
             theme: 'grid',
-            headStyles: {
-                fillColor: [41, 128, 185],
-                textColor: 255,
-                fontSize: 10,
-                fontStyle: 'bold'
-            },
-            bodyStyles: {
-                fontSize: 9,
-                cellPadding: 3
-            },
-            alternateRowStyles: {
-                fillColor: [245, 245, 245]
-            },
-            columnStyles: {
-                0: { cellWidth: 60 },
-                1: { cellWidth: 70 },
-                2: { cellWidth: 40, halign: 'center' },
-                3: { cellWidth: 50 },
-                4: { cellWidth: 35, halign: 'center' }
-            },
-            margin: { left: 14, right: 14 }
+            headStyles: { fillColor: [41, 128, 185], textColor: 255, fontSize: 10, fontStyle: 'bold' },
+            bodyStyles: { fontSize: 9, cellPadding: 3 },
+            alternateRowStyles: { fillColor: [245, 245, 245] }
         });
 
-        // Total de empleados
         const finalY = doc.lastAutoTable.finalY + 10;
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.text(`Total Empleados: ${datos.length}`, 14, finalY);
 
-        doc.save(`Empleados_${new Date().toISOString().split('T')[0]}.pdf`);
+        doc.save(`Prestamos_${new Date().toISOString().split('T')[0]}.pdf`);
+    }
+
+    function verDetallesPrestamos(usuarioId, nombreEmpleado) {
+        const empleado = prestamosData.find(e => e.id === usuarioId);
+        
+        if (!empleado || !empleado.prestamos || empleado.prestamos.length === 0) {
+            Swal.fire('Sin préstamos', `${nombreEmpleado} no tiene préstamos activos`, 'info');
+            return;
+        }
+
+        let html = `
+            <div class="table-responsive">
+                <h5 class="mb-3">Empleado: <strong>${nombreEmpleado}</strong></h5>
+                <table class="table table-sm table-bordered table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>ID Préstamo</th>
+                            <th>Fecha</th>
+                            <th>Monto Divisa</th>
+                            <th>Productos</th>
+                            <th>Pagado</th>
+                            <th>Saldo</th>
+                            <th>Estatus</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        empleado.prestamos.forEach(prestamo => {
+            const fecha = new Date(prestamo.Fecha).toLocaleDateString('es-VE');
+            const montoDivisa = parseFloat(prestamo.MontoDivisa || 0).toFixed(2);
+            const totalProductos = prestamo.total_detalles_divisa || 0;
+            const totalPagado = prestamo.total_pagado_divisa || 0;
+            const saldoPendiente = prestamo.saldo_pendiente_divisa || 0;
+            const estatusTexto = prestamo.Estatus == 1 ? 'Nuevo' : (prestamo.Estatus == 2 ? 'En Proceso' : 'Incluido');
+            const estatusColor = prestamo.Estatus == 1 ? 'warning' : (prestamo.Estatus == 2 ? 'info' : 'secondary');
+            
+            html += `
+                <tr>
+                    <td><strong>${prestamo.PrestamoId}</strong></td>
+                    <td>${fecha}</td>
+                    <td class="text-end">$${montoDivisa}</td>
+                    <td class="text-end">$${totalProductos.toFixed(2)}</td>
+                    <td class="text-end">$${totalPagado.toFixed(2)}</td>
+                    <td class="text-end"><strong>$${saldoPendiente.toFixed(2)}</strong></td>
+                    <td class="text-center"><span class="badge bg-${estatusColor}">${estatusTexto}</span></td>
+                </tr>
+            `;
+        });
+
+        // Totales generales
+        const totalGeneralDivisa = empleado.monto_total_prestamo || 0;
+        const totalGeneralPagado = empleado.prestamos.reduce((sum, p) => sum + (p.total_pagado_divisa || 0), 0);
+        const totalGeneralPendiente = totalGeneralDivisa - totalGeneralPagado;
+
+        html += `
+                    </tbody>
+                    <tfoot class="table-secondary">
+                        <tr class="fw-bold">
+                            <td colspan="2" class="text-end">TOTALES:</td>
+                            <td class="text-end">$${totalGeneralDivisa.toFixed(2)}</td>
+                            <td class="text-end"></td>
+                            <td class="text-end">$${totalGeneralPagado.toFixed(2)}</td>
+                            <td class="text-end">$${totalGeneralPendiente.toFixed(2)}</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        `;
+
+        document.getElementById('modalDetallesPrestamosLabel').innerHTML = `<i class="fas fa-hand-holding-usd me-2"></i>Préstamos de ${nombreEmpleado}`;
+        document.getElementById('modalDetallesPrestamosBody').innerHTML = html;
+        
+        const modal = new bootstrap.Modal(document.getElementById('modalDetallesPrestamos'));
+        modal.show();
     }
 
     function zoomImagen(img) {
@@ -610,9 +633,7 @@
             width: 'auto',
             padding: '2em',
             background: '#fff',
-            customClass: {
-                image: 'img-fluid rounded'
-            }
+            customClass: { image: 'img-fluid rounded' }
         });
     }
 </script>
@@ -649,10 +670,6 @@
         white-space: nowrap;
     }
     
-    .badge.bg-opacity-10 {
-        background-color: rgba(var(--bs-primary-rgb), 0.1);
-    }
-    
     @media print {
         .card-header, .card-footer, .btn-group, .app-content-header, .breadcrumb {
             display: none !important;
@@ -668,7 +685,6 @@
         }
     }
 
-    /* ===== ESTILOS PARA ZOOM DE IMAGENES ===== */
     .img-zoomable {
         transition: transform 0.3s ease, box-shadow 0.3s ease;
         cursor: zoom-in;
@@ -678,187 +694,7 @@
         transform: scale(1.05);
         box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     }
-
-    /* Overlay para zoom */
-    .image-zoom-overlay {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.9);
-        z-index: 9999;
-        justify-content: center;
-        align-items: center;
-        animation: fadeInOverlay 0.3s ease-out;
-    }
-
-    .image-zoom-container {
-        position: relative;
-        max-width: 90%;
-        max-height: 90%;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-    }
-
-    .image-zoom-container img {
-        max-width: 100%;
-        max-height: 80vh;
-        object-fit: contain;
-        border-radius: 8px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-        animation: zoomInImage 0.3s ease-out;
-    }
-
-    .image-zoom-close {
-        position: absolute;
-        top: -40px;
-        right: -10px;
-        color: white;
-        font-size: 40px;
-        font-weight: bold;
-        cursor: pointer;
-        transition: color 0.3s ease;
-        z-index: 10000;
-        text-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
-        background: rgba(0, 0, 0, 0.5);
-        width: 50px;
-        height: 50px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        line-height: 1;
-    }
-
-    .image-zoom-close:hover {
-        color: #ff6b6b;
-        background: rgba(0, 0, 0, 0.7);
-    }
-
-    .image-description {
-        color: white;
-        text-align: center;
-        margin-top: 20px;
-        font-size: 1.1rem;
-        background: rgba(0, 0, 0, 0.7);
-        padding: 10px 20px;
-        border-radius: 8px;
-        max-width: 80%;
-    }
-
-    /* Animaciones */
-    @keyframes fadeInOverlay {
-        from {
-            opacity: 0;
-        }
-        to {
-            opacity: 1;
-        }
-    }
-
-    @keyframes zoomInImage {
-        from {
-            transform: scale(0.8);
-            opacity: 0;
-        }
-        to {
-            transform: scale(1);
-            opacity: 1;
-        }
-    }
-
-    /* Para tablets y móviles */
-    @media (max-width: 768px) {
-        .image-zoom-container {
-            max-width: 95%;
-        }
-        
-        .image-zoom-container img {
-            max-height: 70vh;
-        }
-        
-        .image-zoom-close {
-            top: -35px;
-            right: 0;
-            font-size: 35px;
-            width: 45px;
-            height: 45px;
-        }
-        
-        .image-description {
-            font-size: 1rem;
-            padding: 8px 16px;
-            max-width: 90%;
-        }
-    }
-
-    @media (max-width: 576px) {
-        .image-zoom-container img {
-            max-height: 60vh;
-        }
-        
-        .image-zoom-close {
-            top: -30px;
-            font-size: 30px;
-            width: 40px;
-            height: 40px;
-        }
-        
-        .image-description {
-            font-size: 0.9rem;
-            margin-top: 15px;
-        }
-    }
-
-    /* Para impresión */
-    @media print {
-        .image-zoom-overlay {
-            display: none !important;
-        }
-        
-        .img-zoomable {
-            cursor: default !important;
-        }
-    }
-
-    /* Estilos para el modal de actualización */
-    #modalActualizarPVP .modal-header {
-        background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
-    }
-
-    #resumenCambio {
-        background-color: #f8f9fa;
-        border-left: 4px solid #007bff;
-    }
-
-    .input-group-text {
-        background-color: #e9ecef;
-        font-weight: bold;
-    }
-
-    .form-control-lg {
-        font-size: 1.25rem;
-        font-weight: bold;
-    }
-
-    .badge.bg-light {
-        border: 1px solid #dee2e6;
-    }
-
-    /* Estilo para el botón de actualizar */
-    .btn-outline-warning:hover {
-        background-color: #ffc107;
-        border-color: #ffc107;
-        color: #000;
-    }
-
-    .bg-bronze {
-        background-color: #cd7f32 !important;
-    }
-
+    
     .table td {
         vertical-align: middle;
         padding: 0.75rem 0.5rem;
@@ -873,14 +709,6 @@
     .btn-group .btn {
         padding: 0.25rem 0.5rem;
         margin: 0 2px;
-    }
-    
-    .btn-group .btn i {
-        font-size: 0.9rem;
-    }
-    
-    .text-muted small {
-        font-size: 0.75rem;
     }
 </style>
 @endsection

@@ -340,6 +340,13 @@ class VentasController extends Controller
     // Crear ventas diarias y ventas por vendedor
     public function store(Request $request)
     {
+        // En store() - inicio del proceso
+        \Log::info('🟢 INICIO carga de ventas', [
+            'sucursal_id' => $request->sucursal_id,
+            'fecha' => $request->sale_date,
+            'tasa_cambio' => $request->exchange_rate
+        ]);
+
         DB::beginTransaction(); // Comienza la transacción
 
         try {
@@ -375,6 +382,13 @@ class VentasController extends Controller
             $sucursalId = $request->sucursal_id;
             $saleDate = Carbon::parse($request->sale_date)->startOfDay();
             $exchangeRate = $request->exchange_rate;
+
+            // Antes de updateOrCreate en DivisaValor
+            \Log::info('💰 Guardando tasa de cambio', [
+                'fecha' => $saleDate,
+                'tasa' => $exchangeRate,
+                'tabla' => 'DivisaValor'
+            ]);
 
             // Guardar tasa de cambio
             DivisaValor::updateOrCreate(
@@ -418,6 +432,52 @@ class VentasController extends Controller
 
             // Si todo es exitoso, confirmar la transacción
             DB::commit();
+
+            // En store() - finalización exitosa
+            \Log::info('✅ FINALIZACIÓN EXITOSA', [
+                'sucursal_id' => $sucursalId,
+                'fecha' => $saleDate,
+                'tasa_cambio_guardada' => true,
+                'ventas_procesadas' => true,
+                'vendedores_procesados' => true
+            ]);
+
+            // En store(), después de procesar ambos archivos
+            $ventaPrincipal = Venta::where('SucursalId', $sucursalId)
+                ->whereDate('Fecha', $saleDate)
+                ->orderByDesc('ID')
+                ->first();
+
+            if ($ventaPrincipal) {
+                $totalVentaProducto = VentaProducto::where('VentaId', $ventaPrincipal->ID)->sum('MontoDivisa');
+                $totalVentaVendedor = VentaVendedor::where('VentaId', $ventaPrincipal->ID)->sum('MontoDivisa');
+                
+                $diferencia = abs($totalVentaProducto - $totalVentaVendedor);
+                $porcentajeDiferencia = ($diferencia / max($totalVentaProducto, $totalVentaVendedor)) * 100;
+                
+                if ($diferencia > 0.01) { // Margen de 1 centavo
+                    \Log::error('🚨 INCONSISTENCIA ENTRE ARCHIVOS', [
+                        'venta_id' => $ventaPrincipal->ID,
+                        'total_desde_ventas_diarias' => $totalVentaProducto,
+                        'total_desde_ventas_vendedor' => $totalVentaVendedor,
+                        'diferencia' => $diferencia,
+                        'porcentaje_diferencia' => round($porcentajeDiferencia, 2) . '%',
+                        'fecha' => $saleDate,
+                        'sucursal_id' => $sucursalId,
+                        'alerta' => $porcentajeDiferencia > 5 ? 'DIFERENCIA MAYOR AL 5%' : 'DIFERENCIA MODERADA'
+                    ]);
+                    
+                    // Opcional: Enviar notificación
+                    // Notification::route('mail', 'admin@tienda.com')->notify(new InconsistenciaVentas(...));
+                } else {
+                    \Log::info('✅ CONSISTENCIA VERIFICADA', [
+                        'venta_id' => $ventaPrincipal->ID,
+                        'total_ventas_diarias' => $totalVentaProducto,
+                        'total_ventas_vendedor' => $totalVentaVendedor,
+                        'diferencia' => $diferencia
+                    ]);
+                }
+            }
 
             return response()->json(['success' => true, 'message' => 'Archivos procesados correctamente']);
         } catch (\Throwable $e) {
@@ -469,6 +529,14 @@ class VentasController extends Controller
                     ->pluck('ID');
 
                 if ($ventasExistentes->isNotEmpty()) {
+
+                    // En procesarVentasDiarias - antes de eliminar
+                    \Log::info('🗑️ Eliminando ventas existentes', [
+                        'tablas' => ['VentasVendedor', 'VentaProducto', 'Venta'],
+                        'sucursal_id' => $sucursalId,
+                        'fecha' => $saleDate,
+                        'ventas_afectadas' => $ventasExistentes->count()
+                    ]);
 
                     // 1️⃣ Borrar VentasVendedor primero
                     DB::table('VentasVendedor')
@@ -541,6 +609,14 @@ class VentasController extends Controller
                                     'SucursalId' => $sucursalId,
                                     'Estatus' => 1,
                                     'Saldo' => 0
+                                ]);
+
+                                // En procesarVentasDiarias - después de crear venta
+                                \Log::info('📝 Venta creada', [
+                                    'tabla' => 'Venta',
+                                    'venta_id' => $venta->ID,
+                                    'fecha' => $saleDate,
+                                    'sucursal_id' => $sucursalId
                                 ]);
                                 
                                 $estado = 'DETALLES';
@@ -634,22 +710,112 @@ class VentasController extends Controller
                                                         ->where('SucursalId', $sucursalId)
                                                         ->where('Estatus', 1)
                                                         ->first();
+
+                                    // 🔴 LOG ANTES de usar $productoSucursal
+                                    \Log::info('🔍 Buscando ProductoSucursal', [
+                                        'producto_id' => $producto->ID,
+                                        'codigo' => $codigo,
+                                        'sucursal_id' => $sucursalId,
+                                        'existe_en_sucursal' => $productoSucursal ? true : false,
+                                        'pvp_divisa' => $productoSucursal ? $productoSucursal->PvpDivisa : 'NO_DISPONIBLE'
+                                    ]);
                                     
                                     if ($producto) {
-                                        // Calcular precio unitario
-                                        $precioUnitario = $cantidad > 0 ? $montoNeto / $cantidad : $montoNeto;
+                                    //     // Calcular precio unitario
+                                    //     $precioUnitario = $cantidad > 0 ? $montoNeto / $cantidad : $montoNeto;
                                         
-                                        // Crear detalle de venta
+                                    //     // Calcular MontoDivisa
+                                    //     $montoDivisaSinRedondear = $cantidad * $productoSucursal->PvpDivisa;
+                                    //     $montoDivisaRedondeado = round($montoDivisaSinRedondear, 2);
+                                        
+                                    //     // LOG DE DEBUG - MUY IMPORTANTE
+                                    //     \Log::info('🔢 CÁLCULO MONTO DIVISA', [
+                                    //         'producto_codigo' => $codigo,
+                                    //         'cantidad' => $cantidad,
+                                    //         'pvp_divisa' => $productoSucursal->PvpDivisa,
+                                    //         'monto_divisa_sin_redondear' => $montoDivisaSinRedondear,
+                                    //         'monto_divisa_redondeado' => $montoDivisaRedondeado,
+                                    //         'diferencia' => $montoDivisaSinRedondear - $montoDivisaRedondeado
+                                    //     ]);
+                                        
+                                    //     VentaProducto::create([
+                                    //         'VentaId' => $venta->ID,
+                                    //         'ProductoId' => $producto->ID,
+                                    //         'Cantidad' => $cantidad,
+                                    //         'PrecioVenta' => round($cantidad * $precioUnitario, 2),
+                                    //         'MontoDivisa' => $montoDivisaRedondeado,  // ← VALOR REDONDEADO
+                                    //         'TicketId' => 0,
+                                    //     ]);
+
+                                    //     // // Después de crear todos los VentaProducto
+                                    //     // if ($venta) {
+                                    //     //     // SUMA DETALLADA
+                                    //     //     $detallesVenta = VentaProducto::where('VentaId', $venta->ID)
+                                    //     //         ->select('ProductoId', 'Cantidad', 'MontoDivisa')
+                                    //     //         ->get();
+                                            
+                                    //     //     $totalVenta = $detallesVenta->sum('MontoDivisa');
+                                            
+                                    //     //     // LOG CRÍTICO 1: Detalle de productos
+                                    //     //     \Log::info('📊 DETALLE VENTA DIARIA', [
+                                    //     //         'venta_id' => $venta->ID,
+                                    //     //         'total_monto_divisa' => $totalVenta,
+                                    //     //         'cantidad_productos' => $detallesVenta->count(),
+                                    //     //         'productos' => $detallesVenta->toArray()
+                                    //     //     ]);
+                                            
+                                    //     //     // LOG CRÍTICO 2: Comparación con Exchange Rate
+                                    //     //     $exchangeRate = DivisaValor::where('Fecha', $saleDate)->first();
+                                    //     //     if ($exchangeRate) {
+                                    //     //         \Log::info('💰 VERIFICACIÓN TASA CAMBIO', [
+                                    //     //             'fecha' => $saleDate,
+                                    //     //             'tasa' => $exchangeRate->Valor,
+                                    //     //             'total_bs_estimado' => $totalVenta * $exchangeRate->Valor
+                                    //     //         ]);
+                                    //     //     }
+                                            
+                                    //     //     $venta->update(['Saldo' => $totalVenta]);
+                                    //     // }
+                                        
+                                    // } 
+
+                                        // 1. OBTENER LA TASA DE CAMBIO (como hace el SP)
+                                        $tasaCambio = DivisaValor::where('Fecha', $saleDate)->first();
+                                        if (!$tasaCambio) {
+                                            // Si no hay tasa para esa fecha, usar la última (como hace el SP)
+                                            $tasaCambio = DivisaValor::orderBy('Fecha', 'desc')->first();
+                                        }
+                                        $tasaValor = $tasaCambio->Valor;
+                                        
+                                        // 2. RECALCULAR MontoDivisa usando la MISMA fórmula del SP
+                                        // Fórmula del SP: ((@Monto / @Cantidad) / @TasaDeCambio) * @Cantidad
+                                        // Simplificado: @Monto / @TasaDeCambio
+                                        $montoDivisaCalculado = $montoNeto / $tasaValor;
+                                        
+                                        // 3. Redondear a 2 decimales como DECIMAL(18,2)
+                                        $montoDivisaRedondeado = round($montoDivisaCalculado, 2);
+                                        
+                                        // LOG DE COMPARACIÓN
+                                        \Log::info('🔢 CÁLCULO MONTO DIVISA (CORREGIDO)', [
+                                            'producto_codigo' => $codigo,
+                                            'cantidad' => $cantidad,
+                                            'monto_neto_excel' => $montoNeto,
+                                            'tasa_cambio' => $tasaValor,
+                                            'monto_divisa_calculado' => $montoDivisaCalculado,
+                                            'monto_divisa_redondeado' => $montoDivisaRedondeado,
+                                            'pvp_divisa_tabla' => $productoSucursal->PvpDivisa,
+                                            'diferencia_con_tabla' => $montoDivisaRedondeado - round($cantidad * $productoSucursal->PvpDivisa, 2)
+                                        ]);
+                                        
                                         VentaProducto::create([
                                             'VentaId' => $venta->ID,
                                             'ProductoId' => $producto->ID,
                                             'Cantidad' => $cantidad,
-                                            'PrecioVenta' => $cantidad * $precioUnitario,
-                                            'MontoDivisa' => $cantidad * $productoSucursal->PvpDivisa,
+                                            'PrecioVenta' => round($montoNeto, 2),  // ← Usar montoNeto directo
+                                            'MontoDivisa' => $montoDivisaRedondeado,
                                             'TicketId' => 0,
                                         ]);
-                                        
-                                    } 
+                                    }
                                 } 
                             }
                             
@@ -676,9 +842,13 @@ class VentasController extends Controller
                     $totalVenta = VentaProducto::where('VentaId', $venta->ID)
                                     ->sum('MontoDivisa');
 
-                    $venta->update([
-                        'Saldo' => $totalVenta
-                    ]);
+                    $totalVentaRedondeado = round($totalVenta, 2);
+
+                    // $venta->update([
+                    //     'Saldo' => $totalVenta
+                    // ]);
+
+                    $venta->update(['Saldo' => $totalVentaRedondeado]);
 
                     return $venta;
                 } else {
@@ -850,61 +1020,147 @@ class VentasController extends Controller
                                     
                                     // Cantidad (en tu archivo siempre parece ser 1)
                                     $cantidad = 1;
-                                    
+
                                     if ($precioUnitario > 0) {
                                         $productoCount++;
                                         $totalProducto = $cantidad * $precioUnitario;
-                                        Log::info("🛒 Producto {$productoCount}: Código: {$codigoProducto}, Desc: {$descripcion}, Cant: {$cantidad}, Precio: {$precioUnitario}, Total: {$totalProducto}, Vendedor: {$vendedorActual}, Documento: {$documentoActual}");
+                                        Log::info("🛒 Producto {$productoCount}: Código: {$codigoProducto}...");
                                         
+                                        // BUSCAR VENDEDOR
                                         $usuario = Usuario::where('VendedorId', $vendedorActual)
-                                        ->where('EsActivo', 1)
-                                        ->first();
-
-                                        $producto = Producto::where('Codigo', $codigoProducto)->first();
-
-                                        if ($usuario && $producto) {
-
-                                            $productoSucursal = ProductoSucursal::where('ProductoId', $producto->ID)
-                                                ->where('SucursalId', $sucursalId)
-                                                ->where('Estatus', 1)
-                                                ->first();
-
-                                            // VentaVendedor::create([
-                                            //     'VentaId' => $venta->ID,
-                                            //     'ProductoId' => $producto->ID,
-                                            //     'UsuarioId' => $usuario->ID,
-                                            //     'Cantidad' => $cantidad,
-                                            //     'Costo' => 0,
-                                            //     'CostoDivisa' => $producto->CostoDivisa ?? 0,
-                                            //     'PrecioVenta' => $productoSucursal->PvpBS ?? $precioUnitario,
-                                            //     'MontoDivisa' => $productoSucursal->PvpDivisa ?? ($totalProducto / $exchangeRate),
-                                            // ]);
-
-                                            $venta = Venta::where('SucursalId', $sucursalId)
-                                            ->whereDate('Fecha', $saleDate)
-                                            ->orderByDesc('ID')
+                                            ->where('SucursalId', $sucursalId)
+                                            ->where('EsActivo', 1)
                                             ->first();
+                                        
+                                        if (!$usuario) {
+                                            // Crear nuevo vendedor
+                                            $email = now()->format('YmdHis') . '@tiendastenshop.com';
+                                            
+                                            // Obtener máximo ID correctamente
+                                            $ultimoId = Usuario::max(DB::raw('CAST(UsuarioId AS INT)')) ?? 0;
+                                            $nuevoId = $ultimoId + 1;
+                                            
+                                            Log::info("📊 Creando nuevo vendedor - Último ID: {$ultimoId}, Nuevo ID: {$nuevoId}");
+                                            
+                                            $usuario = new Usuario();
+                                            $usuario->UsuarioId = (string) $nuevoId;
+                                            $usuario->VendedorId = $vendedorActual;
+                                            $usuario->Email = $email;
+                                            $usuario->EsActivo = 1;
+                                            $usuario->PhoneNumber = null;
+                                            $usuario->NombreCompleto = $nombreVendedor;
+                                            $usuario->Direccion = null;
+                                            $usuario->FechaCreacion = Carbon::now();
+                                            $usuario->FechaNacimiento = Carbon::now();
+                                            $usuario->SucursalId = $sucursalId;
+                                            $usuario->FotoPerfil = null;
+                                            $usuario->EsRegistrado = 1;
 
-                                            if ($venta) {
-                                                VentaVendedor::create([
-                                                    'VentaId' => $venta->ID,
-                                                    'ProductoId' => $producto->ID,
-                                                    'UsuarioId' => $usuario->UsuarioId,
-                                                    'Cantidad' => $cantidad,
-                                                    'Costo' => 0,
-                                                    'CostoDivisa' => $producto->CostoDivisa ?? 0,
-                                                    'PrecioVenta' => $productoSucursal->PvpBS ?? $precioUnitario,
-                                                    'MontoDivisa' => $productoSucursal->PvpDivisa ?? ($totalProducto / $exchangeRate),
-                                                ]);
+                                            // En procesarVentasPorVendedor - creación de usuario
+                                            \Log::info('👤 Creando nuevo vendedor', [
+                                                'tabla' => 'Usuario',
+                                                'vendedor_id' => $vendedorActual,
+                                                'nombre' => $nombreVendedor,
+                                                'sucursal_id' => $sucursalId,
+                                                'usuario_id' => $usuario->UsuarioId
+                                            ]);
+                                            
+                                            $usuario->save();
+                                            
+                                            // 🔴 EN VEZ DE fresh(), BUSCAR DIRECTAMENTE
+                                            $usuario = Usuario::where('VendedorId', $vendedorActual)
+                                                ->where('SucursalId', $sucursalId)
+                                                ->first();
+                                            
+                                            if ($usuario) {
+                                                Log::info("🆕 NUEVO VENDEDOR CREADO: ID: {$usuario->UsuarioId}, VendedorId: {$vendedorActual}");
                                             } else {
-                                                Log::error("❌ No se encontró la venta.");
-                                                // O bien, lanzar una excepción si es necesario
+                                                Log::error("❌ Error: No se pudo recuperar el vendedor después de guardar");
+                                                // 🔴 NO HACER break, solo continuar
                                             }
-
+                                        }
+                                        
+                                        // Verificar usuario válido
+                                        if (!$usuario || empty($usuario->UsuarioId)) {
+                                            Log::error("❌ Usuario inválido para vendedor: {$vendedorActual}");
+                                            // 🔴 NO HACER break, solo registrar error y continuar
                                         } else {
-                                            Log::warning("No se pudo insertar producto {$codigoProducto}: " . 
-                                                        ($usuario ? '' : 'usuario no encontrado ') . 
-                                                        ($producto ? '' : 'producto no encontrado'));
+                                            // BUSCAR PRODUCTO (solo si hay usuario válido)
+                                            $producto = Producto::where('Codigo', $codigoProducto)->first();
+                                            
+                                            if ($producto) {
+                                                $productoSucursal = ProductoSucursal::where('ProductoId', $producto->ID)
+                                                    ->where('SucursalId', $sucursalId)
+                                                    ->where('Estatus', 1)
+                                                    ->first();
+                                                
+                                                $venta = Venta::where('SucursalId', $sucursalId)
+                                                    ->whereDate('Fecha', $saleDate)
+                                                    ->orderByDesc('ID')
+                                                    ->first();
+                                                
+                                                if ($venta) {
+
+                                                    // 1. OBTENER LA TASA DE CAMBIO (como hace el SP)
+                                                    $tasaCambio = DivisaValor::where('Fecha', $saleDate)->first();
+                                                    if (!$tasaCambio) {
+                                                        $tasaCambio = DivisaValor::orderBy('Fecha', 'desc')->first();
+                                                    }
+                                                    $tasaValor = $tasaCambio->Valor;
+                                                    
+                                                    // 2. CALCULAR MontoDivisa usando la MISMA fórmula del SP
+                                                    // Fórmula del SP: @MontoDivisa = @Monto / @TasaDeCambio
+                                                    $montoDivisaCalculado = $totalProducto / $tasaValor;  // $totalProducto es el monto en Bs
+                                                    $montoDivisaRedondeado = round($montoDivisaCalculado, 2);
+                                                    
+                                                    // 3. PrecioVenta es el monto en Bolívares (sin redondear o redondeado a 2 decimales)
+                                                    $precioVentaRedondeado = round($totalProducto, 2);
+
+                                                    VentaVendedor::create([
+                                                        'VentaId' => $venta->ID,
+                                                        'ProductoId' => $producto->ID,
+                                                        'UsuarioId' => $usuario->UsuarioId,
+                                                        'Cantidad' => $cantidad,
+                                                        'Costo' => 0,
+                                                        'CostoDivisa' => $producto->CostoDivisa ?? 0,
+                                                        // 'PrecioVenta' => $productoSucursal->PvpBS ?? $precioUnitario,
+                                                        // 'MontoDivisa' => $productoSucursal->PvpDivisa ?? ($totalProducto / ($exchangeRate ?? 1)),
+                                                        'PrecioVenta' => $precioVentaRedondeado,  // ← Monto en Bs
+                                                        'MontoDivisa' => $montoDivisaRedondeado,   // ← Monto en USD (Monto / Tasa)
+                                                    ]);
+
+                                                    // En procesarVentasPorVendedor - inserción venta vendedor
+                                                    \Log::info('🏷️ Registrando venta por vendedor', [
+                                                        'tabla' => 'VentaVendedor',
+                                                        'venta_id' => $venta->ID,
+                                                        'producto_id' => $producto->ID,
+                                                        'usuario_id' => $usuario->UsuarioId,
+                                                        'cantidad' => $cantidad,
+                                                        'monto_divisa' => $productoSucursal->PvpDivisa
+                                                    ]);
+
+                                                    // Al final del procesamiento de cada vendedor
+                                                    $totalMontoDivisaVendedor = VentaVendedor::where('VentaId', $venta->ID)
+                                                        ->where('UsuarioId', $usuario->UsuarioId)
+                                                        ->sum('MontoDivisa');
+
+                                                    \Log::info('👥 VERIFICACIÓN VENTA POR VENDEDOR', [
+                                                        'venta_id' => $venta->ID,
+                                                        'usuario_id' => $usuario->UsuarioId,
+                                                        'vendedor_id' => $vendedorActual,
+                                                        'total_monto_divisa_vendedor' => $totalMontoDivisaVendedor,
+                                                        'productos_vendedor' => VentaVendedor::where('VentaId', $venta->ID)
+                                                            ->where('UsuarioId', $usuario->UsuarioId)
+                                                            ->count()
+                                                    ]);
+                                                    
+                                                    Log::info("✅ Venta guardada - Producto: {$codigoProducto}, UsuarioId: {$usuario->UsuarioId}");
+                                                } else {
+                                                    Log::error("❌ No se encontró la venta para fecha: {$saleDate}");
+                                                }
+                                            } else {
+                                                Log::warning("❌ Producto no encontrado: {$codigoProducto}");
+                                            }
                                         }
                                     }
                                     break;
@@ -939,9 +1195,235 @@ class VentasController extends Controller
         });
     }
 
-    private function convertidor(UploadedFile $file): string
+    // private function convertidor(UploadedFile $file): string
+    // {
+    //     $apiKey = env('CLOUDCONVERT_API_KEY');
+        
+    //     if (!$apiKey) {
+    //         throw new \Exception("CLOUDCONVERT_API_KEY no configurada en .env");
+    //     }
+        
+    //     $originalName = $file->getClientOriginalName();
+        
+    //     \Log::info("🔄 CloudConvert con API Key válida: {$originalName}");
+        
+    //     $client = new \GuzzleHttp\Client([
+    //         'timeout' => 60,
+    //     ]);
+        
+    //     try {
+    //         // 1️⃣ CREAR JOB
+    //         \Log::info("📋 Creando job...");
+            
+    //         $jobResponse = $client->post('https://api.cloudconvert.com/v2/jobs', [
+    //             'headers' => [
+    //                 'Authorization' => 'Bearer ' . $apiKey,
+    //                 'Content-Type' => 'application/json',
+    //                 'User-Agent' => 'Laravel-Excel-Converter/1.0'
+    //             ],
+    //             'json' => [
+    //                 'tasks' => [
+    //                     'upload' => [
+    //                         'operation' => 'import/upload',
+    //                         'filename' => $originalName
+    //                     ],
+    //                     'convert' => [
+    //                         'operation' => 'convert',
+    //                         'input' => ['upload'],
+    //                         'output_format' => 'xlsx',
+    //                         'engine' => 'libreoffice'
+    //                     ],
+    //                     'export' => [
+    //                         'operation' => 'export/url',
+    //                         'input' => ['convert']
+    //                     ]
+    //                 ]
+    //             ]
+    //         ]);
+            
+    //         $jobData = json_decode($jobResponse->getBody(), true);
+            
+    //         if (!isset($jobData['data']['id'])) {
+    //             throw new \Exception("No se pudo crear el job: " . json_encode($jobData));
+    //         }
+            
+    //         $jobId = $jobData['data']['id'];
+    //         \Log::info("✅ Job creado: {$jobId}");
+            
+    //         // 2️⃣ OBTENER INFO DE UPLOAD
+    //         $uploadTask = $jobData['data']['tasks'][0];
+    //         $uploadInfo = $uploadTask['result'];
+            
+    //         if (!isset($uploadInfo['form'])) {
+    //             throw new \Exception("No se recibió formulario de upload: " . json_encode($uploadInfo));
+    //         }
+            
+    //         $uploadUrl = $uploadInfo['form']['url'];
+    //         $formParams = $uploadInfo['form']['parameters'];
+            
+    //         \Log::info("📤 URL Upload: {$uploadUrl}");
+    //         \Log::info("📋 Parámetros: " . json_encode($formParams));
+            
+    //         // 3️⃣ PREPARAR MULTIPART DATA (INCLUYENDO KEY)
+    //         $multipart = [];
+            
+    //         // Primero agregar los parámetros del formulario
+    //         foreach ($formParams as $key => $value) {
+    //             $multipart[] = [
+    //                 'name' => $key,
+    //                 'contents' => $value
+    //             ];
+    //         }
+            
+    //         // Luego agregar el archivo (DEBE ser el último)
+    //         $multipart[] = [
+    //             'name' => 'file',
+    //             'contents' => fopen($file->getPathname(), 'r'),
+    //             'filename' => $originalName,
+    //             'headers' => [
+    //                 'Content-Type' => 'application/vnd.ms-excel'
+    //             ]
+    //         ];
+            
+    //         // 4️⃣ SUBIR ARCHIVO
+    //         \Log::info("⬆️ Subiendo archivo...");
+            
+    //         $uploadResponse = $client->post($uploadUrl, [
+    //             'multipart' => $multipart,
+    //             'headers' => [
+    //                 'Accept' => 'application/json'
+    //             ]
+    //         ]);
+            
+    //         \Log::info("✅ Archivo subido. Código: " . $uploadResponse->getStatusCode());
+            
+    //         // 5️⃣ ESPERAR CONVERSIÓN (con polling)
+    //         \Log::info("⏳ Esperando conversión...");
+            
+    //         $maxAttempts = 20; // 20 intentos × 3 segundos = 60 segundos máximo
+    //         $converted = false;
+    //         $downloadUrl = null;
+            
+    //         for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+    //             sleep(3); // Esperar 3 segundos entre intentos
+                
+    //             $statusResponse = $client->get("https://api.cloudconvert.com/v2/jobs/{$jobId}", [
+    //                 'headers' => [
+    //                     'Authorization' => 'Bearer ' . $apiKey,
+    //                     'Accept' => 'application/json'
+    //                 ]
+    //             ]);
+                
+    //             $statusData = json_decode($statusResponse->getBody(), true);
+    //             $jobStatus = $statusData['data']['status'];
+                
+    //             \Log::info("📊 Intento {$attempt}/{$maxAttempts} - Estado: {$jobStatus}");
+                
+    //             if ($jobStatus === 'finished') {
+    //                 // Buscar task de export
+    //                 foreach ($statusData['data']['tasks'] as $task) {
+    //                     if ($task['operation'] === 'export/url' && isset($task['result']['files'][0]['url'])) {
+    //                         $downloadUrl = $task['result']['files'][0]['url'];
+    //                         $converted = true;
+    //                         \Log::info("✅ Conversión completada. URL: {$downloadUrl}");
+    //                         break 2;
+    //                     }
+    //                 }
+    //             } elseif ($jobStatus === 'error') {
+    //                 $errorMsg = $statusData['data']['message'] ?? 'Error desconocido en CloudConvert';
+    //                 throw new \Exception("Error en conversión: {$errorMsg}");
+    //             }
+    //         }
+            
+    //         if (!$converted) {
+    //             throw new \Exception("Timeout: La conversión no se completó en 60 segundos");
+    //         }
+            
+    //         // 6️⃣ DESCARGAR ARCHIVO CONVERTIDO
+    //         \Log::info("💾 Descargando archivo convertido...");
+            
+    //         $downloadResponse = $client->get($downloadUrl);
+    //         $convertedContent = $downloadResponse->getBody();
+            
+    //         // 7️⃣ GUARDAR TEMPORALMENTE
+    //         $tempPath = tempnam(sys_get_temp_dir(), 'xlsx_') . '.xlsx';
+    //         file_put_contents($tempPath, $convertedContent);
+            
+    //         $fileSize = filesize($tempPath);
+    //         \Log::info("💾 Archivo guardado: {$tempPath} ({$fileSize} bytes)");
+            
+    //         // Verificar que sea un XLSX válido
+    //         if ($fileSize < 100) { // XLSX vacío o error
+    //             $content = file_get_contents($tempPath, false, null, 0, 100);
+    //             if (strpos($content, 'Error') !== false || strpos($content, '<?xml') === false) {
+    //                 throw new \Exception("El archivo convertido parece inválido");
+    //             }
+    //         }
+            
+    //         return $tempPath;
+            
+    //     } catch (\GuzzleHttp\Exception\RequestException $e) {
+    //         $errorDetails = "Error CloudConvert: ";
+            
+    //         if ($e->hasResponse()) {
+    //             $response = $e->getResponse();
+    //             $statusCode = $response->getStatusCode();
+    //             $body = $response->getBody()->getContents();
+                
+    //             $errorDetails .= "HTTP {$statusCode} - ";
+                
+    //             // Intentar parsear JSON de error
+    //             $errorData = json_decode($body, true);
+    //             if (json_last_error() === JSON_ERROR_NONE && isset($errorData['message'])) {
+    //                 $errorDetails .= $errorData['message'];
+    //                 if (isset($errorData['errors'])) {
+    //                     $errorDetails .= " - " . json_encode($errorData['errors']);
+    //                 }
+    //             } else {
+    //                 $errorDetails .= $body;
+    //             }
+                
+    //             \Log::error("CloudConvert Response: {$body}");
+    //         } else {
+    //             $errorDetails .= $e->getMessage();
+    //         }
+            
+    //         throw new \Exception($errorDetails);
+            
+    //     } catch (\Exception $e) {
+    //         \Log::error("Error en convertidor: " . $e->getMessage());
+    //         throw $e;
+    //     }
+    // }
+
+    private function convertidor(UploadedFile $file, $retryCount = 0): string
     {
-        $apiKey = env('CLOUDCONVERT_API_KEY');
+        // Obtener todas las API Keys disponibles
+        $allApiKeys = [
+            env('CLOUDCONVERT_API_KEY'),
+            env('CLOUDCONVERT_API_KEY_1'),
+            env('CLOUDCONVERT_API_KEY_2'),
+            // env('CLOUDCONVERT_API_KEY_3'),
+            // Agrega más si es necesario
+        ];
+        
+        // Filtrar keys vacías y obtener solo las que tienen valor
+        $availableKeys = array_values(array_filter($allApiKeys, function($key) {
+            return !empty($key);
+        }));
+        
+        // Verificar que haya al menos una key
+        if (empty($availableKeys)) {
+            throw new \Exception("No hay API Keys de CloudConvert configuradas en .env");
+        }
+        
+        // Si ya no hay más keys para intentar, lanzar error
+        if ($retryCount >= count($availableKeys)) {
+            throw new \Exception("Todas las API Keys de CloudConvert han fallado");
+        }
+        
+        // Usar la key correspondiente según el reintento
+        $apiKey = $availableKeys[$retryCount];
         
         if (!$apiKey) {
             throw new \Exception("CLOUDCONVERT_API_KEY no configurada en .env");
@@ -949,7 +1431,7 @@ class VentasController extends Controller
         
         $originalName = $file->getClientOriginalName();
         
-        \Log::info("🔄 CloudConvert con API Key válida: {$originalName}");
+        \Log::info("🔄 CloudConvert con API Key válida: {$originalName} (Intento " . ($retryCount + 1) . ")");
         
         $client = new \GuzzleHttp\Client([
             'timeout' => 60,
@@ -1123,6 +1605,17 @@ class VentasController extends Controller
                     if (isset($errorData['errors'])) {
                         $errorDetails .= " - " . json_encode($errorData['errors']);
                     }
+                    
+                    // 🔄 VERIFICAR SI ES ERROR POR CRÉDITOS Y REINTENTAR
+                    if (strpos($errorData['message'], 'credits') !== false || 
+                        strpos($errorData['message'], 'CREDITS_EXCEEDED') !== false ||
+                        $statusCode === 402) {
+                        
+                        \Log::warning("⚠️ API Key sin créditos. Reintentando con siguiente API Key...");
+                        
+                        // Reintentar con la siguiente API Key
+                        return $this->convertidor($file, $retryCount + 1);
+                    }
                 } else {
                     $errorDetails .= $body;
                 }
@@ -1135,6 +1628,17 @@ class VentasController extends Controller
             throw new \Exception($errorDetails);
             
         } catch (\Exception $e) {
+            // 🔄 VERIFICAR SI EL ERROR ES POR CRÉDITOS EN OTROS CONTEXTOS
+            $errorMessage = $e->getMessage();
+            if (strpos($errorMessage, 'credits') !== false || 
+                strpos($errorMessage, 'CREDITS_EXCEEDED') !== false) {
+                
+                \Log::warning("⚠️ API Key sin créditos. Reintentando con siguiente API Key...");
+                
+                // Reintentar con la siguiente API Key
+                return $this->convertidor($file, $retryCount + 1);
+            }
+            
             \Log::error("Error en convertidor: " . $e->getMessage());
             throw $e;
         }

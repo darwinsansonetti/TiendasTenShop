@@ -338,7 +338,7 @@ class VentasService
     {
         $venta = VentaDiariaTotalizada::with('sucursal')
             ->where('SucursalId', $sucursalId)
-            ->where('Estatus', 4)
+            ->whereIn('Estatus', [3, 4])
             ->where('Saldo', 0)
             ->where('TotalDivisa', '>', 0)
             ->orderByDesc('ID')

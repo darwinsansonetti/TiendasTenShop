@@ -243,12 +243,11 @@
                                         <i class="fas fa-id-badge me-2"></i>ID de Vendedor (POS)
                                     </label>
                                     <input type="text" 
-                                           class="form-control @error('VendedorId') is-invalid @enderror" 
-                                           id="VendedorId" 
-                                           name="VendedorId" 
-                                           value="{{ old('VendedorId') }}"
-                                           placeholder="Ej: VDD001">
-                                    <small class="text-muted">Si el empleado también es vendedor en POS</small>
+                                        class="form-control @error('VendedorId') is-invalid @enderror" 
+                                        id="VendedorId" 
+                                        name="VendedorId" 
+                                        value="{{ old('VendedorId') }}"
+                                        readonly>
                                     @error('VendedorId')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
@@ -326,6 +325,59 @@
 
 @section('js')
 <script>
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const sucursalSelect = document.getElementById('SucursalId');
+        const rolSelect = document.getElementById('rol_id');
+        const vendedorIdInput = document.getElementById('VendedorId');
+        
+        function generarVendedorId() {
+            const sucursalId = sucursalSelect.value;
+            const rolId = rolSelect.value;
+            
+            // Verificar si hay sucursal seleccionada y si el rol es VENDEDORES
+            if (!sucursalId || !rolId) {
+                return;
+            }
+            
+            // Primero, obtener el nombre del rol para saber si es VENDEDORES
+            const rolOption = rolSelect.options[rolSelect.selectedIndex];
+            const rolNombre = rolOption ? rolOption.text : '';
+            
+            // Solo generar VendedorId si el rol es VENDEDORES
+            if (rolNombre !== 'VENDEDORES') {
+                vendedorIdInput.value = '';
+                vendedorIdInput.placeholder = 'No aplica para este rol';
+                return;
+            }
+            
+            // Mostrar estado de carga
+            vendedorIdInput.value = 'Generando...';
+            
+            // Hacer request para obtener el próximo ID
+            fetch(`{{ url('cpanel/empleados/obtener-proximo-vendedor-id') }}/${sucursalId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        vendedorIdInput.value = data.vendedor_id;
+                        vendedorIdInput.placeholder = 'ID generado automáticamente';
+                    } else {
+                        vendedorIdInput.value = '';
+                        vendedorIdInput.placeholder = 'Error al generar ID';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    vendedorIdInput.value = '';
+                    vendedorIdInput.placeholder = 'Error al generar ID';
+                });
+        }
+        
+        // Eventos
+        sucursalSelect.addEventListener('change', generarVendedorId);
+        rolSelect.addEventListener('change', generarVendedorId);
+    });
+
     // Toggle para mostrar/ocultar contraseña
     function togglePassword(fieldId) {
         const field = document.getElementById(fieldId);

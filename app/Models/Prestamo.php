@@ -37,7 +37,14 @@ class Prestamo extends Model
 
     public $timestamps = false;
 
-    public function usuario(): BelongsTo
+    // Relación con AspNetUsers (UsuarioId es GUID de AspNetUsers)
+    public function usuarioSistema(): BelongsTo
+    {
+        return $this->belongsTo(AspNetUser::class, 'UsuarioId', 'Id');
+    }
+
+    // Si también puede apuntar a Usuarios temporales, mantén ambas
+    public function usuarioTemporal(): BelongsTo
     {
         return $this->belongsTo(Usuario::class, 'UsuarioId', 'UsuarioId');
     }

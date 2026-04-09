@@ -1,6 +1,6 @@
 @extends('layout.layout_dashboard')
 
-@section('title', 'TiendasTenShop | Empleados')
+@section('title', 'TiendasTenShop | Deducciones')
 
 @php
     use App\Helpers\FileHelper;
@@ -12,11 +12,11 @@
 <div class="app-content-header">
     <div class="container-fluid">
         <div class="row">
-            <div class="col-sm-6"><h3 class="mb-0">Empleados</h3></div>
+            <div class="col-sm-6"><h3 class="mb-0">Deducciones</h3></div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-end">
                     <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
-                    <li class="breadcrumb-item active" aria-current="page">Empleados</li>
+                    <li class="breadcrumb-item active" aria-current="page">Deducciones</li>
                 </ol>
             </div>
         </div>
@@ -28,17 +28,14 @@
     <div class="container-fluid">  
 
     @if($empleados && $empleados->count() > 0)
-        <!-- Card de tabla -->
         <div class="card">
             <div class="card-header">
                 <div class="row align-items-center">
-                    <!-- Título y Buscador (Izquierda) -->
                     <div class="col-md-6 d-flex align-items-center gap-3">
                         <h3 class="card-title mb-0">
                             <i class="fas fa-users me-2"></i>Listado de Empleados
                         </h3>
                         
-                        <!-- Buscador -->
                         <div class="input-group input-group-sm" style="width: 250px;">
                             <span class="input-group-text">
                                 <i class="fas fa-search"></i>
@@ -54,16 +51,8 @@
                         </div>
                     </div>
                     
-                    <!-- Botones (Derecha) -->
                     <div class="col-md-6 text-end">
                         <div class="d-flex gap-2 justify-content-end">
-                            <!-- Botón Agregar Empleado -->
-                            <a href="{{ route('cpanel.empleados.agregar') }}" 
-                                class="btn btn-success btn-sm">
-                                <i class="fas fa-plus-circle me-1"></i>+ Nuevo Empleado
-                            </a>
-                            
-                            <!-- Botones de exportación -->
                             <div class="btn-group">
                                 <button type="button"
                                         class="btn btn-outline-secondary btn-sm"
@@ -87,36 +76,71 @@
                         <thead class="table-light">
                             <tr>
                                 <th width="80" class="text-center">Foto</th>
-                                <th width="250" class="sortable" data-col="nombre">Empleado <span class="sort-icon">↕️</span></th>
-                                <th width="250" class="sortable" data-col="cargo">Cargo <span class="sort-icon">↕️</span></th>
-                                <th width="200" class="sortable" data-col="sucursal">Sucursal <span class="sort-icon">↕️</span></th>
-                                <th width="120" class="text-center sortable" data-col="ingreso">Ingreso <span class="sort-icon">↕️</span></th>
-                                <th width="120" class="text-center">Acción</th>
+                                <th width="200" class="sortable" data-col="nombre">Empleado <span class="sort-icon">↕️</span></th>
+                                <th width="150" class="sortable" data-col="sucursal">Sucursal <span class="sort-icon">↕️</span></th>
+                                <th width="220" class="text-center sortable" data-col="ultima_deduccion">Última Deducción <span class="sort-icon">↕️</span></th>
+                                <th width="100" class="text-center">Asignar</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach($empleados as $index => $vendedor)
+                            @foreach($empleados as $index => $empleado)
                                 @php
-                                    $id = $vendedor->Id ?? '';
-                                    $nombre = $vendedor->NombreCompleto ?? 'N/A';
-                                    $email = $vendedor->Email ?? '';
-                                    $rol = $vendedor->rol_nombre ?? 'N/A';
-                                    $sucursalNombre = $vendedor->sucursal_nombre ?? 'N/A';
-                                    $fotoPerfil = $vendedor->FotoPerfil ?? '';
-                                    $fechaIngreso = $vendedor->FechaCreacion ?? null;
+                                    // Propiedades del empleado
+                                    $id = $empleado->id ?? '';
+                                    $nombre = $empleado->nombre_completo ?? 'N/A';
+                                    $email = $empleado->email ?? '';
+                                    $rol = $empleado->rol_nombre ?? 'N/A';
+                                    $sucursalNombre = $empleado->sucursal_nombre ?? 'N/A';
+                                    $fotoPerfil = $empleado->foto_perfil ?? '';
+                                    $fechaIngreso = $empleado->fecha_creacion ?? null;
+                                    $origen = $empleado->origen ?? 'Usuario';
+                                    $vendedorId = $empleado->vendedor_id ?? 'N/A';
+                                    
+                                    // Información de la última deducción
+                                    $ultimaDeduccionFecha = $empleado->ultima_deduccion_fecha ?? null;
+                                    $ultimaDeduccionMontoDivisa = $empleado->ultima_deduccion_monto_divisa ?? null;
+                                    $ultimaDeduccionMontoBs = $empleado->ultima_deduccion_monto_bs ?? null;
+                                    $ultimaDeduccionTipo = $empleado->ultima_deduccion_tipo ?? null;
+                                    $ultimaDeduccionPagado = $empleado->ultima_deduccion_pagado ?? null;
+                                    $ultimaDeduccionMotivo = $empleado->ultima_deduccion_motivo ?? null;
+                                    
+                                    // Determinar estado de la deducción
+                                    $deduccionEstatus = 'Sin deducción';
+                                    $deduccionEstatusColor = 'secondary';
+                                    if ($ultimaDeduccionFecha) {
+                                        if ($ultimaDeduccionPagado == 0) {
+                                            $deduccionEstatus = 'Pendiente';
+                                            $deduccionEstatusColor = 'warning';
+                                        } else {
+                                            $deduccionEstatus = 'Pagado';
+                                            $deduccionEstatusColor = 'success';
+                                        }
+                                    }
                                     
                                     // Determinar color según el rol
                                     $rolColor = 'secondary';
                                     $rolIcon = 'user';
+                                    $rolNombreMostrar = $rol;
+                                    
                                     if ($rol == 'ADMIN') {
                                         $rolColor = 'danger';
                                         $rolIcon = 'crown';
                                     } elseif ($rol == 'SUPERVISOR') {
                                         $rolColor = 'info';
                                         $rolIcon = 'user-cog';
-                                    } elseif ($rol == 'VENDEDORES') {
+                                    } elseif ($rol == 'DEPOSITARIO') {
+                                        $rolColor = 'primary';
+                                        $rolIcon = 'warehouse';
+                                    } elseif ($rol == 'VENDEDOR' || $rol == 'VENDEDORES') {
                                         $rolColor = 'success';
                                         $rolIcon = 'user-tie';
+                                    } elseif ($origen == 'Usuario' && $rol == 'VENDEDOR') {
+                                        $rolColor = 'success';
+                                        $rolIcon = 'user-tie';
+                                    } elseif ($origen == 'Usuario') {
+                                        $rolColor = 'secondary';
+                                        $rolIcon = 'user';
+                                        $rolNombreMostrar = 'Vendedor Temporal';
                                     }
                                     
                                     $imgSrc = FileHelper::getOrDownloadFile(
@@ -125,7 +149,7 @@
                                         'assets/img/adminlte/img/default.png'
                                     );
                                 @endphp
-                                <tr class="align-middle">
+                                <tr class="align-middle" data-origen="{{ $origen }}" data-vendedor-id="{{ $vendedorId }}">
                                     <!-- Foto -->
                                     <td class="text-center">
                                         <img src="{{ $imgSrc }}" 
@@ -141,59 +165,71 @@
                                     <td data-order="{{ $nombre }}">
                                         <strong>{{ $nombre }}</strong>
                                         <br>
-                                        <small class="text-muted">
-                                            <i class="fas fa-envelope me-1"></i>{{ $email }}
+                                        <small class="badge bg-{{ $rolColor }} mt-1">
+                                            <i class="fas fa-{{ $rolIcon }} me-1"></i>{{ $rolNombreMostrar }}
                                         </small>
-                                    </td>
-
-                                    <!-- Cargo -->
-                                    <td>
-                                        <span class="text-muted">
-                                            <i class="fas fa-map-marker-alt me-1 text-secondary"></i>
-                                            {{ $rol }}
-                                        </span>
+                                        @if($origen == 'Usuario')
+                                            <br>
+                                            <small class="text-muted">
+                                                <i class="fas fa-id-badge me-1"></i>{{ $vendedorId }}
+                                            </small>
+                                        @endif
                                     </td>
 
                                     <!-- Sucursal -->
                                     <td data-order="{{ $sucursalNombre }}">
-                                        <span class="badge bg-warning text-white p-2">
+                                        <span class="badge bg-warning text-dark p-2">
                                             <i class="fas fa-store me-1"></i>{{ $sucursalNombre }}
                                         </span>
                                     </td>
 
-                                    <!-- Ingreso -->
-                                    <td class="text-center" data-order="{{ $fechaIngreso ? strtotime($fechaIngreso) : 0 }}">
-                                        @if($fechaIngreso)
+                                    <!-- Última Deducción -->
+                                    <td class="text-center" data-order="{{ $ultimaDeduccionFecha ? strtotime($ultimaDeduccionFecha) : 0 }}">
+                                        @if($ultimaDeduccionFecha)
                                             @php
-                                                $fecha = is_string($fechaIngreso) 
-                                                    ? \Carbon\Carbon::parse($fechaIngreso) 
-                                                    : \Carbon\Carbon::instance($fechaIngreso);
+                                                $fechaDeduccion = \Carbon\Carbon::parse($ultimaDeduccionFecha);
                                             @endphp
-                                            <span class="badge bg-light text-dark p-2">
-                                                <i class="far fa-calendar-alt me-1"></i>
-                                                {{ $fecha->format('d/m/Y') }}
-                                            </span>
+
+                                            <div class="card bg-light p-1 m-0" style="border-radius: 8px;">
+                                                <div class="d-flex align-items-center justify-content-between">
+                                                    <div class="text-start ps-2">
+                                                        <small class="text-muted">Última deducción</small>
+                                                        <div class="fw-bold text-danger">
+                                                            - ${{ number_format($ultimaDeduccionMontoDivisa, 2) }}
+                                                        </div>
+                                                        @if($ultimaDeduccionMotivo)
+                                                            <small class="text-muted">
+                                                                <i class="fas fa-comment me-1"></i>{{ \Illuminate\Support\Str::limit($ultimaDeduccionMotivo, 30) }}
+                                                            </small>
+                                                        @endif
+                                                    </div>
+                                                    <div class="text-end pe-2">
+                                                        <small class="text-muted">{{ $fechaDeduccion->format('d/m/Y') }}</small>
+                                                        <div>
+                                                            <span class="badge bg-{{ $deduccionEstatusColor }}">{{ $deduccionEstatus }}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         @else
-                                            <span class="text-muted">N/A</span>
+                                            <span class="text-muted">
+                                                <i class="fas fa-minus-circle me-1"></i>
+                                                Sin deducciones
+                                            </span>
                                         @endif
                                     </td>
 
-                                    <!-- Acción -->
+                                    <!-- Acción Asignar Deducción -->
                                     <td class="text-center">
                                         <div class="btn-group" role="group">
-                                            <!-- Botón Editar -->
-                                            <a href="{{ route('cpanel.empleados.internos.editar', $id) }}"
-                                            class="btn btn-sm btn-outline-warning"
-                                            title="Editar empleado"
-                                            data-bs-toggle="tooltip">
-                                                <i class="bi bi-pencil"></i>
-                                            </a>
-        
-                                            <a href="{{ route('cpanel.empleados.internos.password', $id) }}"
-                                            class="btn btn-sm btn-outline-danger"
-                                            title="Cambiar contraseña"
-                                            data-bs-toggle="tooltip">
-                                                <i class="bi bi-key"></i>
+                                            <a href="{{ route('cpanel.empleados.deduccion.asignar', [
+                                                'tipo' => $origen == 'AspNetUser' ? 'sistema' : 'temporal',
+                                                'id' => $id
+                                            ]) }}"
+                                               class="btn btn-sm btn-outline-danger"
+                                               title="Asignar deducción"
+                                               data-bs-toggle="tooltip">
+                                                <i class="bi bi-dash-circle"></i>
                                             </a>
                                         </div>
                                     </td>
@@ -204,7 +240,6 @@
                 </div>
             </div>
             
-            <!-- Resumen -->
             <div class="card-footer">
                 <div class="row">
                     <div class="col-md-4">
@@ -213,17 +248,22 @@
                             Total Empleados: {{ $empleados->count() }}
                         </small>
                     </div>
+                    <div class="col-md-4">
+                        <small class="text-muted">
+                            <i class="fas fa-desktop me-1"></i>
+                            Sistema: {{ $empleados->where('origen', 'AspNetUser')->count() }}
+                        </small>
+                    </div>
                     <div class="col-md-4 text-end">
                         <small class="text-muted">
-                            <i class="fas fa-calendar-alt me-1"></i>
-                            Actualizado: {{ now()->format('d/m/Y H:i') }}
+                            <i class="fas fa-clock me-1"></i>
+                            Temporales: {{ $empleados->where('origen', 'Usuario')->count() }}
                         </small>
                     </div>
                 </div>
             </div>
         </div>
     @else
-        <!-- Card vacío -->
         <div class="card">
             <div class="card-body text-center py-5">
                 <div class="empty-state">
@@ -274,9 +314,7 @@
                 let filasVisibles = 0;
                 
                 filas.forEach(fila => {
-                    // Buscar en la columna de empleado (índice 1 o 2, ajusta según tu tabla)
-                    // Por lo general el nombre del empleado está en la segunda columna
-                    const celdaEmpleado = fila.children[1]; // Ajusta el índice según tu estructura
+                    const celdaEmpleado = fila.children[1];
                     
                     if (celdaEmpleado) {
                         const textoEmpleado = celdaEmpleado.textContent.toLowerCase();
@@ -290,7 +328,6 @@
                     }
                 });
                 
-                // Mostrar mensaje si no hay resultados
                 let mensajeNoResultados = document.getElementById('mensajeNoResultadosEmpleados');
                 
                 if (filasVisibles === 0 && textoBusqueda !== '') {
@@ -312,10 +349,8 @@
                 }
             }
             
-            // Evento de búsqueda mientras escribe
             buscadorEmpleados.addEventListener('input', filtrarTablaEmpleados);
             
-            // Botón limpiar
             if (limpiarBtnEmpleados) {
                 limpiarBtnEmpleados.addEventListener('click', function() {
                     buscadorEmpleados.value = '';
@@ -324,7 +359,6 @@
                 });
             }
             
-            // Tecla ESC para limpiar
             buscadorEmpleados.addEventListener('keydown', function(e) {
                 if (e.key === 'Escape') {
                     buscadorEmpleados.value = '';
@@ -351,12 +385,10 @@
                 th.addEventListener('click', () => {
                     const colIndex = Array.from(th.parentNode.children).indexOf(th);
                     
-                    // Resetear íconos
                     document.querySelectorAll('.sort-icon').forEach(icon => {
                         icon.innerHTML = '↕️';
                     });
                     
-                    // Cambiar dirección si es la misma columna
                     if (columnaActual === colIndex) {
                         ordenAscendente = !ordenAscendente;
                     } else {
@@ -364,12 +396,10 @@
                         columnaActual = colIndex;
                     }
                     
-                    // Actualizar ícono
                     const icono = th.querySelector('.sort-icon');
                     if (icono) {
                         icono.innerHTML = ordenAscendente ? '⬆️' : '⬇️';
                     } else {
-                        // Si no hay icono, agregar clases visuales
                         ths.forEach(t => t.classList.remove('sort-asc', 'sort-desc'));
                         th.classList.add(ordenAscendente ? 'sort-asc' : 'sort-desc');
                     }
@@ -379,7 +409,6 @@
             });
 
             function ordenarTabla(tabla, index, asc = true) {
-                // Obtener solo las filas visibles (no ocultas por el buscador)
                 const filas = Array.from(tbody.querySelectorAll('tr:not([style*="display: none"]):not(.no-results-message)'));
                 
                 filas.sort((a, b) => {
@@ -388,11 +417,9 @@
                     
                     if (!tdA || !tdB) return 0;
 
-                    // Usar data-order si existe
                     const valorA = tdA.dataset.order || extraerValorCelda(tdA);
                     const valorB = tdB.dataset.order || extraerValorCelda(tdB);
 
-                    // Detectar si es número
                     const numA = parseFloat(valorA);
                     const numB = parseFloat(valorB);
 
@@ -405,31 +432,25 @@
                     }
                 });
 
-                // Guardar el mensaje de "no resultados" si existe
                 const mensajeNoResultados = document.getElementById('mensajeNoResultadosEmpleados');
                 
-                // Limpiar tbody
                 while (tbody.firstChild) {
                     tbody.removeChild(tbody.firstChild);
                 }
                 
-                // Agregar filas ordenadas
                 filas.forEach(fila => tbody.appendChild(fila));
                 
-                // Reagregar el mensaje de no resultados si existía
                 if (mensajeNoResultados) {
                     tbody.appendChild(mensajeNoResultados);
                 }
             }
 
             function extraerValorCelda(td) {
-                // Para badges
                 const badge = td.querySelector('.badge');
                 if (badge) {
                     return badge.textContent.trim().replace(/[$,]/g, '');
                 }
                 
-                // Para texto con strong
                 const strong = td.querySelector('strong');
                 if (strong) {
                     return strong.textContent.trim();
@@ -440,164 +461,92 @@
         })();
     });
 
-    // ============================================
-    // EXPORTAR A EXCEL
-    // ============================================
     function exportarExcelEmpleados() {
         const tabla = document.getElementById('tablaEmpleados');
-        if (!tabla) {
-            alert('No se encontró la tabla para exportar');
-            return;
-        }
+        if (!tabla) return;
 
-        const datos = [];
+        const datos = [['Empleado', 'Cargo', 'Sucursal', 'Última Deducción', 'Estado']];
 
-        // Encabezados
-        const headers = ['Empleado', 'Email', 'Cargo', 'Sucursal', 'Ingreso'];
-        datos.push(headers);
-
-        // Filas
         tabla.querySelectorAll('tbody tr').forEach(fila => {
             const celdas = fila.querySelectorAll('td');
+            const nombre = celdas[1]?.querySelector('strong')?.textContent.trim() || '';
+            const cargo = celdas[1]?.querySelector('.badge')?.textContent.trim() || '';
+            const sucursal = celdas[2]?.querySelector('.badge')?.textContent.trim() || '';
             
-            // Empleado y Email (columna 1)
-            const empleadoCell = celdas[1];
-            const nombreEmpleado = empleadoCell.querySelector('strong')?.textContent.trim() || '';
-            const emailEmpleado = empleadoCell.querySelector('small')?.textContent.replace('@', '').trim() || '';
+            let deduccion = '';
+            let estado = '';
+            const tarjeta = celdas[3]?.querySelector('.card');
+            if (tarjeta) {
+                deduccion = tarjeta.querySelector('.fw-bold')?.textContent.trim() || '';
+                estado = tarjeta.querySelector('.badge')?.textContent.trim() || '';
+            } else {
+                deduccion = 'Sin deducciones';
+                estado = '-';
+            }
             
-            // Cargo (columna 2)
-            const cargoCell = celdas[2];
-            const cargo = cargoCell.querySelector('.badge')?.textContent.trim() || '';
-            
-            // Sucursal (columna 3)
-            const sucursalCell = celdas[3];
-            const sucursal = sucursalCell.querySelector('.badge')?.textContent.trim() || '';
-            
-            // Ingreso (columna 4)
-            const ingresoCell = celdas[4];
-            const ingreso = ingresoCell.querySelector('.badge')?.textContent.trim() || 'N/A';
-            
-            datos.push([
-                nombreEmpleado,
-                emailEmpleado,
-                cargo,
-                sucursal,
-                ingreso
-            ]);
+            datos.push([nombre, cargo, sucursal, deduccion, estado]);
         });
 
-        // Crear Excel
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.aoa_to_sheet(datos);
-
-        // Auto ancho columnas
-        const maxColLengths = [];
-        datos.forEach(row => {
-            row.forEach((cell, colIndex) => {
-                const length = String(cell).length;
-                maxColLengths[colIndex] = Math.max(maxColLengths[colIndex] || 10, length);
-            });
-        });
-        ws['!cols'] = maxColLengths.map(l => ({ wch: Math.min(l, 50) }));
-
-        XLSX.utils.book_append_sheet(wb, ws, 'Empleados');
-        
-        const fecha = new Date().toISOString().split('T')[0];
-        XLSX.writeFile(wb, `Empleados_${fecha}.xlsx`);
+        XLSX.utils.book_append_sheet(wb, ws, 'Deducciones');
+        XLSX.writeFile(wb, `Deducciones_${new Date().toISOString().split('T')[0]}.xlsx`);
     }
 
-    // ============================================
-    // EXPORTAR A PDF
-    // ============================================
     function pdfTablaEmpleados() {
-        const tabla = document.getElementById('tablaEmpleados');
-        if (!tabla) {
-            alert('No se encontró la tabla para exportar');
-            return;
-        }
-
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('landscape');
 
-        // Título
         doc.setFontSize(16);
         doc.setTextColor(41, 128, 185);
-        doc.text('Listado de Empleados', 14, 15);
+        doc.text('Listado de Deducciones por Empleado', 14, 15);
         
-        // Fecha
         doc.setFontSize(10);
         doc.setTextColor(100, 100, 100);
         doc.text(`Generado: ${new Date().toLocaleString('es-VE')}`, 14, 22);
 
-        // Preparar datos
-        const headers = [['Empleado', 'Email', 'Cargo', 'Sucursal', 'Ingreso']];
+        const headers = [['Empleado', 'Cargo', 'Sucursal', 'Última Deducción', 'Estado']];
         const datos = [];
 
-        tabla.querySelectorAll('tbody tr').forEach(fila => {
-            const celdas = fila.querySelectorAll('td');
-            
-            // Empleado y Email
-            const empleadoCell = celdas[1];
-            const nombreEmpleado = empleadoCell.querySelector('strong')?.textContent.trim() || '';
-            const emailEmpleado = empleadoCell.querySelector('small')?.textContent.replace('@', '').trim() || '';
-            
-            // Cargo
-            const cargoCell = celdas[2];
-            const cargo = cargoCell.querySelector('.badge')?.textContent.trim() || '';
-            
-            // Sucursal
-            const sucursalCell = celdas[3];
-            const sucursal = sucursalCell.querySelector('.badge')?.textContent.trim() || '';
-            
-            // Ingreso
-            const ingresoCell = celdas[4];
-            const ingreso = ingresoCell.querySelector('.badge')?.textContent.trim() || 'N/A';
-            
-            datos.push([
-                nombreEmpleado,
-                emailEmpleado,
-                cargo,
-                sucursal,
-                ingreso
-            ]);
-        });
+        const tabla = document.getElementById('tablaEmpleados');
+        if (tabla) {
+            tabla.querySelectorAll('tbody tr').forEach(fila => {
+                const celdas = fila.querySelectorAll('td');
+                const nombre = celdas[1]?.querySelector('strong')?.textContent.trim() || '';
+                const cargo = celdas[1]?.querySelector('.badge')?.textContent.trim() || '';
+                const sucursal = celdas[2]?.querySelector('.badge')?.textContent.trim() || '';
+                
+                let deduccion = '';
+                let estado = '';
+                const tarjeta = celdas[3]?.querySelector('.card');
+                if (tarjeta) {
+                    deduccion = tarjeta.querySelector('.fw-bold')?.textContent.trim() || '';
+                    estado = tarjeta.querySelector('.badge')?.textContent.trim() || '';
+                } else {
+                    deduccion = 'Sin deducciones';
+                    estado = '-';
+                }
+                
+                datos.push([nombre, cargo, sucursal, deduccion, estado]);
+            });
+        }
 
-        // Generar PDF
         doc.autoTable({
             head: headers,
             body: datos,
             startY: 30,
             theme: 'grid',
-            headStyles: {
-                fillColor: [41, 128, 185],
-                textColor: 255,
-                fontSize: 10,
-                fontStyle: 'bold'
-            },
-            bodyStyles: {
-                fontSize: 9,
-                cellPadding: 3
-            },
-            alternateRowStyles: {
-                fillColor: [245, 245, 245]
-            },
-            columnStyles: {
-                0: { cellWidth: 60 },
-                1: { cellWidth: 70 },
-                2: { cellWidth: 40, halign: 'center' },
-                3: { cellWidth: 50 },
-                4: { cellWidth: 35, halign: 'center' }
-            },
-            margin: { left: 14, right: 14 }
+            headStyles: { fillColor: [41, 128, 185], textColor: 255, fontSize: 10, fontStyle: 'bold' },
+            bodyStyles: { fontSize: 9, cellPadding: 3 },
+            alternateRowStyles: { fillColor: [245, 245, 245] }
         });
 
-        // Total de empleados
         const finalY = doc.lastAutoTable.finalY + 10;
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.text(`Total Empleados: ${datos.length}`, 14, finalY);
 
-        doc.save(`Empleados_${new Date().toISOString().split('T')[0]}.pdf`);
+        doc.save(`Deducciones_${new Date().toISOString().split('T')[0]}.pdf`);
     }
 
     function zoomImagen(img) {
@@ -610,9 +559,7 @@
             width: 'auto',
             padding: '2em',
             background: '#fff',
-            customClass: {
-                image: 'img-fluid rounded'
-            }
+            customClass: { image: 'img-fluid rounded' }
         });
     }
 </script>
