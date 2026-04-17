@@ -152,20 +152,16 @@
                                         $sucursalId = $empleado->SucursalId ?? null;
                                     }
                                     
-                                    // Obtener sucursal - Prioridad: 1. Sucursal del DTO, 2. Sucursal de la entidad
+                                    // Obtener sucursal
                                     $sucursalNombre = 'N/A';
                                     
-                                    // Primero, verificar si el DTO ya tiene la sucursal cargada
                                     if (isset($detalle->Sucursal) && $detalle->Sucursal && isset($detalle->Sucursal->Nombre)) {
                                         $sucursalNombre = $detalle->Sucursal->Nombre;
                                     } 
-                                    // Si no, buscar en la entidad (usuario o empleado)
                                     elseif ($entidad && isset($entidad->Sucursal) && $entidad->Sucursal && isset($entidad->Sucursal->Nombre)) {
                                         $sucursalNombre = $entidad->Sucursal->Nombre;
                                     }
-                                    // Si la entidad tiene SucursalId pero no la relación cargada, intentar obtenerla
                                     elseif ($sucursalId) {
-                                        // Usar cache para evitar múltiples consultas
                                         $sucursalNombre = Cache::remember("sucursal_nombre_{$sucursalId}", 3600, function() use ($sucursalId) {
                                             $sucursal = \App\Models\Sucursal::find($sucursalId);
                                             return $sucursal ? $sucursal->Nombre : 'N/A';
@@ -178,129 +174,137 @@
                                         'assets/img/adminlte/img/default.png'
                                     );
 
-                                    // Calcular bonos
-                                    $bonosPendientes = $detalle->bonos_pendientes ?? 0;
-                                    $bonosPagados = $detalle->bonos_pagados ?? 0;
-                                    $totalBonosUSD = 0;
-                                    if (isset($detalle->bonos)) {
-                                        $totalBonosUSD = $detalle->bonos->where('EsPagado', 0)->sum('MontoDivisa');
-                                    }
+                                    // ============================================
+                                    // PARA LIBERALIDAD CERRADA - USAR CAMPOS GUARDADOS
+                                    // ============================================
                                     
-                                    // Calcular deducciones (NUEVO)
-                                    $deduccionesPendientes = $detalle->deducciones_pendientes ?? 0;
-                                    $deduccionesPagadas = $detalle->deducciones_pagadas ?? 0;
-                                    $totalDeduccionesUSD = 0;
-                                    if (isset($detalle->deducciones)) {
-                                        $totalDeduccionesUSD = $detalle->deducciones->where('EsPagado', 0)->sum('MontoDivisa');
-                                    }
+                                    // Bonos = OtraLiberalidad (bonos del mes al cerrar)
+                                    $bonosUSD = $detalle->OtraLiberalidad ?? 0;
                                     
+                                    // Deducciones = TotalPagado? No, las deducciones se calculan como:
+                                    // Deducciones = Liberalidad + Bonos - Neto
+                                    // Pero como ya tenemos Neto (TotalPagado), mejor usamos la fórmula inversa
                                     $liberalidadUSD = $detalle->MontoLiberalidad ?? 0;
-                                    $netoUSD = $liberalidadUSD + $totalBonosUSD - $totalDeduccionesUSD;
-                                @endphp
+                                    $netoUSD = $detalle->TotalPagado ?? 0;
+                                    
+                                    // Calcular deducciones: Neto = Liberalidad + Bonos - Deducciones
+                                    // Despejando: Deducciones = Liberalidad + Bonos - Neto
+                                    $deduccionesUSD = max(0, $liberalidadUSD + $bonosUSD - $netoUSD);
+                                    
+                                    // Si hay AbonoPrestamo, se puede mostrar como tooltip
+                                    $abonoPrestamo = $detalle->AbonoPrestamo ?? 0;
+                                    $deudaPrestamo = $detalle->DeudaPrestamo ?? 0;
+                                    @endphp
 
-                                <tr class="align-middle">
-                                    
-                                    <!-- Foto -->
-                                    <td class="text-center">
-                                        <img src="{{ $imgSrc }}" 
-                                            alt="{{ $nombre }}"
-                                            class="rounded-circle border border-success img-zoomable" 
-                                            style="width: 50px; height: 50px; object-fit: cover; cursor: zoom-in;"
-                                            onclick="zoomImagen(this)"
-                                            data-full-image="{{ $imgSrc }}"
-                                            data-description="{{ $nombre }}">
-                                    </td>
-                                    
-                                    <!-- Empleado -->
-                                    <td data-order="{{ $nombre }}">
-                                        <strong>{{ $nombre }}</strong>
-                                        @if($vendedorId)
-                                            <br>
-                                            <small class="text-muted">
-                                                <i class="fas fa-id-badge me-1"></i>{{ $vendedorId }}
-                                            </small>
-                                        @endif
-                                        @if($detalle->EsVendedor ?? false)
-                                            <span class="badge bg-success ms-1">Vendedor</span>
-                                        @else
-                                            <span class="badge bg-info ms-1">Interno</span>
-                                        @endif
-                                    </td>
-                                    
-                                    <!-- Sucursal -->
-                                    <td data-order="{{ $sucursalNombre }}">
-                                        <span class="badge bg-warning text-white p-2">
-                                            <i class="fas fa-store me-1"></i>{{ $sucursalNombre }}
-                                        </span>
-                                    </td>
-                                    
-                                    <!-- Unidades -->
-                                    <td class="text-center fw-bold" data-order="{{ $detalle->Unidades ?? 0 }}">
-                                        <span class="badge bg-primary text-white p-2">
-                                            {{ number_format($detalle->Unidades ?? 0, 0, ',', '.') }}
-                                        </span>
-                                    </td>
-                                    
-                                    <!-- Ventas USD -->
-                                    <td class="text-center text-success fw-bold" data-order="{{ $detalle->Venta ?? 0 }}">
-                                        $ {{ number_format($detalle->Venta ?? 0, 2, ',', '.') }}
-                                    </td>
-                                    
-                                    <!-- Bonos USD -->
-                                    <td class="text-center">
-                                        @if($totalBonosUSD > 0)
-                                            <span class="text-success">
-                                                <i class="fas fa-gift me-1"></i>
-                                                $ {{ number_format($totalBonosUSD, 2, ',', '.') }}
-                                            </span>
-                                            @if($bonosPendientes > 0)
-                                                <br><small class="text-muted">({{ $bonosPendientes }} pendiente{{ $bonosPendientes != 1 ? 's' : '' }})</small>
+                                    <tr class="align-middle">
+                                        <!-- Foto -->
+                                        <td class="text-center">
+                                            <img src="{{ $imgSrc }}" 
+                                                alt="{{ $nombre }}"
+                                                class="rounded-circle border border-success img-zoomable" 
+                                                style="width: 50px; height: 50px; object-fit: cover; cursor: zoom-in;"
+                                                onclick="zoomImagen(this)"
+                                                data-full-image="{{ $imgSrc }}"
+                                                data-description="{{ $nombre }}">
+                                        </td>
+                                        
+                                        <!-- Empleado -->
+                                        <td data-order="{{ $nombre }}">
+                                            <strong>{{ $nombre }}</strong>
+                                            @if($vendedorId)
+                                                <br>
+                                                <small class="text-muted">
+                                                    <i class="fas fa-id-badge me-1"></i>{{ $vendedorId }}
+                                                </small>
                                             @endif
-                                        @else
-                                            <span class="text-muted">$ 0,00</span>
-                                        @endif
-                                    </td>
-                                    
-                                    <!-- Deducciones USD (NUEVA) -->
-                                    <td class="text-center">
-                                        @if($totalDeduccionesUSD > 0)
-                                            <span class="text-danger">
-                                                <i class="fas fa-minus-circle me-1"></i>
-                                                - $ {{ number_format($totalDeduccionesUSD, 2, ',', '.') }}
-                                            </span>
-                                            @if($deduccionesPendientes > 0)
-                                                <br><small class="text-muted">({{ $deduccionesPendientes }} pendiente{{ $deduccionesPendientes != 1 ? 's' : '' }})</small>
+                                            @if($detalle->EsVendedor ?? false)
+                                                <span class="badge bg-success ms-1">Vendedor</span>
+                                            @else
+                                                <span class="badge bg-info ms-1">Interno</span>
                                             @endif
-                                        @else
-                                            <span class="text-muted">$ 0,00</span>
-                                        @endif
-                                    </td>
-                                    
-                                    <!-- Liberalidad USD -->
-                                    <td class="text-end fw-bold">
-                                        $ {{ number_format($liberalidadUSD, 2, ',', '.') }}
-                                    </td>
-                                    
-                                    <!-- Neto USD (NUEVO) -->
-                                    <td class="text-end fw-bold text-primary">
-                                        <span class="badge bg-dark p-2">
-                                            <i class="fas fa-calculator me-1"></i>
-                                            $ {{ number_format($netoUSD, 2, ',', '.') }}
-                                        </span>
-                                    </td>
+                                        </td>
+                                        
+                                        <!-- Sucursal -->
+                                        <td data-order="{{ $sucursalNombre }}">
+                                            <span class="badge bg-warning text-white p-2">
+                                                <i class="fas fa-store me-1"></i>{{ $sucursalNombre }}
+                                            </span>
+                                        </td>
+                                        
+                                        <!-- Unidades -->
+                                        <td class="text-center fw-bold" data-order="{{ $detalle->Unidades ?? 0 }}">
+                                            <span class="badge bg-primary text-white p-2">
+                                                {{ number_format($detalle->Unidades ?? 0, 0, ',', '.') }}
+                                            </span>
+                                        </td>
+                                        
+                                        <!-- Ventas USD -->
+                                        <td class="text-center text-success fw-bold" data-order="{{ $detalle->Venta ?? 0 }}">
+                                            $ {{ number_format($detalle->Venta ?? 0, 2, ',', '.') }}
+                                        </td>
+                                        
+                                        <!-- Bonos USD (usando OtraLiberalidad) -->
+                                        <td class="text-center" data-order="{{ $bonosUSD }}">
+                                            @if($bonosUSD > 0)
+                                                <span class="text-success">
+                                                    <i class="fas fa-gift me-1"></i>
+                                                    $ {{ number_format($bonosUSD, 2, ',', '.') }}
+                                                </span>
+                                            @else
+                                                <span class="text-muted">$ 0,00</span>
+                                            @endif
+                                        </td>
+                                        
+                                        <!-- Deducciones USD (calculadas) -->
+                                        <td class="text-center" data-order="{{ $deduccionesUSD }}">
+                                            @if($deduccionesUSD > 0)
+                                                <span class="text-danger">
+                                                    <i class="fas fa-minus-circle me-1"></i>
+                                                    - $ {{ number_format($deduccionesUSD, 2, ',', '.') }}
+                                                </span>
+                                            @else
+                                                <span class="text-muted">$ 0,00</span>
+                                            @endif
+                                            
+                                            @if($abonoPrestamo > 0)
+                                                <br>
+                                                <small class="text-muted" title="Abono a préstamo">
+                                                    <i class="fas fa-hand-holding-usd me-1"></i>Préstamo: ${{ number_format($abonoPrestamo, 2) }}
+                                                </small>
+                                            @endif
+                                            @if($deudaPrestamo > 0)
+                                                <br>
+                                                <small class="text-muted" title="Deuda pendiente">
+                                                    <i class="fas fa-clock me-1"></i>Deuda: ${{ number_format($deudaPrestamo, 2) }}
+                                                </small>
+                                            @endif
+                                        </td>
+                                        
+                                        <!-- Liberalidad USD -->
+                                        <td class="text-end fw-bold" data-order="{{ $liberalidadUSD }}">
+                                            $ {{ number_format($liberalidadUSD, 2, ',', '.') }}
+                                        </td>
+                                        
+                                        <!-- Neto USD (usando TotalPagado) -->
+                                        <td class="text-end fw-bold text-primary" data-order="{{ $netoUSD }}">
+                                            <span class="badge bg-dark p-2">
+                                                <i class="fas fa-calculator me-1"></i>
+                                                $ {{ number_format($netoUSD, 2, ',', '.') }}
+                                            </span>
+                                        </td>
 
-                                    <!-- Detalle -->
-                                    <td class="text-center">
-                                        <div class="btn-group" role="group">
-                                            <a href="{{ route('liberalidad.detalle', ['id' => $detalle->LiberalidadDetalleId]) }}"
-                                                class="btn btn-sm btn-outline-primary"
-                                                title="Ver detalles del empleado"
-                                                data-bs-toggle="tooltip">
-                                                <i class="bi bi-eye"></i>
-                                            </a>
-                                        </div>
-                                    </td>
-                                </tr>
+                                        <!-- Detalle -->
+                                        <td class="text-center">
+                                            <div class="btn-group" role="group">
+                                                <a href="{{ route('liberalidad.detalle', ['id' => $detalle->LiberalidadDetalleId]) }}"
+                                                    class="btn btn-sm btn-outline-primary"
+                                                    title="Ver detalles del empleado"
+                                                    data-bs-toggle="tooltip">
+                                                    <i class="bi bi-eye"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
                                 @endforeach
                             </tbody>
                         </table>
@@ -354,8 +358,15 @@
                         
                         <!-- Botones (Derecha) -->
                         <div class="col-md-4 text-end">
-                            
                             <div class="btn-group">
+                                <!-- Botón Cerrar Liberalidad (solo cuando NO está cerrada) -->
+                                <button type="button" 
+                                        class="btn btn-sm btn-success" 
+                                        id="btnCerrarLiberalidad"
+                                        onclick="cerrarLiberalidad()">
+                                    <i class="fas fa-lock me-1"></i>Cerrar Liberalidad
+                                </button>
+                                
                                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="pdfTablaLiberalidad()">
                                     <i class="fas fa-print me-1"></i>PDF
                                 </button>
@@ -504,8 +515,11 @@
                                         </td>
                                         
                                         <!-- Liberalidad USD -->
-                                        <td class="text-end fw-bold">
-                                            $ {{ number_format($liberalidadUSD, 2, ',', '.') }}
+                                        <td class="text-center">                                            
+                                            <span class="text-success">
+                                                <i class="fas fa-gift me-1"></i>
+                                                $ {{ number_format($liberalidadUSD, 2, ',', '.') }}
+                                            </span>
                                         </td>
                                         
                                         <!-- Neto USD -->
@@ -576,40 +590,6 @@
         var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
             return new bootstrap.Tooltip(tooltipTriggerEl)
         });
-        
-        // // ==========================
-        // // CHECK ALL / UNCHECK ALL
-        // // ==========================
-        // const checkAll = document.getElementById('checkAll');
-        // if (checkAll) {
-        //     checkAll.addEventListener('change', function() {
-        //         const checkboxes = document.querySelectorAll('.detalle-checkbox');
-        //         checkboxes.forEach(cb => cb.checked = this.checked);
-        //         updateSelectAllState();
-        //     });
-        // }
-
-        // // ==========================
-        // // ACTUALIZAR ESTADO DEL CHECK ALL
-        // // ==========================
-        // function updateSelectAllState() {
-        //     const checkAll = document.getElementById('checkAll');
-        //     const checkboxes = document.querySelectorAll('.detalle-checkbox');
-        //     if (!checkAll) return;
-            
-        //     const todosSeleccionados = Array.from(checkboxes).every(cb => cb.checked);
-        //     const ningunoSeleccionado = Array.from(checkboxes).every(cb => !cb.checked);
-            
-        //     if (todosSeleccionados) {
-        //         checkAll.checked = true;
-        //         checkAll.indeterminate = false;
-        //     } else if (ningunoSeleccionado) {
-        //         checkAll.checked = false;
-        //         checkAll.indeterminate = false;
-        //     } else {
-        //         checkAll.indeterminate = true;
-        //     }
-        // }
 
         // ==========================
         // BUSCADOR DE EMPLEADOS
@@ -768,13 +748,16 @@
             }
         })();
         
-        // // ==========================
-        // // EVENTOS PARA CHECKBOXES INDIVIDUALES
-        // // ==========================
-        // const checkboxes = document.querySelectorAll('.detalle-checkbox');
-        // checkboxes.forEach(checkbox => {
-        //     checkbox.addEventListener('change', updateSelectAllState);
-        // });
+        if (sessionStorage.getItem('generarPDF') === 'true') {
+            const periodo = sessionStorage.getItem('periodoPDF');
+            sessionStorage.removeItem('generarPDF');
+            sessionStorage.removeItem('periodoPDF');
+            
+            // Esperar a que la tabla se actualice completamente
+            setTimeout(() => {
+                generarPDFLiberalidadConDatos(periodo);
+            }, 1000);
+        }
     });
     
     function zoomImagen(img) {
@@ -813,6 +796,244 @@
         
         const wb = XLSX.utils.table_to_book(tabla, {sheet: "Liberalidad"});
         XLSX.writeFile(wb, `Liberalidad_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+
+    let pdfEnMemoria = null;
+    let nombreArchivo = null;
+
+    function generarPDFLiberalidadConDatos(periodo) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('landscape');
+        
+        const tabla = document.getElementById('tablaLiberalidad');
+        if (!tabla) {
+            console.error('No se encontró la tabla');
+            return;
+        }
+        
+        // ============================================
+        // FUNCIÓN AUXILIAR PARA LIMPIAR NÚMEROS
+        // ============================================
+        const limpiarNumero = (texto) => {
+            if (!texto) return 0;
+            let limpio = texto.replace('$', '').replace('-', '').trim();
+            if (limpio.includes('(')) limpio = limpio.split('(')[0].trim();
+            limpio = limpio.replace(/\./g, '');
+            limpio = limpio.replace(',', '.');
+            return parseFloat(limpio) || 0;
+        };
+        
+        const limpiarEntero = (texto) => {
+            if (!texto) return 0;
+            return parseInt(texto.replace(/\./g, '')) || 0;
+        };
+        
+        const limpiarNombre = (texto) => {
+            if (!texto) return '';
+            return texto.replace('Vendedor', '').replace('Interno', '').trim();
+        };
+        
+        // ============================================
+        // EXTRAER DATOS DE LA TABLA
+        // ============================================
+        const headers = [
+            ['Empleado', 'Sucursal', 'Unidades', 'Ventas USD', 'Bonos USD', 'Deducciones USD', 'Liberalidad USD', 'Neto USD']
+        ];
+        const rows = [];
+        
+        const filas = tabla.querySelectorAll('tbody tr');
+        
+        filas.forEach(fila => {
+            const celdas = fila.querySelectorAll('td');
+            if (celdas.length >= 9) {
+                rows.push([
+                    limpiarNombre(celdas[1]?.innerText || ''),
+                    celdas[2]?.innerText.trim() || '',
+                    limpiarEntero(celdas[3]?.innerText),
+                    limpiarNumero(celdas[4]?.innerText),
+                    limpiarNumero(celdas[5]?.innerText),
+                    limpiarNumero(celdas[6]?.innerText),
+                    limpiarNumero(celdas[7]?.innerText),
+                    limpiarNumero(celdas[8]?.innerText)
+                ]);
+            }
+        });
+        
+        // ============================================
+        // CALCULAR TOTALES
+        // ============================================
+        let totales = {
+            unidades: 0,
+            ventas: 0,
+            bonos: 0,
+            deducciones: 0,
+            liberalidad: 0,
+            neto: 0
+        };
+        
+        rows.forEach(row => {
+            totales.unidades += row[2];
+            totales.ventas += row[3];
+            totales.bonos += row[4];
+            totales.deducciones += row[5];
+            totales.liberalidad += row[6];
+            totales.neto += row[7];
+        });
+        
+        // Agregar fila de totales
+        rows.push([
+            'TOTALES',
+            '',
+            totales.unidades.toLocaleString('es-VE', { minimumFractionDigits: 0 }),
+            `$ ${totales.ventas.toFixed(2)}`,
+            `$ ${totales.bonos.toFixed(2)}`,
+            `$ ${totales.deducciones.toFixed(2)}`,
+            `$ ${totales.liberalidad.toFixed(2)}`,
+            `$ ${totales.neto.toFixed(2)}`
+        ]);
+        
+        // Formatear filas para visualización
+        const filasFormateadas = rows.map((row, index) => {
+            if (index === rows.length - 1) return row; // Totales
+            return [
+                row[0],
+                row[1],
+                row[2].toLocaleString('es-VE', { minimumFractionDigits: 0 }),
+                `$ ${row[3].toFixed(2)}`,
+                `$ ${row[4].toFixed(2)}`,
+                `$ ${row[5].toFixed(2)}`,
+                `$ ${row[6].toFixed(2)}`,
+                `$ ${row[7].toFixed(2)}`
+            ];
+        });
+        
+        // ============================================
+        // GENERAR PDF
+        // ============================================
+        doc.setFontSize(16);
+        doc.setTextColor(41, 128, 185);
+        doc.text('Reporte de Liberalidad', 14, 15);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Período: ${periodo}`, 14, 22);
+        doc.text(`Generado: ${new Date().toLocaleString('es-VE')}`, 14, 29);
+        
+        doc.autoTable({
+            head: headers,
+            body: filasFormateadas,
+            startY: 40,
+            theme: 'grid',
+            headStyles: {
+                fillColor: [41, 128, 185],
+                textColor: [255, 255, 255],
+                fontSize: 9,
+                fontStyle: 'bold',
+                halign: 'center'
+            },
+            bodyStyles: {
+                fontSize: 8,
+                cellPadding: 3
+            },
+            alternateRowStyles: {
+                fillColor: [245, 245, 245]
+            },
+            columnStyles: {
+                0: { cellWidth: 35 },  // Empleado
+                1: { cellWidth: 30 },  // Sucursal
+                2: { cellWidth: 20, halign: 'center' },  // Unidades
+                3: { cellWidth: 25, halign: 'right' },   // Ventas
+                4: { cellWidth: 25, halign: 'right' },   // Bonos
+                5: { cellWidth: 25, halign: 'right' },   // Deducciones
+                6: { cellWidth: 25, halign: 'right' },   // Liberalidad
+                7: { cellWidth: 25, halign: 'right' }    // Neto
+            },
+            didDrawPage: function(data) {
+                // Número de página
+                const pageCount = doc.internal.getNumberOfPages();
+                doc.setFontSize(8);
+                doc.setTextColor(150, 150, 150);
+                doc.text(
+                    `Página ${data.pageNumber} de ${pageCount}`,
+                    doc.internal.pageSize.getWidth() - 30,
+                    doc.internal.pageSize.getHeight() - 10
+                );
+            }
+        });
+        
+        // Guardar PDF
+        doc.save(`Liberalidad_${periodo}_${new Date().toISOString().slice(0,10)}.pdf`);
+    }
+
+    function exportarPDFMemoria() {
+        if (pdfEnMemoria) {
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(pdfEnMemoria);
+            link.href = url;
+            link.download = nombreArchivo;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            // Limpiar memoria
+            pdfEnMemoria = null;
+            nombreArchivo = null;
+        }
+    }
+
+    function cerrarLiberalidad() {
+        const periodo = document.getElementById('periodo').value;
+        
+        Swal.fire({
+            title: '¿Cerrar Liberalidad?',
+            html: `Esta acción no se puede deshacer.<br>
+                La liberalidad del período <strong>${periodo}</strong> quedará registrada.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#28a745',
+            cancelButtonColor: '#dc3545',
+            confirmButtonText: 'Sí, cerrar',
+            cancelButtonText: 'Cancelar'    }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire({
+                    title: 'Cerrando liberalidad...',
+                    text: 'Por favor espere',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+                
+                fetch('{{ route("cpanel.empleados.liberalidad.cerrar") }}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        periodo: periodo
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Recargar la página para ver los datos actualizados
+                        location.reload();
+                        
+                        // Guardar flag para generar PDF después de la recarga
+                        sessionStorage.setItem('generarPDF', 'true');
+                        sessionStorage.setItem('periodoPDF', periodo);
+                    } else {
+                        Swal.fire('Error', data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire('Error', 'Ocurrió un error al cerrar la liberalidad', 'error');
+                });
+            }
+        });
     }
 </script>
 

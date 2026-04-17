@@ -244,6 +244,42 @@ Route::middleware('auth')->group(function() {
 
     // Listado de empleados con prestamos
     Route::get('/cpanel/empleados/listado/prestamos', [EmpleadosController::class, 'listado_empleados_prestamos'])->name('cpanel.empleados.lista_empleados_prestamos');
+
+    // Obtener bonos disponibles de un empleado para pagar préstamos
+    Route::get('/cpanel/empleados/prestamos/bonos-disponibles/{usuarioId}', [EmpleadosController::class, 'obtenerBonosDisponiblesPrestamo'])
+        ->name('cpanel.empleados.prestamos.bonos_disponibles');
+
+    // Registrar pago normal de préstamo (efectivo, transferencia, etc.)
+    Route::post('/cpanel/empleados/prestamos/registrar-pago', [EmpleadosController::class, 'registrarPagoNormal'])
+        ->name('cpanel.empleados.prestamos.registrar_pago');
+
+    // Registrar pago de préstamo usando bono
+    Route::post('/cpanel/empleados/prestamos/registrar-pago-bono', [EmpleadosController::class, 'registrarPagoConBono'])
+        ->name('cpanel.empleados.prestamos.registrar_pago_bono');
+
+    // Registrar pago de préstamo usando liberalidad
+    Route::post('/cpanel/empleados/prestamos/registrar-pago-liberalidad', [EmpleadosController::class, 'registrarPagoConLiberalidad'])
+        ->name('cpanel.empleados.prestamos.registrar_pago_liberalidad');
+
+    // Detalle de préstamos de un empleado
+    Route::get('/cpanel/empleados/prestamos/detalle/{usuarioId}', [EmpleadosController::class, 'detallePrestamosEmpleado'])
+        ->name('cpanel.empleados.prestamos.detalle');
+
+    // Formulario para solicitar préstamo
+    Route::get('/cpanel/empleados/prestamos/solicitar/{usuarioId}', [EmpleadosController::class, 'formularioSolicitarPrestamo'])
+        ->name('cpanel.empleados.prestamos.solicitar.form');
+
+    // Guardar solicitud de préstamo
+    Route::post('/cpanel/empleados/prestamos/solicitar', [EmpleadosController::class, 'guardarSolicitarPrestamo'])
+        ->name('cpanel.empleados.prestamos.solicitar.guardar');
+
+    // Buscar producto por código
+    Route::get('/cpanel/empleados/prestamos/buscar-producto', [EmpleadosController::class, 'buscarProductoPorCodigo'])
+        ->name('cpanel.empleados.prestamos.buscar_producto');
+
+    // Cerra Liberalidad
+    Route::post('/cpanel/empleados/liberalidad/cerrar', [EmpleadosController::class, 'cerrarLiberalidad'])
+    ->name('cpanel.empleados.liberalidad.cerrar');
 });
 
 

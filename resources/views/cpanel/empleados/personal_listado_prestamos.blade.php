@@ -213,24 +213,38 @@
                                         @endif
                                     </td>
 
-                                    <!-- Acción Ver Detalles -->
+                                    <!-- Acción -->
                                     <td class="text-center">
-                                        @if($totalPrestamos > 0)
+                                        <div class="btn-group" role="group">                                            
+                                            <!-- Botón Solicitar Préstamo (siempre visible) -->
                                             <button type="button"
-                                                    class="btn btn-sm btn-outline-info"
-                                                    onclick="verDetallesPrestamos('{{ $id }}', '{{ addslashes($nombre) }}')"
-                                                    title="Ver detalles de préstamos"
+                                                class="btn btn-sm btn-outline-primary"
+                                                onclick="window.location.href='{{ route("cpanel.empleados.prestamos.solicitar.form", $id) }}'"
+                                                title="Solicitar nuevo préstamo"
+                                                data-bs-toggle="tooltip">
+                                                <i class="bi bi-plus-circle"></i>
+                                            </button>
+                                            
+                                            <!-- Botón Pagar Préstamo (solo si tiene préstamos activos) -->
+                                            @if($totalPrestamos > 0 && $totalPendiente > 0)
+                                                <button type="button"
+                                                    class="btn btn-sm btn-outline-success"
+                                                    onclick="pagarPrestamos('{{ $id }}', '{{ addslashes($nombre) }}')"
+                                                    title="Registrar pago de préstamos"
                                                     data-bs-toggle="tooltip">
-                                                <i class="fas fa-eye me-1"></i> Ver
-                                            </button>
-                                        @else
+                                                    <i class="bi bi-cash-stack"></i>
+                                                </button>
+                                            @endif
+
+                                            <!-- Botón Ver Detalles -->
                                             <button type="button"
-                                                    class="btn btn-sm btn-outline-secondary"
-                                                    disabled
-                                                    title="Sin préstamos">
-                                                <i class="fas fa-eye me-1"></i> Ver
+                                                class="btn btn-sm btn-outline-info"
+                                                onclick="window.location.href='{{ route("cpanel.empleados.prestamos.detalle", $id) }}'"
+                                                title="Ver detalles de préstamos"
+                                                data-bs-toggle="tooltip">
+                                                <i class="bi bi-eye"></i>
                                             </button>
-                                        @endif
+                                        </div>
                                     </td>
                                 </tr>
                             @endforeach
@@ -317,6 +331,7 @@
 
 <script>
     let prestamosData = @json($empleados);
+    let empleadosData = @json($empleados);
 
     document.addEventListener("DOMContentLoaded", function() {
         // Tooltips
@@ -621,6 +636,898 @@
         
         const modal = new bootstrap.Modal(document.getElementById('modalDetallesPrestamos'));
         modal.show();
+    }
+
+    function pagarPrestamos(usuarioId, nombreEmpleado) {
+        const url = '{{ route("cpanel.empleados.prestamos.bonos_disponibles", ":usuarioId") }}';
+        const finalUrl = url.replace(':usuarioId', usuarioId);
+
+        const empleadoActual = empleadosData.find(e => e.id === usuarioId);
+        
+        fetch(finalUrl)
+            .then(response => response.json())
+            .then(data => {
+                let tieneBonos = data.success && data.data.total_bonos_disponibles > 0;
+                let tieneLiberalidad = data.data.liberalidad && data.data.liberalidad.tiene_liberalidad;
+                let liberalidadDisponible = data.data.liberalidad?.disponible || 0;
+                let montoLiberalidad = data.data.liberalidad?.monto || 0;
+                let montoDescuento = data.data.liberalidad?.monto_descuento || 0;
+                
+                let bonosHtml = '';
+                let liberalidadHtml = '';
+                
+                if (tieneBonos) {
+                    bonosHtml = `
+                        <div class="alert alert-success">
+                            <strong>🎁 Bonos disponibles:</strong> $${data.data.total_bonos_disponibles.toFixed(2)} USD
+                            <br>
+                            <small>Seleccione "Transferencia (Bono)" para usar sus bonos</small>
+                        </div>
+                    `;
+                }
+                
+                if (tieneLiberalidad) {
+                    liberalidadHtml = `
+                        <div class="alert alert-info">
+                            <strong>💰 Liberalidad disponible:</strong> $${liberalidadDisponible.toFixed(2)} USD
+                            <br>
+                            <small>Seleccione "Transferencia (Liberalidad)" para usar su liberalidad</small>
+                        </div>
+                    `;
+                }
+                
+                Swal.fire({
+                    title: `Registrar Pago - ${nombreEmpleado}`,
+                    html: `
+                        <div class="text-start">
+                            ${bonosHtml}
+                            ${liberalidadHtml}
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Fecha del pago *</label>
+                                <input type="date" id="fechaPago" class="form-control" value="">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Descripción *</label>
+                                <input type="text" id="descripcion" class="form-control" placeholder="Escriba la descripción...">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Forma de pago *</label>
+                                <select id="formaPago" class="form-select">
+                                    <option value="">Seleccione un valor</option>
+                                    <option value="0">💵 Efectivo</option>
+                                    <option value="2">🏦 Depósito</option>
+                                    <option value="3">📱 Transferencia</option>
+                                    ${tieneBonos ? '<option value="bono">🎁 Transferencia (Bono)</option>' : ''}
+                                    ${tieneLiberalidad ? '<option value="liberalidad">💰 Transferencia (Liberalidad)</option>' : ''}
+                                </select>
+                            </div>
+                            
+                            <div id="montoContainer">
+                                <div class="mb-3">
+                                    <label class="form-label">Monto a pagar (USD)</label>
+                                    <input type="number" id="montoPago" class="form-control" step="0.01" placeholder="0.00">
+                                </div>
+                            </div>
+                            
+                            <div id="bonosContainer" style="display: none;">
+                                <div class="mb-3">
+                                    <label class="form-label">Seleccionar bono</label>
+                                    <select id="bonoSelect" class="form-select">
+                                        ${data.data.bonos.map(bono => 
+                                            `<option value="${bono.ID}" data-monto="${bono.MontoDivisa}">
+                                                Bono #${bono.ID} - $${bono.MontoDivisa} - ${bono.Motivo || 'Sin motivo'}
+                                            </option>`
+                                        ).join('')}
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Monto a pagar con bono (USD)</label>
+                                    <input type="number" id="montoBono" class="form-control" step="0.01" 
+                                        max="${data.data.total_bonos_disponibles}" placeholder="0.00">
+                                    <small class="text-muted">Máximo disponible: $${data.data.total_bonos_disponibles.toFixed(2)}</small>
+                                </div>
+                            </div>
+                            
+                            <div id="liberalidadContainer" style="display: none;">
+                                <div class="mb-3">
+                                    <label class="form-label">Monto a pagar con liberalidad (USD)</label>
+                                    <input type="number" id="montoLiberalidad" class="form-control" step="0.01" 
+                                        max="${liberalidadDisponible}" placeholder="0.00">
+                                    <small class="text-muted">Máximo disponible: $${liberalidadDisponible.toFixed(2)}</small>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Número de operación</label>
+                                <input type="text" id="numeroOperacion" class="form-control" placeholder="Número de operación / referencia">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Observación</label>
+                                <textarea id="observacion" class="form-control" rows="2" 
+                                        placeholder="Observación del pago..."></textarea>
+                            </div>
+                        </div>
+                    `,
+                    showCancelButton: true,
+                    confirmButtonText: 'Registrar Pago',
+                    cancelButtonText: 'Cancelar',
+                    confirmButtonColor: '#28a745',
+                    didOpen: () => {
+                        // Establecer fecha actual del cliente
+                        const fechaInput = document.getElementById('fechaPago');
+                        if (fechaInput) {
+                            const hoy = new Date();
+                            const año = hoy.getFullYear();
+                            const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+                            const dia = String(hoy.getDate()).padStart(2, '0');
+                            fechaInput.value = `${año}-${mes}-${dia}`;
+                        }
+                        
+                        const formaPagoSelect = document.getElementById('formaPago');
+                        const montoContainer = document.getElementById('montoContainer');
+                        const bonosContainer = document.getElementById('bonosContainer');
+                        const liberalidadContainer = document.getElementById('liberalidadContainer');
+                        const montoBono = document.getElementById('montoBono');
+                        const montoLiberalidadInput = document.getElementById('montoLiberalidad');
+                        const bonoSelect = document.getElementById('bonoSelect');
+                        
+                        if (formaPagoSelect) {
+                            formaPagoSelect.addEventListener('change', function() {
+                                if (this.value === 'bono') {
+                                    if (montoContainer) montoContainer.style.display = 'none';
+                                    if (bonosContainer) bonosContainer.style.display = 'block';
+                                    if (liberalidadContainer) liberalidadContainer.style.display = 'none';
+                                } else if (this.value === 'liberalidad') {
+                                    if (montoContainer) montoContainer.style.display = 'none';
+                                    if (bonosContainer) bonosContainer.style.display = 'none';
+                                    if (liberalidadContainer) liberalidadContainer.style.display = 'block';
+                                } else {
+                                    if (montoContainer) montoContainer.style.display = 'block';
+                                    if (bonosContainer) bonosContainer.style.display = 'none';
+                                    if (liberalidadContainer) liberalidadContainer.style.display = 'none';
+                                }
+                            });
+                        }
+                        
+                        if (bonoSelect && bonoSelect.options && bonoSelect.options.length > 0) {
+                            const updateMontoMax = () => {
+                                const selectedIndex = bonoSelect.selectedIndex;
+                                if (selectedIndex >= 0 && selectedIndex < bonoSelect.options.length) {
+                                    const selectedOption = bonoSelect.options[selectedIndex];
+                                    if (selectedOption && selectedOption.dataset && selectedOption.dataset.monto) {
+                                        const montoDisponible = parseFloat(selectedOption.dataset.monto);
+                                        if (montoBono && !isNaN(montoDisponible)) {
+                                            montoBono.max = montoDisponible;
+                                            montoBono.placeholder = `Máximo: $${montoDisponible.toFixed(2)}`;
+                                        }
+                                    }
+                                }
+                            };
+                            
+                            bonoSelect.addEventListener('change', updateMontoMax);
+                            updateMontoMax();
+                        }
+                    },
+                    preConfirm: () => {
+                        const formaPago = document.getElementById('formaPago').value;
+                        const fechaPago = document.getElementById('fechaPago').value;
+                        const descripcion = document.getElementById('descripcion').value;
+                        const observacion = document.getElementById('observacion').value;
+                        const numeroOperacion = document.getElementById('numeroOperacion').value;
+                        
+                        if (!fechaPago) {
+                            Swal.showValidationMessage('Debe seleccionar una fecha');
+                            return false;
+                        }
+                        
+                        if (!descripcion) {
+                            Swal.showValidationMessage('Debe ingresar una descripción');
+                            return false;
+                        }
+                        
+                        if (!formaPago) {
+                            Swal.showValidationMessage('Debe seleccionar una forma de pago');
+                            return false;
+                        }
+                        
+                        if (formaPago === 'bono') {
+                            const bonoId = document.getElementById('bonoSelect').value;
+                            const monto = document.getElementById('montoBono').value;
+                            
+                            if (!monto || parseFloat(monto) <= 0) {
+                                Swal.showValidationMessage('Debe ingresar un monto válido');
+                                return false;
+                            }
+                            
+                            const bonoSeleccionado = data.data.bonos.find(b => b.ID == bonoId);
+                            if (!bonoSeleccionado) {
+                                Swal.showValidationMessage('Bono no encontrado');
+                                return false;
+                            }
+                            
+                            if (parseFloat(monto) > bonoSeleccionado.MontoDivisa) {
+                                Swal.showValidationMessage(`El monto no puede exceder $${bonoSeleccionado.MontoDivisa.toFixed(2)}`);
+                                return false;
+                            }
+                            
+                            return {
+                                tipo: 'bono',
+                                usuarioId: usuarioId,
+                                empleado: empleadoActual,
+                                bono_id: parseInt(bonoId),
+                                monto: parseFloat(monto),
+                                fecha: fechaPago,
+                                descripcion: descripcion,
+                                observacion: observacion,
+                                numero_operacion: numeroOperacion
+                            };
+                        } else if (formaPago === 'liberalidad') {
+                            const monto = document.getElementById('montoLiberalidad').value;
+                            
+                            if (!monto || parseFloat(monto) <= 0) {
+                                Swal.showValidationMessage('Debe ingresar un monto válido');
+                                return false;
+                            }
+                            
+                            if (parseFloat(monto) > liberalidadDisponible) {
+                                Swal.showValidationMessage(`El monto no puede exceder $${liberalidadDisponible.toFixed(2)}`);
+                                return false;
+                            }
+                            
+                            return {
+                                tipo: 'liberalidad',
+                                usuarioId: usuarioId,
+                                empleado: empleadoActual,
+                                monto: parseFloat(monto),
+                                fecha: fechaPago,
+                                descripcion: descripcion,
+                                observacion: observacion,
+                                numero_operacion: numeroOperacion
+                            };
+                        } else {
+                            const monto = document.getElementById('montoPago').value;
+                            
+                            if (!monto || parseFloat(monto) <= 0) {
+                                Swal.showValidationMessage('Debe ingresar un monto válido');
+                                return false;
+                            }
+                            
+                            return {
+                                tipo: 'normal',
+                                usuarioId: usuarioId,
+                                empleado: empleadoActual,
+                                monto: parseFloat(monto),
+                                formaPago: parseInt(formaPago),
+                                fecha: fechaPago,
+                                descripcion: descripcion,
+                                observacion: observacion,
+                                numero_operacion: numeroOperacion
+                            };
+                        }
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        if (result.value.tipo === 'bono') {
+                            registrarPagoConBono(result.value);
+                        } else if (result.value.tipo === 'liberalidad') {
+                            registrarPagoConLiberalidad(result.value);
+                        } else {
+                            registrarPagoNormal(result.value);
+                        }
+                    }
+                });
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                mostrarModalPagoNormal(usuarioId, nombreEmpleado);
+            });
+    }
+
+    function mostrarModalPagoNormal(usuarioId, nombreEmpleado) {
+        const empleadoActual = empleadosData.find(e => e.id === usuarioId);
+        
+        Swal.fire({
+            title: `Registrar Pago - ${nombreEmpleado}`,
+            html: `
+                <div class="text-start">
+                    <div class="mb-3">
+                        <label class="form-label">Fecha del pago *</label>
+                        <input type="date" id="fechaPago" class="form-control" value="">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Descripción *</label>
+                        <input type="text" id="descripcion" class="form-control" placeholder="Escriba la descripción...">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Monto a pagar (USD) *</label>
+                        <input type="number" id="montoPago" class="form-control" step="0.01" placeholder="0.00">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Forma de pago *</label>
+                        <select id="formaPago" class="form-select">
+                            <option value="0">Efectivo</option>
+                            <option value="2">Depósito</option>
+                            <option value="3">Transferencia</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Número de operación</label>
+                        <input type="text" id="numeroOperacion" class="form-control" placeholder="Número de operación / referencia">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Observación</label>
+                        <textarea id="observacion" class="form-control" rows="2" 
+                                placeholder="Observación del pago..."></textarea>
+                    </div>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Registrar Pago',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#28a745',
+            didOpen: () => {
+                // Establecer fecha actual del cliente
+                const fechaInput = document.getElementById('fechaPago');
+                if (fechaInput) {
+                    const hoy = new Date();
+                    const año = hoy.getFullYear();
+                    const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+                    const dia = String(hoy.getDate()).padStart(2, '0');
+                    fechaInput.value = `${año}-${mes}-${dia}`;
+                }
+            },
+            preConfirm: () => {
+                const fecha = document.getElementById('fechaPago').value;
+                const descripcion = document.getElementById('descripcion').value;
+                const monto = document.getElementById('montoPago').value;
+                const formaPago = document.getElementById('formaPago').value;
+                const numeroOperacion = document.getElementById('numeroOperacion').value;
+                const observacion = document.getElementById('observacion').value;
+                
+                if (!fecha) {
+                    Swal.showValidationMessage('Debe seleccionar una fecha');
+                    return false;
+                }
+                
+                if (!descripcion) {
+                    Swal.showValidationMessage('Debe ingresar una descripción');
+                    return false;
+                }
+                
+                if (!monto || parseFloat(monto) <= 0) {
+                    Swal.showValidationMessage('Debe ingresar un monto válido');
+                    return false;
+                }
+                
+                if (!formaPago) {
+                    Swal.showValidationMessage('Debe seleccionar una forma de pago');
+                    return false;
+                }
+                
+                return {
+                    usuarioId: usuarioId,
+                    empleado: empleadoActual,
+                    monto: parseFloat(monto),
+                    formaPago: parseInt(formaPago),
+                    fecha: fecha,
+                    descripcion: descripcion,
+                    observacion: observacion,
+                    numero_operacion: numeroOperacion
+                };
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                registrarPagoNormal(result.value);
+            }
+        });
+    }
+
+    function registrarPagoNormal(datos) {
+        Swal.fire({
+            title: 'Procesando pago...',
+            text: 'Por favor espere',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        
+        fetch('{{ route("cpanel.empleados.prestamos.registrar_pago") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                usuarioId: datos.usuarioId,
+                Fecha: datos.fecha,
+                Descripcion: datos.descripcion,
+                MontoDivisaAbonado: datos.monto,
+                FormaDePago: datos.formaPago,
+                Observacion: datos.observacion,
+                NumeroOperacion: datos.numero_operacion
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Preparar datos para el PDF
+                const datosPago = {
+                    tipo: 'normal',
+                    fecha: datos.fecha,
+                    formaPago: datos.formaPago,
+                    numero_operacion: datos.numero_operacion,
+                    monto: datos.monto,
+                    descripcion: datos.descripcion,
+                    observacion: datos.observacion
+                };
+                
+                // Generar PDF del comprobante
+                generarComprobantePagoPDF(datosPago, data.data.prestamos_afectados, datos.empleado);
+                
+                Swal.fire({
+                    title: '¡Pago registrado!',
+                    icon: 'success',
+                    confirmButtonText: 'OK'
+                }).then(() => {
+                    location.reload();
+                });
+            } else {
+                Swal.fire('Error', data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire('Error', 'Ocurrió un error al procesar el pago', 'error');
+        });
+    }
+
+    function registrarPagoConBono(datos) {
+        Swal.fire({
+            title: 'Procesando pago con bono...',
+            text: 'Por favor espere',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        
+        fetch('{{ route("cpanel.empleados.prestamos.registrar_pago_bono") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                usuarioId: datos.usuarioId,
+                monto: datos.monto,
+                bono_id: datos.bono_id,
+                fecha: datos.fecha,
+                descripcion: datos.descripcion,
+                observacion: datos.observacion,
+                numero_operacion: datos.numero_operacion
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Preparar datos para el PDF
+                const datosPago = {
+                    tipo: 'bono',
+                    fecha: datos.fecha,
+                    formaPago: 3,
+                    numero_operacion: datos.numero_operacion,
+                    monto: datos.monto,
+                    bono_id: datos.bono_id,
+                    descripcion: datos.descripcion,
+                    observacion: datos.observacion
+                };
+                
+                // Generar PDF del comprobante
+                generarComprobantePagoPDF(datosPago, data.data.prestamos_afectados, datos.empleado);
+                
+                Swal.fire({
+                    title: '¡Pago registrado!',
+                    html: `
+                        <div class="text-center">
+                            <i class="fas fa-check-circle text-success" style="font-size: 48px;"></i>
+                            <p class="mt-2">${data.message}</p>
+                            <hr>
+                            <small>Bono utilizado: #${datos.bono_id}</small>
+                        </div>
+                    `,
+                    icon: 'success',
+                    confirmButtonText: 'OK'
+                }).then(() => {
+                    location.reload();
+                });
+            } else {
+                Swal.fire('Error', data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire('Error', 'Ocurrió un error al procesar el pago con bono', 'error');
+        });
+    }
+
+    function registrarPagoConLiberalidad(datos) {
+        Swal.fire({
+            title: 'Procesando pago con liberalidad...',
+            text: 'Por favor espere',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        
+        fetch('{{ route("cpanel.empleados.prestamos.registrar_pago_liberalidad") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                usuarioId: datos.usuarioId,
+                monto: datos.monto,
+                fecha: datos.fecha,
+                descripcion: datos.descripcion,
+                observacion: datos.observacion,
+                numero_operacion: datos.numero_operacion
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                Swal.fire({
+                    title: '¡Pago registrado!',
+                    html: `
+                        <div class="text-center">
+                            <i class="fas fa-check-circle text-success" style="font-size: 48px;"></i>
+                            <p class="mt-2">${data.message}</p>
+                        </div>
+                    `,
+                    icon: 'success',
+                    confirmButtonText: 'OK'
+                }).then(() => {
+                    location.reload();
+                });
+            } else {
+                Swal.fire('Error', data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire('Error', 'Ocurrió un error al procesar el pago con liberalidad', 'error');
+        });
+    }
+
+    function generarComprobantePagoPDF(datosPago, prestamosAfectados, empleado) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        const pageWidth = doc.internal.pageSize.getWidth();
+        let yPos = 15;
+        
+        // Formatear la fecha correctamente
+        let fechaPago = datosPago.fecha;
+        let fechaFormateada = '';
+        
+        if (fechaPago) {
+            if (fechaPago.includes('-')) {
+                const partes = fechaPago.split('-');
+                fechaFormateada = `${partes[2]}/${partes[1]}/${partes[0]}`;
+            } else {
+                const fechaObj = new Date(fechaPago);
+                if (!isNaN(fechaObj.getTime())) {
+                    fechaFormateada = fechaObj.toLocaleDateString('es-VE');
+                } else {
+                    fechaFormateada = new Date().toLocaleDateString('es-VE');
+                }
+            }
+        } else {
+            fechaFormateada = new Date().toLocaleDateString('es-VE');
+        }
+        
+        // ============================================
+        // ENCABEZADO CON LOGO
+        // ============================================
+        doc.setFillColor(41, 128, 185);
+        doc.rect(0, 0, pageWidth, 45, 'F');
+        
+        doc.setFontSize(22);
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('helvetica', 'bold');
+        doc.text('TIENDAS TEN SHOP', pageWidth / 2, 20, { align: 'center' });
+        
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Comprobante de Pago de Préstamo', pageWidth / 2, 32, { align: 'center' });
+        
+        doc.setFontSize(9);
+        doc.setTextColor(230, 230, 230);
+        doc.text(`Generado: ${new Date().toLocaleString('es-VE')}`, pageWidth / 2, 40, { align: 'center' });
+        
+        yPos = 55;
+        
+        // ============================================
+        // INFORMACIÓN DEL EMPLEADO (VERSIÓN CORREGIDA)
+        // ============================================
+        doc.setFillColor(245, 245, 245);
+        doc.roundedRect(14, yPos, pageWidth - 28, 65, 3, 3, 'F');
+
+        doc.setFontSize(11);
+        doc.setTextColor(41, 128, 185);
+        doc.setFont('helvetica', 'bold');
+        doc.text('INFORMACIÓN DEL EMPLEADO', 20, yPos + 7);
+
+        doc.setDrawColor(200, 200, 200);
+        doc.line(20, yPos + 12, pageWidth - 20, yPos + 12);
+
+        doc.setFontSize(9);
+        doc.setTextColor(60, 60, 60);
+        doc.setFont('helvetica', 'normal');
+
+        // Fila 1: Nombre
+        doc.text('Nombre completo:', 20, yPos + 22);
+        doc.setFont('helvetica', 'bold');
+        doc.text(empleado.nombre_completo || 'N/A', 70, yPos + 22);
+
+        // Fila 2: Vendedor ID y Teléfono
+        doc.setFont('helvetica', 'normal');
+        doc.text('Vendedor ID:', 20, yPos + 32);
+        doc.setFont('helvetica', 'bold');
+        doc.text(empleado.vendedor_id || 'N/A', 70, yPos + 32);
+
+        doc.setFont('helvetica', 'normal');
+        doc.text('Teléfono:', pageWidth - 65, yPos + 32);
+        doc.setFont('helvetica', 'bold');
+        doc.text(empleado.telefono || 'N/A', pageWidth - 45, yPos + 32);
+
+        // Fila 3: Sucursal
+        doc.setFont('helvetica', 'normal');
+        doc.text('Sucursal:', 20, yPos + 42);
+        doc.setFont('helvetica', 'bold');
+        doc.text(empleado.sucursal_nombre || 'N/A', 70, yPos + 42);
+
+        // Fila 4: Email (en línea completa)
+        doc.setFont('helvetica', 'normal');
+        doc.text('Email:', 20, yPos + 52);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 0, 150);
+        // Limitar email a un ancho máximo
+        let emailTexto = empleado.email || 'N/A';
+        if (emailTexto.length > 35) {
+            emailTexto = emailTexto.substring(0, 32) + '...';
+        }
+        doc.text(emailTexto, 70, yPos + 52);
+
+        // Fila 5: Fecha pago
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(60, 60, 60);
+        doc.text('Fecha pago:', pageWidth - 65, yPos + 42);
+        doc.setFont('helvetica', 'bold');
+        doc.text(fechaFormateada, pageWidth - 45, yPos + 42);
+
+        yPos += 75;
+        
+        // ============================================
+        // INFORMACIÓN DEL PAGO
+        // ============================================
+        doc.setFillColor(41, 128, 185);
+        doc.roundedRect(14, yPos, pageWidth - 28, 10, 3, 3, 'F');
+        doc.setFontSize(10);
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('helvetica', 'bold');
+        doc.text('INFORMACIÓN DEL PAGO', pageWidth / 2, yPos + 7, { align: 'center' });
+        
+        yPos += 15;
+        
+        // Tarjeta de resumen de pago
+        doc.setFillColor(240, 248, 255);
+        doc.roundedRect(14, yPos, pageWidth - 28, 55, 3, 3, 'F');
+        
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(60, 60, 60);
+        
+        let formaPagoTexto = '';
+        let formaPagoColor = [60, 60, 60];
+        if (datosPago.tipo === 'bono') {
+            formaPagoTexto = 'Transferencia (Bono)';
+            formaPagoColor = [40, 167, 69];
+        } else {
+            switch (datosPago.formaPago) {
+                case 0: formaPagoTexto = 'Efectivo'; break;
+                case 2: formaPagoTexto = 'Depósito'; break;
+                case 3: formaPagoTexto = 'Transferencia'; break;
+                default: formaPagoTexto = 'Desconocido';
+            }
+        }
+        
+        doc.text('Forma de pago:', 20, yPos + 10);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(formaPagoColor[0], formaPagoColor[1], formaPagoColor[2]);
+        doc.text(formaPagoTexto, 65, yPos + 10);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(60, 60, 60);
+        doc.text('Monto pagado:', 20, yPos + 22);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(40, 167, 69);
+        doc.text(`$${datosPago.monto.toFixed(2)} USD`, 65, yPos + 22);
+        
+        if (datosPago.numero_operacion) {
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(60, 60, 60);
+            doc.text('N° Operación:', 20, yPos + 34);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0, 0, 0);
+            doc.text(datosPago.numero_operacion, 65, yPos + 34);
+        }
+        
+        if (datosPago.tipo === 'bono') {
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(60, 60, 60);
+            doc.text('Bono utilizado:', pageWidth - 70, yPos + 10);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0, 0, 0);
+            doc.text(`#${datosPago.bono_id}`, pageWidth - 45, yPos + 10);
+        }
+        
+        yPos += 70;
+        
+        // ============================================
+        // DETALLE DE PRÉSTAMOS PAGADOS
+        // ============================================
+        if (prestamosAfectados && prestamosAfectados.length > 0) {
+            doc.setFillColor(41, 128, 185);
+            doc.roundedRect(14, yPos, pageWidth - 28, 10, 3, 3, 'F');
+            doc.setFontSize(10);
+            doc.setTextColor(255, 255, 255);
+            doc.setFont('helvetica', 'bold');
+            doc.text('DETALLE DE PRÉSTAMOS', pageWidth / 2, yPos + 7, { align: 'center' });
+            
+            yPos += 15;
+            
+            const headers = [['Préstamo ID', 'Monto Pagado (USD)', 'Saldo Anterior (USD)', 'Nuevo Saldo (USD)']];
+            const body = prestamosAfectados.map(p => [
+                p.PrestamoId.toString(),
+                `$${p.montoPagado.toFixed(2)}`,
+                `$${p.saldoAnterior.toFixed(2)}`,
+                `$${p.nuevoSaldo.toFixed(2)}`
+            ]);
+            
+            doc.autoTable({
+                head: headers,
+                body: body,
+                startY: yPos,
+                theme: 'grid',
+                headStyles: { 
+                    fillColor: [41, 128, 185], 
+                    textColor: 255, 
+                    fontSize: 9, 
+                    fontStyle: 'bold',
+                    halign: 'center'
+                },
+                bodyStyles: { fontSize: 8, cellPadding: 4 },
+                alternateRowStyles: { fillColor: [245, 245, 245] },
+                columnStyles: {
+                    0: { cellWidth: 35, halign: 'center' },
+                    1: { cellWidth: 40, halign: 'right' },
+                    2: { cellWidth: 45, halign: 'right' },
+                    3: { cellWidth: 45, halign: 'right' }
+                },
+                margin: { left: 14, right: 14 }
+            });
+            
+            yPos = doc.lastAutoTable.finalY + 10;
+            
+            // Resumen de totales
+            const totalPagado = prestamosAfectados.reduce((sum, p) => sum + p.montoPagado, 0);
+            const totalSaldoAnterior = prestamosAfectados.reduce((sum, p) => sum + p.saldoAnterior, 0);
+            const totalNuevoSaldo = prestamosAfectados.reduce((sum, p) => sum + p.nuevoSaldo, 0);
+            
+            doc.setFillColor(240, 248, 255);
+            doc.roundedRect(14, yPos, pageWidth - 28, 35, 3, 3, 'F');
+            
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0, 0, 0);
+            doc.text('RESUMEN DEL PAGO', pageWidth / 2, yPos + 7, { align: 'center' });
+            
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(60, 60, 60);
+            doc.text('Total pagado:', 20, yPos + 18);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(40, 167, 69);
+            doc.text(`$${totalPagado.toFixed(2)} USD`, 65, yPos + 18);
+            
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(60, 60, 60);
+            doc.text('Saldo anterior total:', 20, yPos + 28);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0, 0, 0);
+            doc.text(`$${totalSaldoAnterior.toFixed(2)} USD`, 65, yPos + 28);
+            
+            doc.setFont('helvetica', 'normal');
+            doc.text('Nuevo saldo total:', pageWidth - 70, yPos + 18);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(220, 53, 69);
+            doc.text(`$${totalNuevoSaldo.toFixed(2)} USD`, pageWidth - 45, yPos + 18);
+            
+            yPos += 45;
+        }
+        
+        // ============================================
+        // OBSERVACIÓN
+        // ============================================
+        if (datosPago.observacion) {
+            doc.setFillColor(255, 248, 225);
+            doc.roundedRect(14, yPos, pageWidth - 28, 25, 3, 3, 'F');
+            
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(200, 100, 0);
+            doc.text('Observación:', 20, yPos + 7);
+            
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(60, 60, 60);
+            const observacionLines = doc.splitTextToSize(datosPago.observacion, pageWidth - 48);
+            doc.text(observacionLines, 20, yPos + 15);
+            
+            yPos += 35;
+        } else {
+            yPos += 5;
+        }
+        
+        // ============================================
+        // FIRMAS
+        // ============================================
+        yPos += 10;
+        
+        doc.setDrawColor(150, 150, 150);
+        doc.setLineWidth(0.5);
+        
+        doc.line(25, yPos, 85, yPos);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(100, 100, 100);
+        doc.text('Firma del empleado', 55, yPos + 4, { align: 'center' });
+        
+        doc.line(pageWidth - 85, yPos, pageWidth - 25, yPos);
+        doc.text('Firma del cajero', pageWidth - 55, yPos + 4, { align: 'center' });
+        
+        // ============================================
+        // PIE DE PÁGINA
+        // ============================================
+        const añoActual = new Date().getFullYear();
+        doc.setFillColor(41, 128, 185);
+        doc.rect(0, doc.internal.pageSize.getHeight() - 20, pageWidth, 20, 'F');
+        
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(255, 255, 255);
+        doc.text('Este comprobante es un documento válido de pago', pageWidth / 2, doc.internal.pageSize.getHeight() - 12, { align: 'center' });
+        doc.text(`© ${añoActual} TiendasTenShop - Todos los derechos reservados`, pageWidth / 2, doc.internal.pageSize.getHeight() - 6, { align: 'center' });
+        
+        // ============================================
+        // GUARDAR PDF
+        // ============================================
+        const nombreArchivo = `Comprobante_Pago_${empleado.nombre_completo.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+        doc.save(nombreArchivo);
     }
 
     function zoomImagen(img) {

@@ -44,6 +44,7 @@ use App\DTO\ProductoDTO;
 use App\Models\Liberalidad;
 use App\Models\LiberalidadDetalle;
 use App\DTO\LiberalidadDTO;
+use App\Models\LiberalidadEmpleadoTempo;
 
 use App\Models\AspNetRoles;
 
@@ -1525,27 +1526,13 @@ class EmpleadosController extends Controller
                 $fechaInicio,
                 $fechaFin
             );
+
+            $estatus = 1;
             
             // Buscar liberalidad
-            $liberalidadDTO = $this->buscarLiberalidad($filtroFecha, true);
+            $liberalidadDTO = $this->buscarLiberalidad($filtroFecha, true, $estatus);
 
-            // if (!$liberalidadDTO) {
-            //     // No existe liberalidad cerrada, calcular datos actuales
-            //     $liberalidad = $this->obtenerLiberalidad($filtroFecha);
-
-            //     dd($liberalidad);
-            //     // Enriquecer con bonos y deducciones
-            //     $liberalidad = $this->enriquecerLiberalidad($liberalidad, $mesSeleccionado, $anioSeleccionado);
-
-            //     //dd($liberalidad);
-            // } else {
-            //     // Existe liberalidad cerrada, mostrar datos guardados
-            //     $liberalidad = null;
-            //     // Enriquecer con bonos y deducciones
-            //     $liberalidadDTO = $this->enriquecerLiberalidad($liberalidadDTO, $mesSeleccionado, $anioSeleccionado);
-
-            //     //dd($liberalidadDTO);
-            // }
+                // dd($liberalidadDTO);
 
             if (!$liberalidadDTO) {
                 // No existe liberalidad cerrada, calcular datos actuales
@@ -1555,17 +1542,21 @@ class EmpleadosController extends Controller
                 $liberalidad = $this->obtenerEmpleadosActivosSinVentas($liberalidad, null);
                 
                 // Enriquecer con bonos y deducciones
-                $liberalidad = $this->enriquecerLiberalidad($liberalidad, $mesSeleccionado, $anioSeleccionado);
+                $liberalidad = $this->enriquecerLiberalidad($liberalidad, $mesSeleccionado, $anioSeleccionado, false);
                 
                 // NUEVO: Filtrar empleados que no tienen ventas, bonos ni deducciones
                 $liberalidad = $this->filtrarEmpleadosSinNada($liberalidad);
+
+                // dd($liberalidad);
                 
             } else {
                 // Existe liberalidad cerrada, mostrar datos guardados
                 $liberalidad = null;
                 
                 // Enriquecer con bonos y deducciones
-                $liberalidadDTO = $this->enriquecerLiberalidad($liberalidadDTO, $mesSeleccionado, $anioSeleccionado);
+                $liberalidadDTO = $this->enriquecerLiberalidad($liberalidadDTO, $mesSeleccionado, $anioSeleccionado, true);
+
+                // dd($liberalidadDTO);
             }
             
             session([
@@ -1589,12 +1580,121 @@ class EmpleadosController extends Controller
         }
     }
 
+    private function obtenerAjusteLiberalidadTemporal($usuarioId, $empleadoId, $mes, $anio)
+    {
+        $query = DB::connection('sqlsrv')
+            ->table('LiberalidadEmpleadoTempo')
+            ->select(['MontoDescuentoDivisa', 'MontoDescuentoBs'])
+            ->where('Mes', $mes)
+            ->where('Anno', $anio);
+        
+        if ($usuarioId) {
+            $query->where('UsuarioId', $usuarioId);
+        } elseif ($empleadoId) {
+            $query->where('EmpleadoId', $empleadoId);
+        } else {
+            return null;
+        }
+        
+        return $query->first();
+    }
+
     /**
      * Obtiene todos los empleados activos que no están en la liberalidad
      */
+    // private function obtenerEmpleadosActivosSinVentas($liberalidad, $sucursalId = null)
+    // {
+    //     // Crear un mapa de claves únicas (usando combinación de tipo + id)
+    //     $clavesUnicas = [];
+    //     foreach ($liberalidad->detalles as $detalle) {
+    //         if (isset($detalle->UsuarioId) && $detalle->UsuarioId) {
+    //             $clavesUnicas['usuario_' . $detalle->UsuarioId] = true;
+    //         }
+    //         if (isset($detalle->EmpleadoId) && $detalle->EmpleadoId) {
+    //             $clavesUnicas['empleado_' . $detalle->EmpleadoId] = true;
+    //         }
+    //     }
+        
+    //     // Obtener empleados activos de AspNetUsers
+    //     $aspNetUsers = DB::connection('sqlsrv')
+    //         ->table('AspNetUsers')
+    //         ->where('EsActivo', 1)
+    //         ->when($sucursalId, function($query) use ($sucursalId) {
+    //             return $query->where('SucursalId', $sucursalId);
+    //         })
+    //         ->get();
+        
+    //     // Obtener vendedores temporales activos de Usuarios
+    //     $usuariosTemp = DB::connection('sqlsrv')
+    //         ->table('Usuarios')
+    //         ->where('EsActivo', 1)
+    //         ->when($sucursalId, function($query) use ($sucursalId) {
+    //             return $query->where('SucursalId', $sucursalId);
+    //         })
+    //         ->get();
+        
+    //     $nuevosAgregados = 0;
+        
+    //     // Agregar empleados de sistema que faltan
+    //     foreach ($aspNetUsers as $empleado) {
+    //         $key = 'empleado_' . $empleado->Id;
+    //         if (!isset($clavesUnicas[$key])) {
+                
+    //             $nuevoDetalle = (object)[
+    //                 'EmpleadoId' => $empleado->Id,
+    //                 'UsuarioId' => null,
+    //                 'Empleado' => $empleado,
+    //                 'Usuario' => null,
+    //                 'Unidades' => 0,
+    //                 'Venta' => 0,
+    //                 'MontoLiberalidad' => 0,
+    //                 'MontoExcluido' => 0,
+    //                 'MontoLiberacion' => 0,
+    //                 'ProductosExcluidos' => 0,
+    //                 'OtraLiberalidad' => 0,
+    //                 'SaldoFavor' => 0,
+    //                 'AbonoPrestamo' => 0,
+    //                 'Estatus' => 0,
+    //                 'EsVendedor' => false
+    //             ];
+    //             $liberalidad->detalles->push($nuevoDetalle);
+    //             $nuevosAgregados++;
+    //         }
+    //     }
+        
+    //     // Agregar vendedores temporales que faltan
+    //     foreach ($usuariosTemp as $vendedor) {
+    //         $key = 'usuario_' . $vendedor->UsuarioId;
+    //         if (!isset($clavesUnicas[$key])) {
+                
+    //             $nuevoDetalle = (object)[
+    //                 'EmpleadoId' => null,
+    //                 'UsuarioId' => $vendedor->UsuarioId,
+    //                 'Empleado' => null,
+    //                 'Usuario' => $vendedor,
+    //                 'Unidades' => 0,
+    //                 'Venta' => 0,
+    //                 'MontoLiberalidad' => 0,
+    //                 'MontoExcluido' => 0,
+    //                 'MontoLiberacion' => 0,
+    //                 'ProductosExcluidos' => 0,
+    //                 'OtraLiberalidad' => 0,
+    //                 'SaldoFavor' => 0,
+    //                 'AbonoPrestamo' => 0,
+    //                 'Estatus' => 0,
+    //                 'EsVendedor' => true
+    //             ];
+    //             $liberalidad->detalles->push($nuevoDetalle);
+    //             $nuevosAgregados++;
+    //         }
+    //     }
+        
+    //     return $liberalidad;
+    // }
+
     private function obtenerEmpleadosActivosSinVentas($liberalidad, $sucursalId = null)
     {
-        // Crear un mapa de claves únicas (usando combinación de tipo + id)
+        // Crear un mapa de claves únicas
         $clavesUnicas = [];
         foreach ($liberalidad->detalles as $detalle) {
             if (isset($detalle->UsuarioId) && $detalle->UsuarioId) {
@@ -1623,12 +1723,27 @@ class EmpleadosController extends Controller
             })
             ->get();
         
+        // Crear un mapa de ExternalId a GUID para evitar duplicados
+        $externalIdToGuid = [];
+        foreach ($aspNetUsers as $empleado) {
+            if ($empleado->ExternalId) {
+                $externalIdToGuid[$empleado->ExternalId] = $empleado->Id;
+            }
+        }
+        
         $nuevosAgregados = 0;
         
         // Agregar empleados de sistema que faltan
         foreach ($aspNetUsers as $empleado) {
             $key = 'empleado_' . $empleado->Id;
             if (!isset($clavesUnicas[$key])) {
+                
+                // Verificar si ya existe un vendedor temporal con este ExternalId
+                $externalId = $empleado->ExternalId;
+                if ($externalId && isset($clavesUnicas['usuario_' . $externalId])) {
+                    // Ya existe el vendedor temporal, no agregar duplicado
+                    continue;
+                }
                 
                 $nuevoDetalle = (object)[
                     'EmpleadoId' => $empleado->Id,
@@ -1656,6 +1771,15 @@ class EmpleadosController extends Controller
         foreach ($usuariosTemp as $vendedor) {
             $key = 'usuario_' . $vendedor->UsuarioId;
             if (!isset($clavesUnicas[$key])) {
+                
+                // Verificar si este vendedor temporal ya existe como empleado de sistema (por ExternalId)
+                if (isset($externalIdToGuid[$vendedor->UsuarioId])) {
+                    $guid = $externalIdToGuid[$vendedor->UsuarioId];
+                    if (isset($clavesUnicas['empleado_' . $guid])) {
+                        // Ya existe el empleado de sistema, no agregar duplicado
+                        continue;
+                    }
+                }
                 
                 $nuevoDetalle = (object)[
                     'EmpleadoId' => null,
@@ -1685,21 +1809,44 @@ class EmpleadosController extends Controller
     /**
      * Filtra los empleados que no tienen ventas, ni bonos, ni deducciones
      */
+    // private function filtrarEmpleadosSinNada($liberalidad)
+    // {
+    //     if (!$liberalidad || !isset($liberalidad->detalles)) {
+    //         return $liberalidad;
+    //     }
+        
+    //     $originalCount = $liberalidad->detalles->count();
+        
+    //     // Filtrar: mantener empleados que tengan ventas, bonos o deducciones
+    //     $detallesFiltrados = $liberalidad->detalles->filter(function($detalle) {
+    //         $tieneVentas = ($detalle->Venta ?? 0) > 0;
+    //         $tieneBonos = ($detalle->total_bonos_usd ?? 0) > 0;
+    //         $tieneDeducciones = ($detalle->total_deducciones_usd ?? 0) > 0;
+            
+    //         return $tieneVentas || $tieneBonos || $tieneDeducciones;
+    //     });
+        
+    //     $liberalidad->detalles = $detallesFiltrados->values();
+        
+    //     return $liberalidad;
+    // }
+
     private function filtrarEmpleadosSinNada($liberalidad)
     {
         if (!$liberalidad || !isset($liberalidad->detalles)) {
             return $liberalidad;
         }
         
-        $originalCount = $liberalidad->detalles->count();
-        
-        // Filtrar: mantener empleados que tengan ventas, bonos o deducciones
+        // Filtrar: mantener empleados que tengan ventas, bonos, deducciones, deuda préstamo u otra liberalidad
         $detallesFiltrados = $liberalidad->detalles->filter(function($detalle) {
             $tieneVentas = ($detalle->Venta ?? 0) > 0;
             $tieneBonos = ($detalle->total_bonos_usd ?? 0) > 0;
             $tieneDeducciones = ($detalle->total_deducciones_usd ?? 0) > 0;
+            $tieneDeudaPrestamo = ($detalle->DeudaPrestamo ?? 0) > 0;
+            $tieneOtraLiberalidad = ($detalle->OtraLiberalidad ?? 0) > 0;
+            $tieneMontoLiberalidad = ($detalle->MontoLiberalidad ?? 0) > 0;
             
-            return $tieneVentas || $tieneBonos || $tieneDeducciones;
+            return $tieneVentas || $tieneBonos || $tieneDeducciones || $tieneDeudaPrestamo || $tieneOtraLiberalidad || $tieneMontoLiberalidad;
         });
         
         $liberalidad->detalles = $detallesFiltrados->values();
@@ -1710,7 +1857,7 @@ class EmpleadosController extends Controller
     /**
      * Enriquece los detalles de liberalidad con información de bonos y deducciones
      */
-    private function enriquecerLiberalidad($liberalidad, $mes, $anio)
+    private function enriquecerLiberalidad($liberalidad, $mes, $anio, $esCerrado = false)
     {
         if (!$liberalidad || !isset($liberalidad->detalles)) {
             return $liberalidad;
@@ -1747,7 +1894,42 @@ class EmpleadosController extends Controller
             // ============================================
             // NETO (Liberalidad + Bonos - Deducciones)
             // ============================================
-            $detalle->neto_usd = ($detalle->MontoLiberalidad ?? 0) + $detalle->total_bonos_usd - $detalle->total_deducciones_usd;
+            // $detalle->neto_usd = ($detalle->MontoLiberalidad ?? 0) + $detalle->total_bonos_usd - $detalle->total_deducciones_usd;
+
+            // ============================================
+            // 3. APLICAR AJUSTE DE LIBERALIDAD TEMPORAL (NUEVO)
+            // ============================================
+            $ajuste = $this->obtenerAjusteLiberalidadTemporal($usuarioId, $empleadoId, $mes, $anio);
+            
+            $montoLiberalidadOriginal = $detalle->MontoLiberalidad ?? 0;
+            
+            if ($ajuste && $ajuste->MontoDescuentoDivisa > 0) {
+                // Restar el descuento al MontoLiberalidad original
+                $detalle->MontoLiberalidad = max(0, $montoLiberalidadOriginal - $ajuste->MontoDescuentoDivisa);
+                $detalle->ajuste_liberalidad = $ajuste->MontoDescuentoDivisa;
+                
+                \Log::info('📝 Ajuste de liberalidad aplicado', [
+                    'empleado' => $detalle->Usuario->NombreCompleto ?? $detalle->Empleado->NombreCompleto ?? 'N/A',
+                    'original' => $montoLiberalidadOriginal,
+                    'descuento' => $ajuste->MontoDescuentoDivisa,
+                    'nuevo' => $detalle->MontoLiberalidad
+                ]);
+            } else {
+                $detalle->ajuste_liberalidad = 0;
+                $detalle->ajuste_motivo = null;
+            }
+
+            // ============================================
+            // NETO (comportamiento diferente según bandera)
+            // ============================================
+            if ($esCerrado) {
+                // Mes CERRADO: respetar el valor guardado en LiberalidadDetalles
+                // El neto ya está en MontoLiberalidad (o calculado con OtraLiberalidad - DeudaPrestamo)
+                $detalle->neto_usd = ($detalle->MontoLiberalidad ?? 0) + ($detalle->OtraLiberalidad ?? 0) - ($detalle->DeudaPrestamo ?? 0) - ($detalle->AbonoPrestamo ?? 0);
+            } else {
+                // Mes ABIERTO: recalcular con datos actuales
+                $detalle->neto_usd = ($detalle->MontoLiberalidad ?? 0) + $detalle->total_bonos_usd - $detalle->total_deducciones_usd;
+            }
         }
         
         return $liberalidad;
@@ -1756,6 +1938,33 @@ class EmpleadosController extends Controller
     /**
      * Obtiene los bonos de un empleado para un período específico
      */
+    // private function obtenerBonosPorEmpleado($usuarioId, $empleadoId, $mes, $anio)
+    // {
+    //     $query = DB::connection('sqlsrv')
+    //         ->table('BonosEmpleados')
+    //         ->select([
+    //             'ID',
+    //             'TipoBono',
+    //             'MontoBs',
+    //             'MontoDivisa',
+    //             'Tasa',
+    //             'EsPagado',
+    //             'FechaCreacion'
+    //         ])
+    //         ->where('MesBono', $mes)
+    //         ->where('AnnoBono', $anio);
+        
+    //     if ($usuarioId) {
+    //         $query->where('UsuarioId', $usuarioId);
+    //     } elseif ($empleadoId) {
+    //         $query->where('EmpleadoId', $empleadoId);
+    //     } else {
+    //         return collect();
+    //     }
+        
+    //     return $query->orderBy('FechaCreacion', 'desc')->get();
+    // }
+
     private function obtenerBonosPorEmpleado($usuarioId, $empleadoId, $mes, $anio)
     {
         $query = DB::connection('sqlsrv')
@@ -1767,16 +1976,24 @@ class EmpleadosController extends Controller
                 'MontoDivisa',
                 'Tasa',
                 'EsPagado',
-                'FechaCreacion'
+                'FechaCreacion',
+                'Motivo'
             ])
             ->where('MesBono', $mes)
             ->where('AnnoBono', $anio);
         
-        if ($usuarioId) {
-            $query->where('UsuarioId', $usuarioId);
-        } elseif ($empleadoId) {
-            $query->where('EmpleadoId', $empleadoId);
-        } else {
+        // Buscar por AMBOS campos (OR)
+        $query->where(function($q) use ($usuarioId, $empleadoId) {
+            if ($usuarioId) {
+                $q->orWhere('UsuarioId', $usuarioId);
+            }
+            if ($empleadoId) {
+                $q->orWhere('EmpleadoId', $empleadoId);
+            }
+        });
+        
+        // Si no hay ningún criterio, retornar vacío
+        if (!$usuarioId && !$empleadoId) {
             return collect();
         }
         
@@ -1786,6 +2003,34 @@ class EmpleadosController extends Controller
     /**
      * Obtiene las deducciones de un empleado para un período específico
      */
+    // private function obtenerDeduccionesPorEmpleado($usuarioId, $empleadoId, $mes, $anio)
+    // {
+    //     $query = DB::connection('sqlsrv')
+    //         ->table('Deducciones')
+    //         ->select([
+    //             'ID',
+    //             'TipoDeduccion',
+    //             'MontoBs',
+    //             'MontoDivisa',
+    //             'Tasa',
+    //             'EsPagado',
+    //             'FechaCreacion',
+    //             'Motivo'
+    //         ])
+    //         ->where('MesDeduccion', $mes)
+    //         ->where('AnnoDeduccion', $anio);
+        
+    //     if ($usuarioId) {
+    //         $query->where('UsuarioId', $usuarioId);
+    //     } elseif ($empleadoId) {
+    //         $query->where('EmpleadoId', $empleadoId);
+    //     } else {
+    //         return collect();
+    //     }
+        
+    //     return $query->orderBy('FechaCreacion', 'desc')->get();
+    // }
+
     private function obtenerDeduccionesPorEmpleado($usuarioId, $empleadoId, $mes, $anio)
     {
         $query = DB::connection('sqlsrv')
@@ -1803,18 +2048,25 @@ class EmpleadosController extends Controller
             ->where('MesDeduccion', $mes)
             ->where('AnnoDeduccion', $anio);
         
-        if ($usuarioId) {
-            $query->where('UsuarioId', $usuarioId);
-        } elseif ($empleadoId) {
-            $query->where('EmpleadoId', $empleadoId);
-        } else {
+        // Buscar por AMBOS campos (OR)
+        $query->where(function($q) use ($usuarioId, $empleadoId) {
+            if ($usuarioId) {
+                $q->orWhere('UsuarioId', $usuarioId);
+            }
+            if ($empleadoId) {
+                $q->orWhere('EmpleadoId', $empleadoId);
+            }
+        });
+        
+        // Si no hay ningún criterio, retornar vacío
+        if (!$usuarioId && !$empleadoId) {
             return collect();
         }
         
         return $query->orderBy('FechaCreacion', 'desc')->get();
     }
 
-    private function buscarLiberalidad($filtroFecha, $esDetalles = true)
+    private function buscarLiberalidad($filtroFecha, $esDetalles = true, $estatus)
     {
         try {
             // Usar las propiedades del filtro
@@ -1839,7 +2091,6 @@ class EmpleadosController extends Controller
             return $liberalidadDTO;
             
         } catch (\Exception $e) {
-            \Log::error('Error en buscarLiberalidad: ' . $e->getMessage());
             throw $e;
         }
     }
@@ -2047,7 +2298,6 @@ class EmpleadosController extends Controller
             return $liberalidadDTO;
             
         } catch (\Exception $e) {
-            \Log::error('Error en obtenerLiberalidad: ' . $e->getMessage());
             \Log::error('Trace: ' . $e->getTraceAsString());
             throw $e;
         }
@@ -2633,6 +2883,7 @@ class EmpleadosController extends Controller
                     'u.SucursalId as sucursal_id',
                     'u.FotoPerfil as foto_perfil',
                     'u.VendedorId as vendedor_id',
+                    'u.ExternalId as external_id',
                     's.Nombre as sucursal_nombre',
                     DB::raw("'AspNetUser' as origen")
                 ])
@@ -2841,11 +3092,13 @@ class EmpleadosController extends Controller
             // ============================================
             // 7. LOG PARA DEPURACIÓN
             // ============================================
-            \Log::info('📋 LISTADO DE EMPLEADOS PARA BONOS', [
-                'total_empleados' => $empleados->count(),
-                'bonos_asignados_sistema' => $ultimosBonosSistema->count(),
-                'bonos_asignados_temporales' => $ultimosBonosTemporales->count()
-            ]);
+            // \Log::info('📋 LISTADO DE EMPLEADOS PARA BONOS', [
+            //     'total_empleados' => $empleados->count(),
+            //     'bonos_asignados_sistema' => $ultimosBonosSistema->count(),
+            //     'bonos_asignados_temporales' => $ultimosBonosTemporales->count()
+            // ]);
+
+            // dd($empleados);
 
             // ============================================
             // 8. CONFIGURAR MENÚ ACTIVO
@@ -2878,10 +3131,10 @@ class EmpleadosController extends Controller
                 $empleado = DB::connection('sqlsrv')
                     ->table('AspNetUsers')
                     ->where('Id', $id)
-                    ->select('Id', 'NombreCompleto', 'SucursalId')
+                    ->select('Id', 'NombreCompleto', 'SucursalId', 'ExternalId')
                     ->first();
                 $empleadoId = $id;
-                $usuarioId = null;
+                $usuarioId = $empleado->ExternalId ?? null;
             } else {
                 $empleado = DB::connection('sqlsrv')
                     ->table('Usuarios')
@@ -3112,6 +3365,7 @@ class EmpleadosController extends Controller
                     'u.SucursalId as sucursal_id',
                     'u.FotoPerfil as foto_perfil',
                     'u.VendedorId as vendedor_id',
+                    'u.ExternalId as external_id',
                     's.Nombre as sucursal_nombre',
                     DB::raw("'AspNetUser' as origen")
                 ])
@@ -3317,14 +3571,16 @@ class EmpleadosController extends Controller
             // ============================================
             $empleados = $empleados->sortBy('nombre_completo')->values();
 
+            // dd($empleados);
+
             // ============================================
             // 7. LOG PARA DEPURACIÓN
             // ============================================
-            \Log::info('📋 LISTADO DE EMPLEADOS PARA BONOS', [
-                'total_empleados' => $empleados->count(),
-                'deducciones_sistema' => $ultimaDeduccionSistema->count(),
-                'deducciones_temporales' => $ultimasDeduccionesTemporales->count()
-            ]);
+            // \Log::info('📋 LISTADO DE EMPLEADOS PARA BONOS', [
+            //     'total_empleados' => $empleados->count(),
+            //     'deducciones_sistema' => $ultimaDeduccionSistema->count(),
+            //     'deducciones_temporales' => $ultimasDeduccionesTemporales->count()
+            // ]);
 
             // ============================================
             // 8. CONFIGURAR MENÚ ACTIVO
@@ -3357,10 +3613,10 @@ class EmpleadosController extends Controller
                 $empleado = DB::connection('sqlsrv')
                     ->table('AspNetUsers')
                     ->where('Id', $id)
-                    ->select('Id', 'NombreCompleto', 'SucursalId')
+                    ->select('Id', 'NombreCompleto', 'SucursalId', 'ExternalId')
                     ->first();
                 $empleadoId = $id;
-                $usuarioId = null;
+                $usuarioId = $empleado->ExternalId ?? null;
             } else {
                 $empleado = DB::connection('sqlsrv')
                     ->table('Usuarios')
@@ -3622,6 +3878,7 @@ class EmpleadosController extends Controller
                     'u.SucursalId as sucursal_id',
                     'u.FotoPerfil as foto_perfil',
                     'u.VendedorId as vendedor_id',
+                    'u.ExternalId as external_id',
                     's.Nombre as sucursal_nombre',
                     DB::raw("'AspNetUser' as origen")
                 ])
@@ -3833,9 +4090,6 @@ class EmpleadosController extends Controller
             ->get();
     }
 
-    /**
-     * Obtiene todos los préstamos activos de un empleado (Nuevo + En Proceso)
-     */
     private function obtenerPrestamosPorEmpleado($usuarioId)
     {
         if (!$usuarioId) {
@@ -3858,5 +4112,1268 @@ class EmpleadosController extends Controller
         
         // Ordenar por fecha ascendente
         return $prestamos->sortBy('Fecha')->values();
+    }
+
+    public function obtenerBonosDisponiblesPrestamo($usuarioId)
+    {
+        \Log::info('=== obtenerBonosDisponiblesPrestamo ===');
+        \Log::info('usuarioId: ' . $usuarioId);
+        
+        try {
+            $mesActual = date('n');
+            $anioActual = date('Y');
+            
+            // Buscar el empleado para obtener sus IDs
+            $empleado = DB::connection('sqlsrv')
+                ->table('AspNetUsers')
+                ->where('Id', $usuarioId)
+                ->first();
+            
+            $usuarioIdNum = $empleado->ExternalId ?? null;
+            $empleadoIdGuid = $empleado->Id;
+            
+            // Usar la función existente para obtener bonos
+            $bonos = $this->obtenerBonosPorEmpleado($usuarioIdNum, $empleadoIdGuid, $mesActual, $anioActual);
+            
+            // Filtrar solo bonos pendientes (EsPagado = 0)
+            $bonosPendientes = $bonos->filter(function($bono) {
+                return $bono->EsPagado == 0;
+            })->values();
+            
+            $totalBonosDisponibles = $bonosPendientes->sum('MontoDivisa');
+
+            // ============================================
+            // OBTENER LIBERALIDAD ACTUAL DEL EMPLEADO
+            // ============================================
+            $liberalidadData = $this->obtenerLiberalidadEmpleado($usuarioIdNum, $empleadoIdGuid, $mesActual, $anioActual);
+            
+            if ($liberalidadData && isset($liberalidadData->detalles)) {
+                // Buscar el detalle específico del empleado para obtener MontoLiberalidad
+                $detalleEmpleado = null;
+                
+                foreach ($liberalidadData->detalles as $detalle) {
+                    // Buscar por UsuarioId (numérico)
+                    if ($usuarioIdNum && isset($detalle->UsuarioId) && $detalle->UsuarioId == $usuarioIdNum) {
+                        $detalleEmpleado = $detalle;
+                        break;
+                    }
+                    // Buscar por EmpleadoId (GUID)
+                    if ($empleadoIdGuid && isset($detalle->EmpleadoId) && $detalle->EmpleadoId == $empleadoIdGuid) {
+                        $detalleEmpleado = $detalle;
+                        break;
+                    }
+                }
+                
+                // Inicializar variables
+                $montoLiberalidadDivisa = 0;
+                $montoDescuentoDivisa = 0;
+                $disponibleLiberalidadDivisa = 0;
+                
+                if ($detalleEmpleado) {
+                    $montoLiberalidadDivisa = $detalleEmpleado->MontoLiberalidad ?? 0;
+                    
+                    // SOLO si el monto es mayor que 0, crear o actualizar
+                    if ($montoLiberalidadDivisa > 0) {
+                        // Buscar si ya existe un registro en LiberalidadEmpleadoTempo
+                        $registroLiberalidad = DB::connection('sqlsrv')
+                            ->table('LiberalidadEmpleadoTempo')
+                            ->where('Mes', $mesActual)
+                            ->where('Anno', $anioActual)
+                            ->where(function($query) use ($empleadoIdGuid, $usuarioIdNum) {
+                                if ($empleadoIdGuid) {
+                                    $query->where('EmpleadoId', $empleadoIdGuid);
+                                }
+                                if ($usuarioIdNum) {
+                                    $query->orWhere('UsuarioId', $usuarioIdNum);
+                                }
+                            })
+                            ->first();
+                        
+                        if ($registroLiberalidad) {
+                            // Actualizar solo MontoLiberalidadDivisa
+                            DB::connection('sqlsrv')
+                                ->table('LiberalidadEmpleadoTempo')
+                                ->where('Id', $registroLiberalidad->Id)
+                                ->update([
+                                    'MontoLiberalidadDivisa' => $montoLiberalidadDivisa,
+                                    'FechaCreacion' => now()
+                                ]);
+                            
+                            // Obtener los valores actualizados
+                            $montoDescuentoDivisa = $registroLiberalidad->MontoDescuentoDivisa ?? 0;
+                            $disponibleLiberalidadDivisa = $registroLiberalidad->DisponibleLiberalidadDivisa ?? 0;
+                            
+                            \Log::info('Registro de liberalidad actualizado', [
+                                'empleado' => $empleadoIdGuid,
+                                'monto_liberalidad_divisa' => $montoLiberalidadDivisa,
+                                'monto_descuento_divisa' => $montoDescuentoDivisa,
+                                'disponible_liberalidad_divisa' => $disponibleLiberalidadDivisa
+                            ]);
+                        } else {
+                            // Crear nuevo registro (los demás campos quedan en 0)
+                            DB::connection('sqlsrv')
+                                ->table('LiberalidadEmpleadoTempo')
+                                ->insert([
+                                    'Mes' => $mesActual,
+                                    'Anno' => $anioActual,
+                                    'EmpleadoId' => $empleadoIdGuid,
+                                    'UsuarioId' => $usuarioIdNum,
+                                    'FechaCreacion' => now(),
+                                    'MontoLiberalidadDivisa' => $montoLiberalidadDivisa,
+                                    'MontoLiberalidadBs' => 0,
+                                    'MontoDescuentoDivisa' => 0,
+                                    'MontoDescuentoBs' => 0,
+                                    'DisponibleLiberalidadDivisa' => $montoLiberalidadDivisa,
+                                    'DisponibleLiberalidadBs' => 0,
+                                    'Tasa' => 0
+                                ]);
+                            
+                            \Log::info('Registro de liberalidad creado', [
+                                'empleado' => $empleadoIdGuid,
+                                'monto_liberalidad_divisa' => $montoLiberalidadDivisa
+                            ]);
+                        }
+                    } else {
+                        // Si el monto es 0, buscar el registro existente para obtener sus valores
+                        $registroLiberalidad = DB::connection('sqlsrv')
+                            ->table('LiberalidadEmpleadoTempo')
+                            ->where('Mes', $mesActual)
+                            ->where('Anno', $anioActual)
+                            ->where(function($query) use ($empleadoIdGuid, $usuarioIdNum) {
+                                if ($empleadoIdGuid) {
+                                    $query->where('EmpleadoId', $empleadoIdGuid);
+                                }
+                                if ($usuarioIdNum) {
+                                    $query->orWhere('UsuarioId', $usuarioIdNum);
+                                }
+                            })
+                            ->first();
+                        
+                        if ($registroLiberalidad) {
+                            $montoDescuentoDivisa = $registroLiberalidad->MontoDescuentoDivisa ?? 0;
+                            $disponibleLiberalidadDivisa = $registroLiberalidad->DisponibleLiberalidadDivisa ?? 0;
+                        }
+                        
+                        \Log::info('MontoLiberalidad es 0, no se crea/actualiza registro', [
+                            'empleado' => $empleadoIdGuid,
+                            'monto_liberalidad_divisa' => $montoLiberalidadDivisa,
+                            'monto_descuento_divisa' => $montoDescuentoDivisa,
+                            'disponible_liberalidad_divisa' => $disponibleLiberalidadDivisa
+                        ]);
+                    }
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'bonos' => $bonosPendientes,
+                    'total_bonos_disponibles' => $totalBonosDisponibles,
+                    'liberalidad' => [
+                        'monto' => floatval($montoLiberalidadDivisa ?? 0),
+                        'monto_descuento' => floatval($montoDescuentoDivisa ?? 0),
+                        'disponible' => floatval($disponibleLiberalidadDivisa ?? 0),
+                        'tiene_liberalidad' => ($montoLiberalidadDivisa ?? 0) > 0
+                    ]
+                ]
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en obtenerBonosDisponiblesPrestamo: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener bonos disponibles: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    private function obtenerLiberalidadEmpleado($usuarioIdNum, $empleadoIdGuid, $mes, $anio)
+    {
+        try {
+            // Calcular fechas de inicio y fin del mes
+            $fechaInicio = Carbon::createFromDate($anio, $mes, 1)->startOfDay();
+            $fechaFin = $fechaInicio->copy()->endOfMonth()->endOfDay();
+            
+            // Crear filtro de fechas
+            $filtroFecha = new ParametrosFiltroFecha(
+                null, null, null, false,
+                $fechaInicio,
+                $fechaFin
+            );
+            
+            // Crear objeto liberalidad
+            $liberalidadDTO = LiberalidadDTO::empty();
+            $liberalidadDTO->detalles = collect();
+            
+            $externalId = $usuarioIdNum ?? $empleadoIdGuid;
+            $liberalidadDTO->detalles = $this->obtenerVentaDetalladaPorUsuario($filtroFecha, $externalId);
+            
+            // Asignar datos del filtro al DTO
+            $liberalidadDTO->Mes = $filtroFecha->mes->value;
+            $liberalidadDTO->Anno = $filtroFecha->anno;
+            $liberalidadDTO->FechaInicio = $filtroFecha->fechaInicio;
+            $liberalidadDTO->FechaFinal = $filtroFecha->fechaFin;
+            $liberalidadDTO->Estatus = 0;
+            
+            // Buscar liberalidad de empleados
+            $liberalidadDTO = $this->buscarLiberalidadEmpleados($liberalidadDTO);
+
+            return $liberalidadDTO;
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en obtenerLiberalidadEmpleado: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    public function registrarPagoNormal(Request $request)
+    {
+        try {
+            $request->validate([
+                'usuarioId' => 'required|string',
+                'Fecha' => 'required|date',
+                'Descripcion' => 'required|string',
+                'MontoDivisaAbonado' => 'required|numeric|min:0.01',
+                'FormaDePago' => 'required|integer|in:0,2,3',
+                'Observacion' => 'nullable|string',
+                'NumeroOperacion' => 'nullable|string'
+            ]);
+            
+            $usuarioId = $request->usuarioId;
+            $montoTotal = $request->MontoDivisaAbonado;
+            
+            // Obtener TODOS los préstamos activos del empleado (más antiguos primero)
+            $prestamos = DB::connection('sqlsrv')
+                ->table('Prestamos')
+                ->where('UsuarioId', $usuarioId)
+                ->whereIn('Estatus', [1, 2])
+                ->orderBy('Fecha', 'asc')
+                ->get();
+            
+            if ($prestamos->isEmpty()) {
+                return response()->json(['success' => false, 'message' => 'No hay préstamos activos'], 400);
+            }
+            
+            // Obtener tasa de cambio según la fecha
+            $tasaCambio = DB::connection('sqlsrv')
+                ->table('DivisaValor')
+                ->whereDate('Fecha', $request->Fecha)
+                ->orderBy('ID', 'desc')
+                ->first();
+            
+            if (!$tasaCambio) {
+                $tasaCambio = DB::connection('sqlsrv')
+                    ->table('DivisaValor')
+                    ->orderBy('ID', 'desc')
+                    ->first();
+            }
+            
+            $tasaValor = $tasaCambio->Valor ?? 475.01;
+            $tasaId = $tasaCambio->ID ?? null;
+            
+            $montoRestante = $montoTotal;
+            $prestamosAfectados = [];
+            $transaccionesRegistradas = [];
+            
+            foreach ($prestamos as $prestamo) {
+                if ($montoRestante <= 0) break;
+                
+                // Calcular saldo pendiente del préstamo
+                $detalles = DB::connection('sqlsrv')
+                    ->table('PrestamosDetalles')
+                    ->where('PrestamoId', $prestamo->PrestamoId)
+                    ->sum('PvpDivisa');
+                
+                $pagos = DB::connection('sqlsrv')
+                    ->table('Transacciones as t')
+                    ->join('TransaccionesUsuario as tu', 't.ID', '=', 'tu.TransaccionId')
+                    ->where('tu.PrestamoId', $prestamo->PrestamoId)
+                    ->sum('t.MontoDivisaAbonado');
+                
+                $totalPrestamo = floatval($prestamo->MontoDivisa) + floatval($detalles);
+                $saldoPendiente = $totalPrestamo - floatval($pagos);
+                
+                if ($saldoPendiente <= 0) {
+                    continue; // Este préstamo ya está pagado, pasar al siguiente
+                }
+                
+                // Calcular cuánto se paga de este préstamo
+                $montoAPagar = min($montoRestante, $saldoPendiente);
+                $montoAPagarBs = round($montoAPagar * $tasaValor, 2);
+                
+                // Generar número de operación para este préstamo
+                $numeroOperacion = $request->NumeroOperacion;
+                if (empty($numeroOperacion)) {
+                    $numeroOperacion = 'ABP' . date('Ymd') . '-' . $prestamo->PrestamoId;
+                }
+                
+                // Crear descripción con prefijo "Auto."
+                $descripcion = $request->Descripcion;
+                if (!str_contains($descripcion, 'Auto.')) {
+                    $descripcion = 'Auto.' . $descripcion;
+                }
+                
+                // Observación
+                $observacion = $request->Observacion;
+                if (empty($observacion)) {
+                    $observacion = $descripcion;
+                }
+                
+                // Registrar transacción para este préstamo
+                $transaccionId = DB::connection('sqlsrv')->table('Transacciones')->insertGetId([
+                    'Fecha' => $request->Fecha,
+                    'Descripcion' => $descripcion,
+                    'DivisaId' => 1,
+                    'MontoDivisaAbonado' => $montoAPagar,
+                    'NumeroOperacion' => $numeroOperacion,
+                    'Estatus' => 2,
+                    'FormaDePago' => $request->FormaDePago,
+                    'SucursalId' => $prestamo->SucursalId,
+                    'TasaDeCambio' => $tasaValor,
+                    'MontoAbonado' => $montoAPagarBs,
+                    'Tipo' => 4,
+                    'Observacion' => $observacion,
+                    'UrlComprobante' => null,
+                    'Nombre' => null,
+                    'Cedula' => null
+                ]);
+                
+                // Relacionar transacción con préstamo y usuario
+                DB::connection('sqlsrv')->table('TransaccionesUsuario')->insert([
+                    'UsuarioId' => $usuarioId,
+                    'TransaccionId' => $transaccionId,
+                    'PrestamoId' => $prestamo->PrestamoId
+                ]);
+                
+                $transaccionesRegistradas[] = $transaccionId;
+                $prestamosAfectados[] = [
+                    'PrestamoId' => $prestamo->PrestamoId,
+                    'montoPagado' => $montoAPagar,
+                    'saldoAnterior' => $saldoPendiente,
+                    'nuevoSaldo' => $saldoPendiente - $montoAPagar
+                ];
+                
+                // Verificar si este préstamo quedó pagado completamente
+                if ($montoAPagar >= $saldoPendiente) {
+                    DB::connection('sqlsrv')
+                        ->table('Prestamos')
+                        ->where('PrestamoId', $prestamo->PrestamoId)
+                        ->update(['Estatus' => 3]);
+                }
+                
+                $montoRestante -= $montoAPagar;
+            }
+            
+            $totalPagado = array_sum(array_column($prestamosAfectados, 'montoPagado'));
+            $todosPagados = $montoRestante <= 0 && count($prestamosAfectados) == count($prestamos);
+
+            $message = "Se ha registrado el pago de {$totalPagado} USD";
+            if ($todosPagados) {
+                $message = "Todos los préstamos han sido pagados completamente. Total: {$totalPagado} USD";
+            } elseif ($montoRestante > 0) {
+                $message = "Se pagaron {$totalPagado} USD. Quedan {$montoRestante} USD por aplicar (no hay más préstamos activos)";
+            }
+            
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'data' => [
+                    'transacciones' => $transaccionesRegistradas,
+                    'prestamos_afectados' => $prestamosAfectados,
+                    'monto_total_pagado' => $totalPagado,
+                    'monto_restante' => $montoRestante
+                ]
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en registrarPagoNormal: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al procesar el pago: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function registrarPagoConBono(Request $request)
+    {
+        try {
+            $request->validate([
+                'usuarioId' => 'required|string',
+                'monto' => 'required|numeric|min:0.01',
+                'bono_id' => 'required|integer',
+                'fecha' => 'required|date',
+                'descripcion' => 'nullable|string',
+                'observacion' => 'nullable|string',
+                'numero_operacion' => 'nullable|string'
+            ]);
+            
+            $usuarioId = $request->usuarioId;
+            $montoTotal = $request->monto;
+            $bonoId = $request->bono_id;
+            $fecha = $request->fecha;
+            $descripcion = $request->descripcion ?: "Pago de préstamo con bono #{$bonoId}";
+            $observacion = $request->observacion;
+            $numeroOperacionBase = $request->numero_operacion;
+            
+            // Obtener el empleado
+            $empleado = DB::connection('sqlsrv')
+                ->table('AspNetUsers')
+                ->where('Id', $usuarioId)
+                ->first();
+            
+            if (!$empleado) {
+                return response()->json(['success' => false, 'message' => 'Empleado no encontrado'], 400);
+            }
+            
+            // Obtener TODOS los préstamos activos del empleado (más antiguos primero)
+            $prestamos = DB::connection('sqlsrv')
+                ->table('Prestamos')
+                ->where('UsuarioId', $usuarioId)
+                ->whereIn('Estatus', [1, 2])
+                ->orderBy('Fecha', 'asc')
+                ->get();
+            
+            if ($prestamos->isEmpty()) {
+                return response()->json(['success' => false, 'message' => 'No hay préstamos activos'], 400);
+            }
+            
+            // Obtener tasa de cambio del día
+            $tasaCambio = DB::connection('sqlsrv')
+                ->table('DivisaValor')
+                ->whereDate('Fecha', $fecha)
+                ->orderBy('ID', 'desc')
+                ->first();
+            
+            if (!$tasaCambio) {
+                $tasaCambio = DB::connection('sqlsrv')
+                    ->table('DivisaValor')
+                    ->orderBy('ID', 'desc')
+                    ->first();
+            }
+            
+            $tasaValor = $tasaCambio->Valor ?? 475.01;
+            
+            // Verificar bono
+            $usuarioIdNum = $empleado->ExternalId ?? null;
+            $empleadoIdGuid = $empleado->Id;
+            $mesActual = date('n');
+            $anioActual = date('Y');
+            
+            $bonos = $this->obtenerBonosPorEmpleado($usuarioIdNum, $empleadoIdGuid, $mesActual, $anioActual);
+            $bono = $bonos->firstWhere('ID', $bonoId);
+            
+            if (!$bono || $bono->EsPagado == 1) {
+                return response()->json(['success' => false, 'message' => 'Bono no encontrado o ya fue pagado'], 400);
+            }
+            
+            if ($montoTotal > $bono->MontoDivisa) {
+                return response()->json(['success' => false, 'message' => 'El monto excede el bono disponible'], 400);
+            }
+            
+            $montoRestante = $montoTotal;
+            $prestamosAfectados = [];
+            $transaccionesRegistradas = [];
+            $montoTotalUsadoBono = 0;
+            
+            foreach ($prestamos as $prestamo) {
+                if ($montoRestante <= 0) break;
+                
+                // Calcular saldo pendiente del préstamo
+                $detalles = DB::connection('sqlsrv')
+                    ->table('PrestamosDetalles')
+                    ->where('PrestamoId', $prestamo->PrestamoId)
+                    ->sum('PvpDivisa');
+                
+                $pagos = DB::connection('sqlsrv')
+                    ->table('Transacciones as t')
+                    ->join('TransaccionesUsuario as tu', 't.ID', '=', 'tu.TransaccionId')
+                    ->where('tu.PrestamoId', $prestamo->PrestamoId)
+                    ->sum('t.MontoDivisaAbonado');
+                
+                $totalPrestamo = floatval($prestamo->MontoDivisa) + floatval($detalles);
+                $saldoPendiente = $totalPrestamo - floatval($pagos);
+                
+                if ($saldoPendiente <= 0) {
+                    continue;
+                }
+                
+                // Calcular cuánto se paga de este préstamo
+                $montoAPagar = min($montoRestante, $saldoPendiente);
+                $montoAPagarBs = round($montoAPagar * $tasaValor, 2);
+                
+                // Generar número de operación para este préstamo
+                $numeroOperacion = $numeroOperacionBase;
+                if (empty($numeroOperacion)) {
+                    $numeroOperacion = 'ABP' . date('Ymd') . '-' . $prestamo->PrestamoId;
+                }
+                
+                // Crear descripción con prefijo "Auto."
+                $descripcionFinal = $descripcion;
+                if (!str_contains($descripcionFinal, 'Auto.')) {
+                    $descripcionFinal = 'Auto.' . $descripcionFinal;
+                }
+                
+                // Observación
+                $observacionFinal = $observacion;
+                if (empty($observacionFinal)) {
+                    $observacionFinal = $descripcionFinal;
+                }
+                
+                // Registrar transacción para este préstamo
+                $transaccionId = DB::connection('sqlsrv')->table('Transacciones')->insertGetId([
+                    'Fecha' => $fecha,
+                    'Descripcion' => $descripcionFinal,
+                    'DivisaId' => 1,
+                    'MontoDivisaAbonado' => $montoAPagar,
+                    'NumeroOperacion' => $numeroOperacion,
+                    'Estatus' => 2,
+                    'FormaDePago' => 3,
+                    'SucursalId' => $prestamo->SucursalId,
+                    'TasaDeCambio' => $tasaValor,
+                    'MontoAbonado' => $montoAPagarBs,
+                    'Tipo' => 4,
+                    'Observacion' => $observacionFinal,
+                    'UrlComprobante' => null,
+                    'Nombre' => null,
+                    'Cedula' => null
+                ]);
+                
+                // Relacionar transacción con préstamo y usuario
+                DB::connection('sqlsrv')->table('TransaccionesUsuario')->insert([
+                    'UsuarioId' => $usuarioId,
+                    'TransaccionId' => $transaccionId,
+                    'PrestamoId' => $prestamo->PrestamoId
+                ]);
+                
+                $transaccionesRegistradas[] = $transaccionId;
+                $prestamosAfectados[] = [
+                    'PrestamoId' => $prestamo->PrestamoId,
+                    'montoPagado' => $montoAPagar,
+                    'saldoAnterior' => $saldoPendiente,
+                    'nuevoSaldo' => $saldoPendiente - $montoAPagar
+                ];
+                
+                // Verificar si este préstamo quedó pagado completamente
+                if ($montoAPagar >= $saldoPendiente) {
+                    DB::connection('sqlsrv')
+                        ->table('Prestamos')
+                        ->where('PrestamoId', $prestamo->PrestamoId)
+                        ->update(['Estatus' => 3]);
+                }
+                
+                $montoRestante -= $montoAPagar;
+                $montoTotalUsadoBono += $montoAPagar;
+            }
+            
+            // Actualizar el bono con el monto total usado
+            $nuevoMonto = $bono->MontoDivisa - $montoTotalUsadoBono;
+            if ($nuevoMonto <= 0) {
+                DB::connection('sqlsrv')
+                    ->table('BonosEmpleados')
+                    ->where('ID', $bonoId)
+                    ->update([
+                        'EsPagado' => 1,
+                        'MontoDivisa' => 0,
+                        'MontoBs' => 0
+                    ]);
+            } else {
+                DB::connection('sqlsrv')
+                    ->table('BonosEmpleados')
+                    ->where('ID', $bonoId)
+                    ->update([
+                        'MontoDivisa' => $nuevoMonto,
+                        'MontoBs' => round($nuevoMonto * $bono->Tasa, 2)
+                    ]);
+            }
+            
+            $todosPagados = $montoRestante <= 0 && count($prestamosAfectados) == count($prestamos);
+            
+            $message = "Se ha registrado el pago de {$montoTotalUsadoBono} USD usando bono";
+            if ($todosPagados) {
+                $message = "Todos los préstamos han sido pagados completamente con bono. Total: {$montoTotalUsadoBono} USD";
+            } elseif ($montoRestante > 0) {
+                $message = "Se pagaron {$montoTotalUsadoBono} USD con bono. Quedan {$montoRestante} USD por aplicar (no hay más préstamos activos)";
+            }
+            
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'data' => [
+                    'transacciones' => $transaccionesRegistradas,
+                    'prestamos_afectados' => $prestamosAfectados,
+                    'monto_total_pagado' => $montoTotalUsadoBono,
+                    'monto_restante' => $montoRestante,
+                    'bono_utilizado' => $bonoId,
+                    'bono_saldo_restante' => $nuevoMonto
+                ]
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en registrarPagoConBono: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al procesar el pago con bono: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function registrarPagoConLiberalidad(Request $request)
+    {
+        try {
+            $request->validate([
+                'usuarioId' => 'required|string',
+                'monto' => 'required|numeric|min:0.01',
+                'fecha' => 'required|date',
+                'descripcion' => 'required|string',
+                'observacion' => 'nullable|string',
+                'numero_operacion' => 'nullable|string'
+            ]);
+            
+            $usuarioId = $request->usuarioId;
+            $monto = $request->monto;
+            $fecha = $request->fecha;
+            $descripcion = $request->descripcion;
+            $observacion = $request->observacion;
+            $numeroOperacion = $request->numero_operacion;
+            
+            // Obtener el empleado
+            $empleado = DB::connection('sqlsrv')
+                ->table('AspNetUsers')
+                ->where('Id', $usuarioId)
+                ->first();
+            
+            if (!$empleado) {
+                return response()->json(['success' => false, 'message' => 'Empleado no encontrado'], 400);
+            }
+            
+            $usuarioIdNum = $empleado->ExternalId ?? null;
+            $empleadoIdGuid = $empleado->Id;
+            $mesActual = date('n');
+            $anioActual = date('Y');
+            
+            // Verificar liberalidad disponible
+            $liberalidad = DB::connection('sqlsrv')
+                ->table('LiberalidadEmpleadoTempo')
+                ->where('Mes', $mesActual)
+                ->where('Anno', $anioActual)
+                ->where(function($query) use ($empleadoIdGuid, $usuarioIdNum) {
+                    if ($empleadoIdGuid) {
+                        $query->where('EmpleadoId', $empleadoIdGuid);
+                    }
+                    if ($usuarioIdNum) {
+                        $query->orWhere('UsuarioId', $usuarioIdNum);
+                    }
+                })
+                ->first();
+            
+            if (!$liberalidad || $liberalidad->DisponibleLiberalidadDivisa < $monto) {
+                return response()->json(['success' => false, 'message' => 'No hay suficiente liberalidad disponible'], 400);
+            }
+            
+            // Obtener tasa de cambio
+            $tasaCambio = DB::connection('sqlsrv')
+                ->table('DivisaValor')
+                ->whereDate('Fecha', $fecha)
+                ->orderBy('ID', 'desc')
+                ->first();
+            
+            if (!$tasaCambio) {
+                $tasaCambio = DB::connection('sqlsrv')
+                    ->table('DivisaValor')
+                    ->orderBy('ID', 'desc')
+                    ->first();
+            }
+            
+            $tasaValor = $tasaCambio->Valor;
+            $tasaId = $tasaCambio->ID ?? null;
+            
+            // Obtener el primer préstamo activo
+            $prestamo = DB::connection('sqlsrv')
+                ->table('Prestamos')
+                ->where('UsuarioId', $usuarioId)
+                ->whereIn('Estatus', [1, 2])
+                ->orderBy('Fecha', 'asc')
+                ->first();
+            
+            if (!$prestamo) {
+                return response()->json(['success' => false, 'message' => 'No hay préstamos activos'], 400);
+            }
+            
+            // Calcular saldo pendiente
+            $detalles = DB::connection('sqlsrv')
+                ->table('PrestamosDetalles')
+                ->where('PrestamoId', $prestamo->PrestamoId)
+                ->sum('PvpDivisa');
+            
+            $pagos = DB::connection('sqlsrv')
+                ->table('Transacciones as t')
+                ->join('TransaccionesUsuario as tu', 't.ID', '=', 'tu.TransaccionId')
+                ->where('tu.PrestamoId', $prestamo->PrestamoId)
+                ->sum('t.MontoDivisaAbonado');
+            
+            $totalPrestamo = floatval($prestamo->MontoDivisa) + floatval($detalles);
+            $saldoPendiente = $totalPrestamo - floatval($pagos);
+            
+            if ($saldoPendiente <= 0) {
+                return response()->json(['success' => false, 'message' => 'El préstamo ya está pagado'], 400);
+            }
+            
+            $montoAPagar = min($monto, $saldoPendiente);
+            $montoAPagarBs = round($montoAPagar * $tasaValor, 2);
+            
+            // Generar número de operación
+            if (empty($numeroOperacion)) {
+                $numeroOperacion = 'ABP' . date('Ymd') . '-' . $prestamo->PrestamoId;
+            }
+            
+            // Crear descripción con prefijo "Auto."
+            $descripcionFinal = $descripcion;
+            if (!str_contains($descripcionFinal, 'Auto.')) {
+                $descripcionFinal = 'Auto.' . $descripcionFinal;
+            }
+            
+            // Observación
+            $observacionFinal = $observacion;
+            if (empty($observacionFinal)) {
+                $observacionFinal = $descripcionFinal;
+            }
+            
+            // Registrar transacción (forma de pago = 3 para transferencia)
+            $transaccionId = DB::connection('sqlsrv')->table('Transacciones')->insertGetId([
+                'Fecha' => $fecha,
+                'Descripcion' => $descripcionFinal,
+                'DivisaId' => 1,
+                'MontoDivisaAbonado' => $montoAPagar,
+                'NumeroOperacion' => $numeroOperacion,
+                'Estatus' => 2,
+                'FormaDePago' => 3,
+                'SucursalId' => $prestamo->SucursalId,
+                'TasaDeCambio' => $tasaValor,
+                'MontoAbonado' => $montoAPagarBs,
+                'Tipo' => 4,
+                'Observacion' => $observacionFinal,
+                'UrlComprobante' => null,
+                'Nombre' => null,
+                'Cedula' => null
+            ]);
+            
+            // Relacionar transacción
+            DB::connection('sqlsrv')->table('TransaccionesUsuario')->insert([
+                'UsuarioId' => $usuarioId,
+                'TransaccionId' => $transaccionId,
+                'PrestamoId' => $prestamo->PrestamoId
+            ]);
+            
+            // Actualizar la liberalidad (reducir el disponible)
+            $nuevoDisponible = $liberalidad->DisponibleLiberalidadDivisa - $montoAPagar;
+            $nuevoMontoDescuento = ($liberalidad->MontoDescuentoDivisa ?? 0) + $montoAPagar;
+            
+            DB::connection('sqlsrv')
+                ->table('LiberalidadEmpleadoTempo')
+                ->where('Id', $liberalidad->Id)
+                ->update([
+                    'MontoDescuentoDivisa' => $nuevoMontoDescuento,
+                    'DisponibleLiberalidadDivisa' => $nuevoDisponible,
+                    'DisponibleLiberalidadBs' => $nuevoDisponible * $tasaValor,
+                    'FechaCreacion' => now()
+                ]);
+            
+            // Verificar si el préstamo quedó pagado
+            $nuevoSaldo = $saldoPendiente - $montoAPagar;
+            $prestamoPagado = $nuevoSaldo <= 0;
+            
+            if ($prestamoPagado) {
+                DB::connection('sqlsrv')
+                    ->table('Prestamos')
+                    ->where('PrestamoId', $prestamo->PrestamoId)
+                    ->update(['Estatus' => 3]);
+            }
+            
+            return response()->json([
+                'success' => true,
+                'message' => $prestamoPagado 
+                    ? "El préstamo se ha pagado completamente con liberalidad. Monto: $ {$montoAPagar} USD"
+                    : "El abono ha sido registrado con liberalidad. Monto: $ {$montoAPagar} USD"
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en registrarPagoConLiberalidad: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al procesar el pago con liberalidad: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function detallePrestamosEmpleado($usuarioId)
+    {
+        try {
+            // Obtener el empleado
+            $empleado = DB::connection('sqlsrv')
+                ->table('AspNetUsers')
+                ->where('Id', $usuarioId)
+                ->first();
+            
+            if (!$empleado) {
+                return back()->with('error', 'Empleado no encontrado');
+            }
+            
+            // Obtener sucursal
+            $sucursal = DB::connection('sqlsrv')
+                ->table('Sucursales')
+                ->where('ID', $empleado->SucursalId)
+                ->first();
+            
+            // Obtener TODOS los préstamos del empleado (sin filtrar por estatus)
+            $prestamos = DB::connection('sqlsrv')
+                ->table('Prestamos')
+                ->where('UsuarioId', $usuarioId)
+                ->orderBy('Fecha', 'desc')
+                ->get();
+            
+            // Procesar cada préstamo con sus detalles y pagos
+            foreach ($prestamos as $prestamo) {
+                // Obtener detalles (productos) del préstamo
+                $detalles = DB::connection('sqlsrv')
+                    ->table('PrestamosDetalles as pd')
+                    ->leftJoin('Productos as p', 'pd.ProductoId', '=', 'p.ID')
+                    ->where('pd.PrestamoId', $prestamo->PrestamoId)
+                    ->select(
+                        'pd.*',
+                        'p.Descripcion as ProductoDescripcion',
+                        'p.Codigo as ProductoCodigo',
+                        'p.UrlFoto as ProductoImagen'  
+                    )
+                    ->get();
+                
+                $prestamo->detalles = $detalles;
+                $prestamo->total_productos = $detalles->sum('PvpDivisa');
+                
+                // Obtener pagos del préstamo
+                $pagos = DB::connection('sqlsrv')
+                    ->table('Transacciones as t')
+                    ->join('TransaccionesUsuario as tu', 't.ID', '=', 'tu.TransaccionId')
+                    ->where('tu.PrestamoId', $prestamo->PrestamoId)
+                    ->select(
+                        't.ID',
+                        't.Fecha',
+                        't.MontoDivisaAbonado',
+                        't.MontoAbonado',
+                        't.FormaDePago',
+                        't.NumeroOperacion',
+                        't.Observacion'
+                    )
+                    ->orderBy('t.Fecha', 'desc')
+                    ->get();
+                
+                $prestamo->pagos = $pagos;
+                $prestamo->total_pagado = $pagos->sum('MontoDivisaAbonado');
+                
+                // Calcular saldo pendiente
+                $totalPrestamo = floatval($prestamo->MontoDivisa) + $prestamo->total_productos;
+                $prestamo->saldo_pendiente = $totalPrestamo - $prestamo->total_pagado;
+                
+                // Estatus texto
+                switch ($prestamo->Estatus) {
+                    case 1:
+                        $prestamo->estatus_texto = 'Nuevo';
+                        $prestamo->estatus_color = 'warning';
+                        break;
+                    case 2:
+                        $prestamo->estatus_texto = 'En Proceso';
+                        $prestamo->estatus_color = 'info';
+                        break;
+                    case 3:
+                        $prestamo->estatus_texto = 'Pagado';
+                        $prestamo->estatus_color = 'success';
+                        break;
+                    case 4:
+                        $prestamo->estatus_texto = 'Incluido';
+                        $prestamo->estatus_color = 'secondary';
+                        break;
+                    default:
+                        $prestamo->estatus_texto = 'Desconocido';
+                        $prestamo->estatus_color = 'dark';
+                }
+            }
+            
+            // Calcular resumen general
+            $resumen = [
+                'total_prestamos' => $prestamos->count(),
+                'total_monto' => $prestamos->sum('MontoDivisa') + $prestamos->sum('total_productos'),
+                'total_pagado' => $prestamos->sum('total_pagado'),
+                'total_pendiente' => 0,
+                'prestamos_nuevos' => $prestamos->where('Estatus', 1)->count(),
+                'prestamos_proceso' => $prestamos->where('Estatus', 2)->count(),
+                'prestamos_pagados' => $prestamos->where('Estatus', 3)->count(),
+                'prestamos_incluidos' => $prestamos->where('Estatus', 4)->count()
+            ];
+            
+            $resumen['total_pendiente'] = $resumen['total_monto'] - $resumen['total_pagado'];
+            
+            // Productos pendientes (no pagados completamente)
+            $productosPendientes = collect();
+            foreach ($prestamos->where('Estatus', 2) as $prestamo) {
+                foreach ($prestamo->detalles as $detalle) {
+                    $productosPendientes->push($detalle);
+                }
+            }
+            
+            session([
+                'menu_active' => 'Empleados',
+                'submenu_active' => 'Prestamos'
+            ]);
+            
+            return view('cpanel.empleados.prestamos_detalle', compact(
+                'empleado',
+                'sucursal',
+                'prestamos',
+                'resumen',
+                'productosPendientes'
+            ));
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en detallePrestamosEmpleado: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar los detalles: ' . $e->getMessage());
+        }
+    }
+
+    public function formularioSolicitarPrestamo($usuarioId)
+    {
+        try {
+            // Obtener el empleado
+            $empleado = DB::connection('sqlsrv')
+                ->table('AspNetUsers')
+                ->where('Id', $usuarioId)
+                ->first();
+            
+            if (!$empleado) {
+                return back()->with('error', 'Empleado no encontrado');
+            }
+            
+            // Obtener sucursal
+            $sucursal = DB::connection('sqlsrv')
+                ->table('Sucursales')
+                ->where('ID', $empleado->SucursalId)
+                ->first();
+            
+            // Obtener tasa de cambio actual
+            $tasa = DB::connection('sqlsrv')
+                ->table('DivisaValor')
+                ->orderBy('ID', 'desc')
+                ->first();
+            
+            // Obtener productos para préstamo de productos (opcional)
+            $productos = DB::connection('sqlsrv')
+                ->table('Productos')
+                ->where('Estatus', 0) // Productos activos
+                ->select('ID', 'Codigo', 'Descripcion', 'CostoDivisa')
+                ->orderBy('Descripcion')
+                ->get();
+            
+            session([
+                'menu_active' => 'Empleados',
+                'submenu_active' => 'Prestamos'
+            ]);
+            
+            return view('cpanel.empleados.prestamos_solicitar', compact(
+                'empleado',
+                'sucursal',
+                'tasa',
+                'productos'
+            ));
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en formularioSolicitarPrestamo: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar el formulario: ' . $e->getMessage());
+        }
+    }
+
+    public function guardarSolicitarPrestamo(Request $request)
+    {
+        try {
+            $request->validate([
+                'usuario_id' => 'required|string',
+                'sucursal_id' => 'required|string',
+                'tipo_prestamo' => 'required|in:dinero,producto',
+                'observacion' => 'nullable|string'
+            ]);
+            
+            $usuarioId = $request->usuario_id;
+            $sucursalId = $request->sucursal_id;
+            $tipoPrestamo = $request->tipo_prestamo;
+            $observacion = $request->observacion;
+            
+            // Obtener tasa de cambio actual
+            $tasa = DB::connection('sqlsrv')
+                ->table('DivisaValor')
+                ->orderBy('ID', 'desc')
+                ->first();
+            
+            $tasaValor = $tasa->Valor;
+            $tasaId = $tasa->ID ?? null;
+            
+            // PASO 1: Crear el préstamo con valores iniciales
+            $prestamoId = DB::connection('sqlsrv')->table('Prestamos')->insertGetId([
+                'UsuarioId' => $usuarioId,
+                'Fecha' => now(),
+                'FechaCierre' => now(),
+                'Observacion' => $observacion,
+                'MontoBs' => 0,
+                'MontoDivisa' => 0,
+                'Estatus' => 1,
+                'Tipo' => 0,
+                'TasaCambioId' => $tasaId,
+                'SucursalId' => $sucursalId
+            ]);
+            
+            if ($tipoPrestamo == 'dinero') {
+                // Préstamo de dinero
+                $request->validate([
+                    'monto_divisa' => 'required|numeric|min:0.01'
+                ]);
+                
+                $montoDivisa = $request->monto_divisa;
+                $montoBs = round($montoDivisa * $tasaValor, 2);
+                
+                DB::connection('sqlsrv')
+                    ->table('Prestamos')
+                    ->where('PrestamoId', $prestamoId)
+                    ->update([
+                        'MontoDivisa' => $montoDivisa,
+                        'MontoBs' => $montoBs,
+                        'Observacion' => $observacion ?: "Préstamo en dinero de $ {$montoDivisa} USD"
+                    ]);
+                
+                return response()->json([
+                    'success' => true,
+                    'message' => "Préstamo en dinero de $ {$montoDivisa} USD solicitado correctamente"
+                ]);
+                
+            } else {
+                // Préstamo de producto
+                $request->validate([
+                    'productos' => 'required|string'
+                ]);
+                
+                $productos = json_decode($request->productos, true);
+                
+                if (empty($productos)) {
+                    DB::connection('sqlsrv')->table('Prestamos')->where('PrestamoId', $prestamoId)->delete();
+                    return response()->json(['success' => false, 'message' => 'No hay productos para procesar'], 400);
+                }
+                
+                $totalDivisa = 0;
+                
+                foreach ($productos as $item) {
+                    $producto = DB::connection('sqlsrv')
+                        ->table('Productos')
+                        ->where('ID', $item['id'])
+                        ->first();
+                    
+                    if (!$producto) {
+                        continue;
+                    }
+                    
+                    $montoDivisa = $producto->CostoDivisa * $item['cantidad'];
+                    $montoBs = round($montoDivisa * $tasaValor, 2);
+                    $totalDivisa += $montoDivisa;
+                    
+                    DB::connection('sqlsrv')->table('PrestamosDetalles')->insert([
+                        'PrestamoId' => $prestamoId,
+                        'ProductoId' => $item['id'],
+                        'Cantidad' => $item['cantidad'],
+                        'PvpBs' => $montoBs,
+                        'PvpDivisa' => $montoDivisa
+                    ]);
+                }
+                
+                // Actualizar el préstamo con el total
+                $totalBs = round($totalDivisa * $tasaValor, 2);
+                DB::connection('sqlsrv')
+                    ->table('Prestamos')
+                    ->where('PrestamoId', $prestamoId)
+                    ->update([
+                        'MontoDivisa' => $totalDivisa,
+                        'MontoBs' => $totalBs,
+                        'Estatus' => 2,
+                        'Observacion' => $observacion ?: "Préstamo de productos - Total: $ {$totalDivisa} USD"
+                    ]);
+                
+                return response()->json([
+                    'success' => true,
+                    'message' => "Préstamo de productos por $ {$totalDivisa} USD solicitado correctamente"
+                ]);
+            }
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en guardarSolicitarPrestamo: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al solicitar el préstamo: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function buscarProductoPorCodigo(Request $request)
+    {
+        try {
+            $codigo = $request->codigo;
+            
+            $producto = DB::connection('sqlsrv')
+                ->table('Productos')
+                ->where('Codigo', $codigo)
+                ->orWhere('CodigoBarra', $codigo)
+                ->select('ID', 'Codigo', 'Descripcion', 'Referencia', 'CostoDivisa')
+                ->first();
+            
+            if (!$producto) {
+                return response()->json(['success' => false, 'message' => 'Producto no encontrado']);
+            }
+            
+            return response()->json([
+                'success' => true,
+                'producto' => $producto
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    public function cerrarLiberalidad(Request $request)
+    {
+        try {
+            $periodo = $request->input('periodo');
+            $partes = explode('-', $periodo);
+            $anio = intval($partes[0]);
+            $mes = intval($partes[1]);
+            
+            // Validar que no esté ya cerrada
+            $existe = DB::connection('sqlsrv')
+                ->table('Liberalidad')
+                ->where('Mes', $mes)
+                ->where('Anno', $anio)
+                ->exists();
+            
+            if ($existe) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La liberalidad de este período ya está cerrada'
+                ]);
+            }
+            
+            // ============================================
+            // 1. MARCAR BONOS DEL PERÍODO COMO PAGADOS
+            // ============================================
+            $bonosActualizados = DB::connection('sqlsrv')
+                ->table('BonosEmpleados')
+                ->where('MesBono', $mes)
+                ->where('AnnoBono', $anio)
+                ->where('EsPagado', 0)
+                ->update(['EsPagado' => 1]);
+            
+            // ============================================
+            // 2. MARCAR DEDUCCIONES DEL PERÍODO COMO PAGADAS
+            // ============================================
+            $deduccionesActualizadas = DB::connection('sqlsrv')
+                ->table('Deducciones')
+                ->where('MesDeduccion', $mes)
+                ->where('AnnoDeduccion', $anio)
+                ->where('EsPagado', 0)
+                ->update(['EsPagado' => 1]);
+            
+            // ============================================
+            // 3. OBTENER DATOS ACTUALES DE LIBERALIDAD
+            // ============================================
+            $fechaInicio = Carbon::createFromDate($anio, $mes, 1)->startOfDay();
+            $fechaFin = $fechaInicio->copy()->endOfMonth()->endOfDay();
+            
+            $filtroFecha = new ParametrosFiltroFecha(
+                null, null, null, false,
+                $fechaInicio,
+                $fechaFin
+            );
+            
+            $liberalidad = $this->obtenerLiberalidad($filtroFecha);
+            
+            // Agregar empleados activos sin ventas
+            $liberalidad = $this->obtenerEmpleadosActivosSinVentas($liberalidad, null);
+            
+            // Enriquecer con bonos y deducciones (ya están como pagados)
+            $liberalidad = $this->enriquecerLiberalidad($liberalidad, $mes, $anio, false);
+            
+            // ============================================
+            // 4. FILTRAR EMPLEADOS SIN NADA (NUEVO)
+            // ============================================
+            $liberalidad = $this->filtrarEmpleadosSinNada($liberalidad);
+            
+            // ============================================
+            // 5. CREAR REGISTRO EN LIBERALIDAD (CABECERA)
+            // ============================================
+            $liberalidadId = DB::connection('sqlsrv')
+                ->table('Liberalidad')
+                ->insertGetId([
+                    'Mes' => $mes,
+                    'Anno' => $anio,
+                    'FechaInicio' => $fechaInicio,
+                    'FechaFinal' => $fechaFin,
+                    'Estatus' => 1
+                ]);
+            
+            // ============================================
+            // 6. GUARDAR DETALLES POR CADA EMPLEADO (SOLO LOS FILTRADOS)
+            // ============================================
+            foreach ($liberalidad->detalles as $detalle) {
+                // Calcular valores según tu lógica
+                $bonosDelMes = $detalle->total_bonos_usd ?? 0;
+                $deduccionesDelMes = $detalle->total_deducciones_usd ?? 0;
+                $montoLiberalidad = $detalle->MontoLiberalidad ?? 0;
+                
+                // TotalPagado = Liberalidad + Bonos - Deducciones
+                $totalPagado = $montoLiberalidad + $bonosDelMes - $deduccionesDelMes;
+                
+                // OtraLiberalidad = Bonos del mes
+                $otraLiberalidad = $bonosDelMes;
+                
+                // AbonoPrestamo = lo que se pagó del préstamo en el mes
+                $abonoPrestamo = $detalle->AbonoPrestamo ?? 0;
+                
+                // DeudaPrestamo = saldo pendiente después del abono
+                $deudaPrestamo = $detalle->DeudaPrestamo ?? 0;
+                
+                DB::connection('sqlsrv')
+                    ->table('LiberalidadDetalles')
+                    ->insert([
+                        'LiberalidadId' => $liberalidadId,
+                        'EmpleadoId' => $detalle->EmpleadoId ?? null,
+                        'UsuarioId' => $detalle->UsuarioId ?? null,
+                        'Unidades' => $detalle->Unidades ?? 0,
+                        'Venta' => $detalle->Venta ?? 0,
+                        'MontoLiberalidad' => $montoLiberalidad,
+                        'OtraLiberalidad' => $otraLiberalidad,
+                        'SaldoFavor' => $detalle->SaldoFavor ?? 0,
+                        'AbonoPrestamo' => $abonoPrestamo,
+                        'DeudaPrestamo' => $deudaPrestamo,
+                        'TotalPagado' => $totalPagado,
+                        'Estatus' => 1,
+                        'EsVendedor' => $detalle->EsVendedor ?? 0,
+                        'Pago' => 0
+                    ]);
+            }
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Liberalidad cerrada correctamente. ' .
+                            "Se marcaron {$bonosActualizados} bonos y {$deduccionesActualizadas} deducciones como pagados. " .
+                            "Se guardaron {$liberalidad->detalles->count()} empleados."
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cerrar la liberalidad: ' . $e->getMessage()
+            ]);
+        }
     }
 }
