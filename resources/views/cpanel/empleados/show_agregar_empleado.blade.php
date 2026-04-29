@@ -4,6 +4,14 @@
 
 @php
     use App\Helpers\FileHelper;
+
+    // Verificar si hay datos precargados desde el botón "Crear Identity"
+    $precargar = session('precargar_vendedor');
+    
+    // Limpiar la sesión después de usarla
+    if ($precargar) {
+        session()->forget('precargar_vendedor');
+    }
 @endphp
 
 @section('content')
@@ -37,6 +45,15 @@
                     <i class="fas fa-plus-circle me-2"></i>Formulario de Registro
                 </h3>
             </div>
+            
+            @if($precargar)
+                <div class="alert alert-info alert-dismissible fade show m-3" role="alert">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>¡Datos precargados!</strong> Los datos del vendedor han sido precargados desde el sistema POS.
+                    Complete la contraseña y seleccione el rol para finalizar la creación.
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            @endif
             
             <form action="{{ route('cpanel.empleados.internos.guardar') }}" 
                   method="POST" 
@@ -73,29 +90,29 @@
                                         <i class="fas fa-user me-2"></i>Nombre Completo *
                                     </label>
                                     <input type="text" 
-                                           class="form-control @error('NombreCompleto') is-invalid @enderror" 
-                                           id="NombreCompleto" 
-                                           name="NombreCompleto" 
-                                           value="{{ old('NombreCompleto') }}"
-                                           placeholder="Ingrese el nombre completo"
-                                           required>
+                                        class="form-control @error('NombreCompleto') is-invalid @enderror" 
+                                        id="NombreCompleto" 
+                                        name="NombreCompleto" 
+                                        value="{{ old('NombreCompleto', $precargar['NombreCompleto'] ?? '') }}"
+                                        placeholder="Ingrese el nombre completo"
+                                        required>
                                     @error('NombreCompleto')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
                                 </div>
-                                
+
                                 <!-- Email -->
                                 <div class="col-md-6 mb-3">
                                     <label for="Email" class="form-label">
                                         <i class="fas fa-envelope me-2"></i>Email *
                                     </label>
                                     <input type="email" 
-                                           class="form-control @error('Email') is-invalid @enderror" 
-                                           id="Email" 
-                                           name="Email" 
-                                           value="{{ old('Email') }}"
-                                           placeholder="correo@ejemplo.com"
-                                           required>
+                                        class="form-control @error('Email') is-invalid @enderror" 
+                                        id="Email" 
+                                        name="Email" 
+                                        value="{{ old('Email', $precargar['Email'] ?? '') }}"
+                                        placeholder="correo@ejemplo.com"
+                                        required>
                                     @error('Email')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
@@ -107,11 +124,11 @@
                                         <i class="fas fa-phone me-2"></i>Teléfono
                                     </label>
                                     <input type="text" 
-                                           class="form-control @error('PhoneNumber') is-invalid @enderror" 
-                                           id="PhoneNumber" 
-                                           name="PhoneNumber" 
-                                           value="{{ old('PhoneNumber') }}"
-                                           placeholder="Número de teléfono">
+                                        class="form-control @error('PhoneNumber') is-invalid @enderror" 
+                                        id="PhoneNumber" 
+                                        name="PhoneNumber" 
+                                        value="{{ old('PhoneNumber', $precargar['PhoneNumber'] ?? '') }}"
+                                        placeholder="Número de teléfono">
                                     @error('PhoneNumber')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
@@ -156,10 +173,10 @@
                                         <i class="fas fa-birthday-cake me-2"></i>Fecha de Nacimiento
                                     </label>
                                     <input type="date" 
-                                           class="form-control @error('FechaNacimiento') is-invalid @enderror" 
-                                           id="FechaNacimiento" 
-                                           name="FechaNacimiento" 
-                                           value="{{ old('FechaNacimiento') }}">
+                                        class="form-control @error('FechaNacimiento') is-invalid @enderror" 
+                                        id="FechaNacimiento" 
+                                        name="FechaNacimiento" 
+                                        value="{{ old('FechaNacimiento', isset($precargar['FechaNacimiento']) ? \Carbon\Carbon::parse($precargar['FechaNacimiento'])->format('Y-m-d') : '') }}">
                                     @error('FechaNacimiento')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
@@ -186,9 +203,9 @@
                                         <i class="fas fa-map-marker-alt me-2"></i>Dirección
                                     </label>
                                     <textarea class="form-control @error('Direccion') is-invalid @enderror" 
-                                              id="Direccion" 
-                                              name="Direccion" 
-                                              rows="2">{{ old('Direccion') }}</textarea>
+                                            id="Direccion" 
+                                            name="Direccion" 
+                                            rows="2">{{ old('Direccion', $precargar['Direccion'] ?? '') }}</textarea>
                                     @error('Direccion')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
@@ -205,7 +222,7 @@
                                         <option value="">Seleccione una sucursal</option>
                                         @foreach($sucursales as $sucursal)
                                             <option value="{{ $sucursal->ID }}" 
-                                                {{ old('SucursalId') == $sucursal->ID ? 'selected' : '' }}>
+                                                {{ old('SucursalId', $precargar['SucursalId'] ?? '') == $sucursal->ID ? 'selected' : '' }}>
                                                 {{ $sucursal->Nombre }}
                                             </option>
                                         @endforeach
@@ -237,7 +254,7 @@
                                     @enderror
                                 </div>
                                 
-                                <!-- Vendedor ID (opcional) -->
+                                <!-- Vendedor ID -->
                                 <div class="col-md-6 mb-3">
                                     <label for="VendedorId" class="form-label">
                                         <i class="fas fa-id-badge me-2"></i>ID de Vendedor (POS)
@@ -246,7 +263,7 @@
                                         class="form-control @error('VendedorId') is-invalid @enderror" 
                                         id="VendedorId" 
                                         name="VendedorId" 
-                                        value="{{ old('VendedorId') }}"
+                                        value="{{ old('VendedorId', $precargar['VendedorId'] ?? '') }}"
                                         readonly>
                                     @error('VendedorId')
                                         <div class="invalid-feedback">{{ $message }}</div>

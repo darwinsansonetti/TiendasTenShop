@@ -87,8 +87,6 @@ class EmpleadosController extends Controller
         // Obtener ranking de vendedores
         $rankingVendedor = GeneralHelper::ObtenerRankingVendedoresSinAgrupar($filtroFecha, null, $sucursalId);
 
-        // dd($rankingVendedor);
-
         session([
             'menu_active' => 'Empleados',
             'submenu_active' => 'Ventas Diarias'
@@ -270,8 +268,6 @@ class EmpleadosController extends Controller
         // Obtener ranking según el filtro de fechas
         $rankingVendedor = GeneralHelper::ObtenerRankingVendedores($filtroFecha);
 
-        // dd($rankingVendedor);
-
         session([
             'menu_active' => 'Empleados',
             'submenu_active' => 'Ranking General'
@@ -287,8 +283,6 @@ class EmpleadosController extends Controller
     public function ventasVendedor(Request $request, $id)
     {
         try {
-            // $id = UsuarioId del vendedor
-            
             // Obtener fechas del request o usar el período actual
             $fechaInicio = $request->input('fecha_inicio')
                 ? Carbon::parse($request->input('fecha_inicio'))->startOfDay()
@@ -433,75 +427,14 @@ class EmpleadosController extends Controller
             ? Carbon::parse($request->input('fecha_fin'))->endOfDay()
             : Carbon::now('America/Caracas')->endOfMonth();
 
-        // Crear filtro de fechas
-        $filtroFecha = new ParametrosFiltroFecha(
-            null, null, null, false,
-            $fechaInicio,
-            $fechaFin
-        );
+        $estatus = $request->input('estatus');
 
-        // 🔴 OBTENER ESTATUS DEL REQUEST (1: activos, 0: inactivos, null: todos)
-        $estatus = $request->input('estatus'); // Puede ser '1', '0', o null        
-
-        // Construir la condición WHERE para el estatus
         $whereEstatus = "";
         if ($estatus === '1') {
             $whereEstatus = " AND u.EsActivo = 1 ";
         } elseif ($estatus === '0') {
             $whereEstatus = " AND u.EsActivo = 0 ";
         }
-
-        // $vendedores = DB::connection('sqlsrv')
-        // ->select("
-        //     -- Vendedores del POS (tabla Usuarios) - Incluir TODOS los activos
-        //     SELECT 
-        //         u.UsuarioId as id,
-        //         u.VendedorId,
-        //         u.Email,
-        //         u.PhoneNumber,
-        //         u.EsActivo,
-        //         u.NombreCompleto,
-        //         u.Direccion,
-        //         u.FechaCreacion,
-        //         u.FechaNacimiento,
-        //         u.SucursalId,
-        //         u.FotoPerfil,
-        //         u.EsRegistrado,
-        //         s.Nombre as sucursal_nombre,
-        //         'pos' as origen
-        //     FROM Usuarios u
-        //     INNER JOIN Sucursales s ON u.SucursalId = s.ID  -- Cambiar a INNER JOIN
-        //     WHERE u.EsActivo = 1 
-        //         AND s.Tipo = 1  -- 🔴 Filtrar por Tipo = 1 (Tienda)
-            
-        //     UNION
-            
-        //     -- Vendedores de Identity con rol VENDEDORES
-        //     SELECT 
-        //         au.Id as id,
-        //         au.VendedorId,
-        //         au.Email,
-        //         au.PhoneNumber,
-        //         au.EsActivo,
-        //         au.NombreCompleto,
-        //         au.Direccion,
-        //         au.FechaCreacion,
-        //         au.FechaNacimiento,
-        //         au.SucursalId,
-        //         au.FotoPerfil,
-        //         CAST(au.EmailConfirmed as int) as EsRegistrado,
-        //         s.Nombre as sucursal_nombre,
-        //         'identity' as origen
-        //     FROM AspNetUsers au
-        //     INNER JOIN AspNetUserRoles ur ON au.Id = ur.UserId
-        //     INNER JOIN AspNetRoles r ON ur.RoleId = r.Id
-        //     INNER JOIN Sucursales s ON au.SucursalId = s.ID  -- Cambiar a INNER JOIN
-        //     WHERE r.Name = 'VENDEDORES'
-        //         AND au.EsActivo = 1
-        //         AND s.Tipo = 1  -- 🔴 Filtrar por Tipo = 1 (Tienda)
-            
-        //     ORDER BY NombreCompleto
-        // ");
 
         $vendedores = DB::connection('sqlsrv')
         ->select("
@@ -520,9 +453,20 @@ class EmpleadosController extends Controller
                 u.FotoPerfil,
                 u.EsRegistrado,
                 s.Nombre as sucursal_nombre,
-                'pos' as origen
+                'pos' as origen,
+                -- 🔴 NUEVO: Indicar si existe en AspNetUsers
+                CASE 
+                    WHEN au.Id IS NOT NULL THEN 1 
+                    ELSE 0 
+                END as existe_en_identity,
+                -- 🔴 NUEVO: Indicar si está activo en Identity
+                CASE 
+                    WHEN au.Id IS NOT NULL AND au.EsActivo = 1 THEN 1 
+                    ELSE 0 
+                END as identity_activo
             FROM Usuarios u
             INNER JOIN Sucursales s ON u.SucursalId = s.ID
+            LEFT JOIN AspNetUsers au ON u.UsuarioId = au.ExternalId
             WHERE s.Tipo = 1
             {$whereEstatus}
             
@@ -543,7 +487,9 @@ class EmpleadosController extends Controller
                 au.FotoPerfil,
                 CAST(au.EmailConfirmed as int) as EsRegistrado,
                 s.Nombre as sucursal_nombre,
-                'identity' as origen
+                'identity' as origen,
+                1 as existe_en_identity,
+                au.EsActivo as identity_activo
             FROM AspNetUsers au
             INNER JOIN AspNetUserRoles ur ON au.Id = ur.UserId
             INNER JOIN AspNetRoles r ON ur.RoleId = r.Id
@@ -563,7 +509,33 @@ class EmpleadosController extends Controller
             return $item->VendedorId . '_' . $item->SucursalId;
         })->map(function($group) {
             // Priorizar el que tiene origen 'pos' sobre 'identity'
-            return $group->firstWhere('origen', 'pos') ?? $group->first();
+            $vendedor = $group->firstWhere('origen', 'pos') ?? $group->first();
+            
+            // 🔴 NUEVO: Determinar si mostrar el botón
+            // Mostrar botón si:
+            // 1. Es del POS (origen 'pos')
+            // 2. NO existe en Identity (existe_en_identity == 0)
+            //    O existe pero está inactivo (identity_activo == 0)
+            if ($vendedor->origen === 'pos') {
+                if ($vendedor->existe_en_identity == 0) {
+                    // No existe en Identity → crear nuevo
+                    $vendedor->mostrar_boton_crear = true;
+                    $vendedor->boton_texto = 'Crear en Identity';
+                    $vendedor->boton_color = 'success';
+                } elseif ($vendedor->identity_activo == 0) {
+                    // Existe pero está inactivo → reactivar
+                    $vendedor->mostrar_boton_crear = true;
+                    $vendedor->boton_texto = 'Reactivar';
+                    $vendedor->boton_color = 'warning';
+                } else {
+                    // Existe y está activo → no mostrar botón
+                    $vendedor->mostrar_boton_crear = false;
+                }
+            } else {
+                $vendedor->mostrar_boton_crear = false;
+            }
+            
+            return $vendedor;
         })->values()->sortBy('NombreCompleto');
         
         session([
@@ -572,11 +544,11 @@ class EmpleadosController extends Controller
         ]);
         
         return view('cpanel.empleados.vendedores_listado', compact(
-                'vendedores',
-                'fechaInicio',
-                'fechaFin',
-                'estatus' 
-                ));
+            'vendedores',
+            'fechaInicio',
+            'fechaFin',
+            'estatus'
+        ));
     }
 
     public function editarVendedor($id)
@@ -718,49 +690,6 @@ class EmpleadosController extends Controller
         }
     }
 
-    // private function guardarFotoVendedor(Request $request, $vendedor)
-    // {
-    //     try {
-    //         $file = $request->file('foto');
-            
-    //         // Generar el nombre del archivo como en .NET (ej: VDD93_4.PNG)
-    //         $vendedorId = $vendedor->VendedorId ?? 'VEND';
-    //         $sucursalId = $vendedor->SucursalId ?? '0';
-    //         $extension = strtoupper($file->getClientOriginalExtension()); // PNG, JPG, etc.
-    //         $filename = $vendedorId . '_' . $sucursalId . '.' . $extension;
-            
-    //         // Ruta donde se guardan las fotos (la misma que usa el helper)
-    //         $folder = 'images/usuarios/';
-    //         $storagePath = 'public/' . $folder;
-            
-    //         // Crear carpeta si no existe
-    //         if (!Storage::exists($storagePath)) {
-    //             Storage::makeDirectory($storagePath, 0755, true);
-    //         }
-            
-    //         // Eliminar foto anterior si existe
-    //         if ($vendedor->FotoPerfil) {
-    //             $oldFile = $storagePath . $vendedor->FotoPerfil;
-    //             if (Storage::exists($oldFile)) {
-    //                 Storage::delete($oldFile);
-    //             }
-    //         }
-            
-    //         // Guardar la nueva foto en storage/app/public/images/usuarios/
-    //         Storage::putFileAs($storagePath, $file, $filename);
-            
-    //         // Actualizar SOLO el campo FotoPerfil en la BD
-    //         $vendedor->FotoPerfil = $filename;
-    //         $vendedor->save();
-            
-    //         return true;
-            
-    //     } catch (\Exception $e) {
-    //         \Log::error('Error al guardar foto del vendedor: ' . $e->getMessage());
-    //         throw $e;
-    //     }
-    // }
-
     private function guardarFotoVendedor(Request $request, $vendedor)
     {
         try {
@@ -895,6 +824,188 @@ class EmpleadosController extends Controller
         } catch (\Exception $e) {
             \Log::error('Error en listado_personal: ' . $e->getMessage());
             return back()->with('error', 'Error al cargar el listado de personal: ' . $e->getMessage());
+        }
+    }
+
+    public function crearUsuarioIdentity(Request $request)
+    {
+        try {
+            \Log::info('🔵 crearUsuarioIdentity - Iniciado', [
+                'id' => $request->input('id'),
+                'accion' => $request->input('accion')
+            ]);
+            
+            $id = $request->input('id');
+            $accion = $request->input('accion');
+            
+            if (!$id) {
+                \Log::warning('⚠️ ID no proporcionado');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'ID de vendedor no proporcionado'
+                ]);
+            }
+            
+            // 1. BUSCAR VENDEDOR EN TABLA Usuarios
+            \Log::info('🔵 Buscando vendedor en Usuarios', ['id' => $id]);
+            
+            $vendedor = DB::connection('sqlsrv')
+                ->table('Usuarios')
+                ->where('UsuarioId', $id)
+                ->first();
+            
+            if (!$vendedor) {
+                \Log::warning('⚠️ Vendedor no encontrado', ['id' => $id]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Vendedor no encontrado en la tabla Usuarios'
+                ]);
+            }
+            
+            \Log::info('🔵 Vendedor encontrado', [
+                'nombre' => $vendedor->NombreCompleto,
+                'vendedor_id' => $vendedor->VendedorId
+            ]);
+            
+            // Contraseña fija
+            $passwordFijo = '12345678';
+            $passwordHash = bcrypt($passwordFijo);
+            
+            // Email
+            $email = $vendedor->Email;
+            if (empty($email)) {
+                $email = strtolower(str_replace(' ', '.', $vendedor->NombreCompleto)) . '@tiendastenshop.com';
+            }
+            
+            \Log::info('🔵 Email generado', ['email' => $email]);
+            
+            // 2. BUSCAR SI EXISTE EN AspNetUsers
+            \Log::info('🔵 Buscando en AspNetUsers');
+            
+            $usuarioExistente = DB::connection('sqlsrv')
+                ->table('AspNetUsers')
+                ->where('ExternalId', $id)
+                ->orWhere('VendedorId', $vendedor->VendedorId)
+                ->first();
+            
+            if ($usuarioExistente && $accion === 'reactivar') {
+                \Log::info('🔵 Reactivando usuario existente', ['usuario_id' => $usuarioExistente->Id]);
+                
+                try {
+                    DB::connection('sqlsrv')
+                        ->table('AspNetUsers')
+                        ->where('Id', $usuarioExistente->Id)
+                        ->update([
+                            'EsActivo' => 1,
+                            'NombreCompleto' => $vendedor->NombreCompleto,
+                            'Email' => $email,
+                            'NormalizedUserName' => strtoupper($email),
+                            'NormalizedEmail' => strtoupper($email),
+                            'PhoneNumber' => $vendedor->PhoneNumber,
+                            'Direccion' => $vendedor->Direccion,
+                            'SucursalId' => $vendedor->SucursalId,
+                            'FechaNacimiento' => $vendedor->FechaNacimiento,
+                            'FotoPerfil' => $vendedor->FotoPerfil,
+                            'ExternalId' => $id,
+                            'VendedorId' => $vendedor->VendedorId,
+                            'PasswordHash' => $passwordHash,
+                            'FechaCreacion' => now()
+                        ]);
+                    
+                    \Log::info('✅ Usuario reactivado correctamente');
+                    
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Vendedor reactivado correctamente. Contraseña: ' . $passwordFijo
+                    ]);
+                } catch (\Exception $e) {
+                    \Log::error('❌ Error al reactivar: ' . $e->getMessage());
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Error al reactivar: ' . $e->getMessage()
+                    ]);
+                }
+            }
+            
+            if ($usuarioExistente && $usuarioExistente->EsActivo == 1) {
+                \Log::warning('⚠️ Usuario ya existe y está activo');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El vendedor ya existe y está activo en el sistema Identity'
+                ]);
+            }
+            
+            // 3. CREAR NUEVO USUARIO
+            \Log::info('🔵 Creando nuevo usuario');
+            
+            $nuevoId = (string) \Illuminate\Support\Str::uuid();
+            
+            try {
+                DB::connection('sqlsrv')
+                    ->table('AspNetUsers')
+                    ->insert([
+                        'Id' => $nuevoId,
+                        'UserName' => $email,
+                        'NormalizedUserName' => strtoupper($email),
+                        'Email' => $email,
+                        'NormalizedEmail' => strtoupper($email),
+                        'EmailConfirmed' => 1,
+                        'PasswordHash' => $passwordHash,
+                        'SecurityStamp' => \Illuminate\Support\Str::random(32),
+                        'ConcurrencyStamp' => \Illuminate\Support\Str::random(32),
+                        'PhoneNumber' => $vendedor->PhoneNumber,
+                        'PhoneNumberConfirmed' => 1,
+                        'TwoFactorEnabled' => 0,
+                        'LockoutEnabled' => 1,
+                        'AccessFailedCount' => 0,
+                        'VendedorId' => $vendedor->VendedorId,
+                        'EsActivo' => 1,
+                        'NombreCompleto' => $vendedor->NombreCompleto,
+                        'Direccion' => $vendedor->Direccion,
+                        'FechaCreacion' => now(),
+                        'FechaNacimiento' => $vendedor->FechaNacimiento,
+                        'SucursalId' => $vendedor->SucursalId,
+                        'FotoPerfil' => $vendedor->FotoPerfil,
+                        'ExternalId' => $id
+                    ]);
+                
+                // Asignar rol VENDEDORES
+                $roleId = DB::connection('sqlsrv')
+                    ->table('AspNetRoles')
+                    ->where('Name', 'VENDEDORES')
+                    ->value('Id');
+                
+                if ($roleId) {
+                    DB::connection('sqlsrv')
+                        ->table('AspNetUserRoles')
+                        ->insert([
+                            'UserId' => $nuevoId,
+                            'RoleId' => $roleId
+                        ]);
+                }
+                
+                \Log::info('✅ Nuevo usuario creado correctamente', ['nuevo_id' => $nuevoId]);
+                
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Vendedor creado correctamente. Contraseña: ' . $passwordFijo
+                ]);
+                
+            } catch (\Exception $e) {
+                \Log::error('❌ Error al crear usuario: ' . $e->getMessage());
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al crear usuario: ' . $e->getMessage()
+                ]);
+            }
+            
+        } catch (\Exception $e) {
+            \Log::error('❌ Error general en crearUsuarioIdentity: ' . $e->getMessage());
+            \Log::error('❌ Stack trace: ' . $e->getTraceAsString());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error general: ' . $e->getMessage()
+            ]);
         }
     }
 
@@ -1112,87 +1223,6 @@ class EmpleadosController extends Controller
         }
     }
 
-    // private function guardarFotoEmpleadoInterno(Request $request, $empleado)
-    // {
-    //     try {
-    //         $file = $request->file('foto');
-            
-    //         // Generar nombre del archivo (formato similar al de vendedores)
-    //         // Si tiene VendedorId, lo usamos, si no, usamos parte del Email o ID
-    //         $vendedorId = $empleado->VendedorId ?? 'EMP';
-    //         $sucursalId = $empleado->SucursalId ?? '0';
-    //         $extension = strtoupper($file->getClientOriginalExtension());
-            
-    //         // Para empleados sin VendedorId, usar un identificador único
-    //         if ($vendedorId == 'EMP') {
-    //             // Usar los primeros 8 caracteres del ID (GUID) para un nombre único
-    //             $idCorto = substr(str_replace('-', '', $empleado->Id), 0, 8);
-    //             $vendedorId = 'EMP_' . $idCorto;
-    //         }
-            
-    //         $filename = $vendedorId . '_' . $sucursalId . '.' . $extension;
-            
-    //         // DETECTAR ENTORNO (igual que en guardarFotoVendedor)
-    //         $environment = app()->environment();
-            
-    //         if ($environment === 'production') {
-    //             // LÓGICA PARA PRODUCCIÓN (SMARTERASP)
-    //             $folder = 'images/usuarios/';
-    //             $physicalPath = base_path('public/' . $folder);
-                
-    //             if (!is_dir($physicalPath)) {
-    //                 mkdir($physicalPath, 0777, true);
-    //             }
-                
-    //             // Eliminar foto anterior si existe
-    //             if ($empleado->FotoPerfil) {
-    //                 $oldFilePath = $physicalPath . $empleado->FotoPerfil;
-    //                 if (file_exists($oldFilePath)) {
-    //                     unlink($oldFilePath);
-    //                 }
-    //             }
-                
-    //             // Mover nueva foto
-    //             $file->move($physicalPath, $filename);
-                
-    //         } else {
-    //             // LÓGICA PARA LOCAL (USANDO STORAGE)
-    //             $folder = 'images/usuarios/';
-    //             $storagePath = 'public/' . $folder;
-                
-    //             if (!Storage::exists($storagePath)) {
-    //                 Storage::makeDirectory($storagePath, 0755, true);
-    //             }
-                
-    //             // Eliminar foto anterior si existe
-    //             if ($empleado->FotoPerfil) {
-    //                 $oldFile = $storagePath . $empleado->FotoPerfil;
-    //                 if (Storage::exists($oldFile)) {
-    //                     Storage::delete($oldFile);
-    //                 }
-    //             }
-                
-    //             // Guardar nueva foto
-    //             Storage::putFileAs($storagePath, $file, $filename);
-    //         }
-            
-    //         // Actualizar campo FotoPerfil en BD
-    //         $empleado->FotoPerfil = $filename;
-    //         $empleado->save();
-            
-    //         \Log::info('Foto de empleado interno guardada:', [
-    //             'id' => $empleado->Id,
-    //             'filename' => $filename
-    //         ]);
-            
-    //         return true;
-            
-    //     } catch (\Exception $e) {
-    //         \Log::error('Error al guardar foto de empleado interno: ' . $e->getMessage());
-    //         throw $e;
-    //     }
-    // }
-
     public function cambiarPassword($id)
     {
         try {
@@ -1247,8 +1277,16 @@ class EmpleadosController extends Controller
     public function agregarEmpleado(Request $request)
     {
         try {
+            \Log::info('🔵 agregarEmpleado - Iniciado');
             
-            // 3. Obtener TODOS los roles disponibles (para el select)
+            // Verificar si hay datos precargados
+            if (session()->has('precargar_vendedor')) {
+                \Log::info('🔵 Datos precargados encontrados', session('precargar_vendedor'));
+            } else {
+                \Log::info('⚠️ No hay datos precargados en sesión');
+            }
+            
+            // 3. Obtener TODOS los roles disponibles
             $roles = DB::connection('sqlsrv')
                 ->table('AspNetRoles')
                 ->orderBy('Name')
@@ -1258,6 +1296,11 @@ class EmpleadosController extends Controller
             $sucursales = Sucursal::where('EsActiva', 1)
                 ->orderBy('Nombre')
                 ->get();
+            
+            \Log::info('🔵 agregarEmpleado - Datos cargados', [
+                'roles_count' => $roles->count(),
+                'sucursales_count' => $sucursales->count()
+            ]);
             
             session([
                 'menu_active' => 'Empleados',
@@ -1270,7 +1313,7 @@ class EmpleadosController extends Controller
             ));
             
         } catch (\Exception $e) {
-            \Log::error('Error en la vista Agregar Empleado: ' . $e->getMessage());
+            \Log::error('❌ Error en agregarEmpleado: ' . $e->getMessage());
             return back()->with('error', 'Error en la vista Agregar Empleado: ' . $e->getMessage());
         }
     }
@@ -1538,6 +1581,32 @@ class EmpleadosController extends Controller
                 // No existe liberalidad cerrada, calcular datos actuales
                 $liberalidad = $this->obtenerLiberalidad($filtroFecha);
                 
+                // Obtener la colección de detalles del DTO
+                $detalles = $liberalidad->detalles;
+                
+                // Filtrar solo vendedores (EsVendedor = true) y agrupar por sucursal
+                $liberalidadPorSucursal = $detalles
+                    ->filter(function($item) {
+                        return $item->EsVendedor === true;
+                    })
+                    ->groupBy(function($item) {
+                        return $item->Usuario->SucursalId;
+                    })
+                    ->map(function($grupo, $sucursalId) {
+                        $primerItem = $grupo->first();
+                        
+                        return [
+                            'SucursalId' => $sucursalId,
+                            'SucursalNombre' => $primerItem->Usuario->SucursalNombre,
+                            'MontoLiberalidadSucursal' => $grupo->sum('MontoLiberalidad'),
+                            'CantidadVendedores' => $grupo->count(),
+                            'DetalleVendedores' => $grupo // Opcional: si quieres mantener el detalle
+                        ];
+                    })
+                    ->values();
+
+                $liberalidadPorSucursalJSON = json_encode($liberalidadPorSucursal);
+                
                 // Agregar empleados activos sin ventas
                 $liberalidad = $this->obtenerEmpleadosActivosSinVentas($liberalidad, null);
                 
@@ -1552,6 +1621,8 @@ class EmpleadosController extends Controller
             } else {
                 // Existe liberalidad cerrada, mostrar datos guardados
                 $liberalidad = null;
+                $liberalidadPorSucursal = null;
+                $liberalidadPorSucursalJSON = '[]';
                 
                 // Enriquecer con bonos y deducciones
                 $liberalidadDTO = $this->enriquecerLiberalidad($liberalidadDTO, $mesSeleccionado, $anioSeleccionado, true);
@@ -1570,7 +1641,9 @@ class EmpleadosController extends Controller
                 'filtroMesAnio',
                 'fechaInicio',
                 'fechaFin',
-                'periodo'
+                'periodo',
+                'liberalidadPorSucursal',
+                'liberalidadPorSucursalJSON'
             ));
             
         } catch (\Exception $e) {
@@ -1598,99 +1671,6 @@ class EmpleadosController extends Controller
         
         return $query->first();
     }
-
-    /**
-     * Obtiene todos los empleados activos que no están en la liberalidad
-     */
-    // private function obtenerEmpleadosActivosSinVentas($liberalidad, $sucursalId = null)
-    // {
-    //     // Crear un mapa de claves únicas (usando combinación de tipo + id)
-    //     $clavesUnicas = [];
-    //     foreach ($liberalidad->detalles as $detalle) {
-    //         if (isset($detalle->UsuarioId) && $detalle->UsuarioId) {
-    //             $clavesUnicas['usuario_' . $detalle->UsuarioId] = true;
-    //         }
-    //         if (isset($detalle->EmpleadoId) && $detalle->EmpleadoId) {
-    //             $clavesUnicas['empleado_' . $detalle->EmpleadoId] = true;
-    //         }
-    //     }
-        
-    //     // Obtener empleados activos de AspNetUsers
-    //     $aspNetUsers = DB::connection('sqlsrv')
-    //         ->table('AspNetUsers')
-    //         ->where('EsActivo', 1)
-    //         ->when($sucursalId, function($query) use ($sucursalId) {
-    //             return $query->where('SucursalId', $sucursalId);
-    //         })
-    //         ->get();
-        
-    //     // Obtener vendedores temporales activos de Usuarios
-    //     $usuariosTemp = DB::connection('sqlsrv')
-    //         ->table('Usuarios')
-    //         ->where('EsActivo', 1)
-    //         ->when($sucursalId, function($query) use ($sucursalId) {
-    //             return $query->where('SucursalId', $sucursalId);
-    //         })
-    //         ->get();
-        
-    //     $nuevosAgregados = 0;
-        
-    //     // Agregar empleados de sistema que faltan
-    //     foreach ($aspNetUsers as $empleado) {
-    //         $key = 'empleado_' . $empleado->Id;
-    //         if (!isset($clavesUnicas[$key])) {
-                
-    //             $nuevoDetalle = (object)[
-    //                 'EmpleadoId' => $empleado->Id,
-    //                 'UsuarioId' => null,
-    //                 'Empleado' => $empleado,
-    //                 'Usuario' => null,
-    //                 'Unidades' => 0,
-    //                 'Venta' => 0,
-    //                 'MontoLiberalidad' => 0,
-    //                 'MontoExcluido' => 0,
-    //                 'MontoLiberacion' => 0,
-    //                 'ProductosExcluidos' => 0,
-    //                 'OtraLiberalidad' => 0,
-    //                 'SaldoFavor' => 0,
-    //                 'AbonoPrestamo' => 0,
-    //                 'Estatus' => 0,
-    //                 'EsVendedor' => false
-    //             ];
-    //             $liberalidad->detalles->push($nuevoDetalle);
-    //             $nuevosAgregados++;
-    //         }
-    //     }
-        
-    //     // Agregar vendedores temporales que faltan
-    //     foreach ($usuariosTemp as $vendedor) {
-    //         $key = 'usuario_' . $vendedor->UsuarioId;
-    //         if (!isset($clavesUnicas[$key])) {
-                
-    //             $nuevoDetalle = (object)[
-    //                 'EmpleadoId' => null,
-    //                 'UsuarioId' => $vendedor->UsuarioId,
-    //                 'Empleado' => null,
-    //                 'Usuario' => $vendedor,
-    //                 'Unidades' => 0,
-    //                 'Venta' => 0,
-    //                 'MontoLiberalidad' => 0,
-    //                 'MontoExcluido' => 0,
-    //                 'MontoLiberacion' => 0,
-    //                 'ProductosExcluidos' => 0,
-    //                 'OtraLiberalidad' => 0,
-    //                 'SaldoFavor' => 0,
-    //                 'AbonoPrestamo' => 0,
-    //                 'Estatus' => 0,
-    //                 'EsVendedor' => true
-    //             ];
-    //             $liberalidad->detalles->push($nuevoDetalle);
-    //             $nuevosAgregados++;
-    //         }
-    //     }
-        
-    //     return $liberalidad;
-    // }
 
     private function obtenerEmpleadosActivosSinVentas($liberalidad, $sucursalId = null)
     {
@@ -1806,31 +1786,6 @@ class EmpleadosController extends Controller
         return $liberalidad;
     }
 
-    /**
-     * Filtra los empleados que no tienen ventas, ni bonos, ni deducciones
-     */
-    // private function filtrarEmpleadosSinNada($liberalidad)
-    // {
-    //     if (!$liberalidad || !isset($liberalidad->detalles)) {
-    //         return $liberalidad;
-    //     }
-        
-    //     $originalCount = $liberalidad->detalles->count();
-        
-    //     // Filtrar: mantener empleados que tengan ventas, bonos o deducciones
-    //     $detallesFiltrados = $liberalidad->detalles->filter(function($detalle) {
-    //         $tieneVentas = ($detalle->Venta ?? 0) > 0;
-    //         $tieneBonos = ($detalle->total_bonos_usd ?? 0) > 0;
-    //         $tieneDeducciones = ($detalle->total_deducciones_usd ?? 0) > 0;
-            
-    //         return $tieneVentas || $tieneBonos || $tieneDeducciones;
-    //     });
-        
-    //     $liberalidad->detalles = $detallesFiltrados->values();
-        
-    //     return $liberalidad;
-    // }
-
     private function filtrarEmpleadosSinNada($liberalidad)
     {
         if (!$liberalidad || !isset($liberalidad->detalles)) {
@@ -1853,10 +1808,7 @@ class EmpleadosController extends Controller
         
         return $liberalidad;
     }
-
-    /**
-     * Enriquece los detalles de liberalidad con información de bonos y deducciones
-     */
+    
     private function enriquecerLiberalidad($liberalidad, $mes, $anio, $esCerrado = false)
     {
         if (!$liberalidad || !isset($liberalidad->detalles)) {
@@ -1935,36 +1887,6 @@ class EmpleadosController extends Controller
         return $liberalidad;
     }
 
-    /**
-     * Obtiene los bonos de un empleado para un período específico
-     */
-    // private function obtenerBonosPorEmpleado($usuarioId, $empleadoId, $mes, $anio)
-    // {
-    //     $query = DB::connection('sqlsrv')
-    //         ->table('BonosEmpleados')
-    //         ->select([
-    //             'ID',
-    //             'TipoBono',
-    //             'MontoBs',
-    //             'MontoDivisa',
-    //             'Tasa',
-    //             'EsPagado',
-    //             'FechaCreacion'
-    //         ])
-    //         ->where('MesBono', $mes)
-    //         ->where('AnnoBono', $anio);
-        
-    //     if ($usuarioId) {
-    //         $query->where('UsuarioId', $usuarioId);
-    //     } elseif ($empleadoId) {
-    //         $query->where('EmpleadoId', $empleadoId);
-    //     } else {
-    //         return collect();
-    //     }
-        
-    //     return $query->orderBy('FechaCreacion', 'desc')->get();
-    // }
-
     private function obtenerBonosPorEmpleado($usuarioId, $empleadoId, $mes, $anio)
     {
         $query = DB::connection('sqlsrv')
@@ -1999,37 +1921,6 @@ class EmpleadosController extends Controller
         
         return $query->orderBy('FechaCreacion', 'desc')->get();
     }
-
-    /**
-     * Obtiene las deducciones de un empleado para un período específico
-     */
-    // private function obtenerDeduccionesPorEmpleado($usuarioId, $empleadoId, $mes, $anio)
-    // {
-    //     $query = DB::connection('sqlsrv')
-    //         ->table('Deducciones')
-    //         ->select([
-    //             'ID',
-    //             'TipoDeduccion',
-    //             'MontoBs',
-    //             'MontoDivisa',
-    //             'Tasa',
-    //             'EsPagado',
-    //             'FechaCreacion',
-    //             'Motivo'
-    //         ])
-    //         ->where('MesDeduccion', $mes)
-    //         ->where('AnnoDeduccion', $anio);
-        
-    //     if ($usuarioId) {
-    //         $query->where('UsuarioId', $usuarioId);
-    //     } elseif ($empleadoId) {
-    //         $query->where('EmpleadoId', $empleadoId);
-    //     } else {
-    //         return collect();
-    //     }
-        
-    //     return $query->orderBy('FechaCreacion', 'desc')->get();
-    // }
 
     private function obtenerDeduccionesPorEmpleado($usuarioId, $empleadoId, $mes, $anio)
     {

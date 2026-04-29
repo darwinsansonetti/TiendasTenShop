@@ -249,11 +249,32 @@
                                                 
                                                 <!-- Botón Historial -->
                                                 <a href="{{ route('cpanel.empleados.ventas.vendedor', ['id' => $id]) }}?fecha_inicio={{ request('fecha_inicio') }}&fecha_fin={{ request('fecha_fin') }}"
-                                                    class="btn btn-sm btn-outline-info"
-                                                    title="Historial del vendedor"
-                                                    data-bs-toggle="tooltip">
+                                                class="btn btn-sm btn-outline-info"
+                                                title="Historial del vendedor"
+                                                data-bs-toggle="tooltip">
                                                     <i class="bi bi-clock-history"></i>
                                                 </a>
+                                                
+                                                <!-- Botón Crear/Reactivar en Identity -->
+                                                @if(isset($vendedor->mostrar_boton_crear) && $vendedor->mostrar_boton_crear)
+                                                    @if($vendedor->existe_en_identity == 0)
+                                                        <button type="button" 
+                                                                class="btn btn-sm btn-outline-success"
+                                                                onclick="crearUsuarioIdentity('{{ $id }}', '{{ addslashes($nombre) }}', 'crear')"
+                                                                title="Crear usuario en el sistema Identity"
+                                                                data-bs-toggle="tooltip">
+                                                            <i class="bi bi-person-plus"></i>
+                                                        </button>
+                                                    @elseif($vendedor->identity_activo == 0)
+                                                        <button type="button" 
+                                                                class="btn btn-sm btn-outline-warning"
+                                                                onclick="crearUsuarioIdentity('{{ $id }}', '{{ addslashes($nombre) }}', 'reactivar')"
+                                                                title="Reactivar usuario en Identity"
+                                                                data-bs-toggle="tooltip">
+                                                            <i class="bi bi-arrow-repeat"></i>
+                                                        </button>
+                                                    @endif
+                                                @endif
                                             </div>
                                         </td>
                                     </tr>
@@ -847,6 +868,65 @@
             background: '#fff',
             customClass: {
                 image: 'img-fluid rounded'
+            }
+        });
+    }
+
+    function crearUsuarioIdentity(id, nombre, accion) {
+        let titulo = accion === 'reactivar' ? 'Reactivar empleado' : 'Crear empleado interno';
+        let texto = accion === 'reactivar' 
+            ? `¿Desea reactivar al vendedor <strong>${nombre}</strong> en el sistema?<br>
+            <small class="text-muted">El usuario existe pero está inactivo. Se reactivará y actualizarán sus datos.</small>`
+            : `¿Desea crear el vendedor <strong>${nombre}</strong> como empleado interno?<br>
+            <small class="text-muted">Se creará un registro en AspNetUsers con rol VENDEDORES.</small>`;
+        
+        Swal.fire({
+            title: titulo,
+            html: texto,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: accion === 'reactivar' ? '#ffc107' : '#28a745',
+            cancelButtonColor: '#dc3545',
+            confirmButtonText: accion === 'reactivar' ? 'Sí, reactivar' : 'Sí, crear',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire({
+                    title: accion === 'reactivar' ? 'Reactivando...' : 'Creando...',
+                    text: 'Por favor espere',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+                
+                fetch('{{ route("cpanel.vendedores.crear-identity") }}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ id: id, accion: accion })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            title: '¡Completado!',
+                            text: data.message,
+                            icon: 'success',
+                            confirmButtonText: 'OK'
+                        }).then(() => {
+                            location.reload();
+                        });
+                    } else {
+                        Swal.fire('Error', data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire('Error', 'Ocurrió un error al procesar la solicitud', 'error');
+                });
             }
         });
     }

@@ -708,32 +708,39 @@
                   </li>
                 </ul>
               </li>
-              <li class="nav-item">
+              <li class="nav-item {{ session('menu_active') == 'Proveedor Mercancía' ? 'menu-open' : '' }}">
                 <a href="#" class="nav-link">
-                  <i class="nav-icon bi bi-tree-fill"></i>
+                  <i class="nav-icon bi bi-truck"></i>
                   <p>
-                    UI Elements
+                    Proveedor Mercancía
                     <i class="nav-arrow bi bi-chevron-right"></i>
                   </p>
                 </a>
                 <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="./UI/general.html" class="nav-link">
+                    <a href="{{ route('cpanel.proveedor.mercancia.listado') }}" class="nav-link {{ session('submenu_active') == 'Listado Proveedores' ? 'active' : '' }}">
                       <i class="nav-icon bi bi-circle"></i>
-                      <p>General</p>
+                      <p>Listado Proveedores</p>
                     </a>
                   </li>
+                </ul>
+                <ul class="nav nav-treeview">
+                  <!-- Opción Registrar Pagos -->
                   <li class="nav-item">
-                    <a href="./UI/icons.html" class="nav-link">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Icons</p>
-                    </a>
+                      <a href="{{ route('cpanel.proveedor.mercancia.registrar_pagos') }}" 
+                        class="nav-link {{ session('submenu_active') == 'Registrar Pagos' ? 'active' : '' }}">
+                          <i class="nav-icon bi bi-circle"></i>
+                          <p>Registrar Pagos</p>
+                      </a>
                   </li>
+
+                  <!-- Opción Registrar Facturas -->
                   <li class="nav-item">
-                    <a href="./UI/timeline.html" class="nav-link">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Timeline</p>
-                    </a>
+                      <a href="{{ route('cpanel.proveedor.mercancia.registrar_facturas') }}" 
+                        class="nav-link {{ session('submenu_active') == 'Registrar Facturas' ? 'active' : '' }}">
+                          <i class="nav-icon bi bi-circle"></i>
+                          <p>Registrar Facturas</p>
+                      </a>
                   </li>
                 </ul>
               </li>

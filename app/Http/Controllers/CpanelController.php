@@ -543,10 +543,318 @@ class CpanelController extends Controller
         // 5️⃣ Obtener sucursal activa
         $sucursalId = session('sucursal_id');
 
-        $indices = GeneralHelper::ObtenerSinVentaSucursales($filtroFecha, $sucursalId);
+        // $indices = GeneralHelper::ObtenerSinVentaSucursales($filtroFecha, $sucursalId);
+        $indices = GeneralHelper::ObtenerAutomaticamenteProductosBajaDemanda($filtroFecha, $sucursalId);
 
-        // dd($indices->detalles->first());
+        // dd($indices->detalles->first()); //SucursalNombre
 
         return view('cpanel.resumen.baja_demanda', compact('indices'));
     } 
+
+    public function ejecutarAutomatizacion(Request $request)
+    {
+        try {
+            // Aumentar tiempo de ejecución
+            set_time_limit(600);
+            
+            // Validar datos
+            $request->validate([
+                'fecha_inicio' => 'required|date',
+                'fecha_fin' => 'required|date',
+                'sucursal_id' => 'required|integer|in:3,4,5,7' // Obligatorio y solo sucursales válidas
+            ]);
+
+            // Usar últimos 2 meses como período fijo
+            $fechaInicio = now()->subMonths(2)->startOfDay();
+            $fechaFin = now()->endOfDay();
+
+            \Log::info('========== INICIO AUTOMATIZACION ==========');
+            \Log::info('Fecha proceso: ' . now()->format('Y-m-d H:i:s'));
+            \Log::info('Periodo analisis: ' . $fechaInicio->format('Y-m-d') . ' al ' . $fechaFin->format('Y-m-d'));
+
+            // Configurar días de gracia para no reprocesar
+            $diasGracia = 90;
+            $fechaLimiteReproceso = now()->subDays($diasGracia);
+            \Log::info("No se reprocesaran productos actualizados en los ultimos {$diasGracia} dias");
+
+            $filtroFecha = new ParametrosFiltroFecha(
+                null,
+                null,
+                null,
+                false,
+                $fechaInicio,
+                $fechaFin
+            );
+
+            $sucursalId = $request->input('sucursal_id');
+            
+            // Obtener nombre de la sucursal
+            $nombreSucursal = DB::table('Sucursales')
+                ->where('Id', $sucursalId)
+                ->value('Nombre') ?? 'Sucursal ' . $sucursalId;
+            
+            \Log::info("Procesando sucursal: {$nombreSucursal} (ID: {$sucursalId})");
+
+            // Obtener productos con baja demanda para UNA sucursal
+            $bajaDemanda = GeneralHelper::ObtenerAutomaticamenteProductosBajaDemanda($filtroFecha, $sucursalId);
+            
+            $totalProductos = $bajaDemanda->detalles->count();
+            \Log::info('Total productos encontrados: ' . $totalProductos);
+            
+            if ($totalProductos == 0) {
+                return response()->json([
+                    'success' => true,
+                    'mensaje' => "No hay productos con baja demanda en {$nombreSucursal}",
+                    'total_analizados' => 0,
+                    'productos_afectados' => 0
+                ]);
+            }
+            
+            // Procesar en lotes de 50 productos
+            $loteSize = 50;
+            $totalLotes = ceil($totalProductos / $loteSize);
+            
+            \Log::info("Procesando en {$totalLotes} lotes de {$loteSize} productos");
+            
+            $productosProcesados = [];
+            $productosConError = [];
+            $productosPrecioMantenido = [];
+            $productosSaltadosPorReproceso = [];
+            
+            $contadorCategorias = [
+                'rotacionLenta' => 0,
+                'riesgoEstancamiento' => 0,
+                'mercanciaCritica' => 0,
+                'remateTotal' => 0,
+                'nuevaColeccion' => 0,
+                'preciosMantenidos' => 0,
+                'saltadosReproceso' => 0
+            ];
+            
+            $productosArray = $bajaDemanda->detalles->values();
+            
+            for ($lote = 0; $lote < $totalLotes; $lote++) {
+                $inicio = $lote * $loteSize;
+                $loteProductos = $productosArray->slice($inicio, $loteSize);
+                
+                \Log::info("Procesando lote " . ($lote + 1) . " de {$totalLotes}");
+                
+                foreach ($loteProductos as $index => $item) {
+                    $productoId = $item->producto_id;
+                    $codigo = $item->producto['codigo'];
+                    $descripcion = $item->producto['descripcion'];
+                    $fechaCreacion = $item->producto['fecha_creacion'];
+                    $existencia = $item->producto['existencia'];
+                    
+                    // Obtener el costo desde la tabla Productos
+                    $costoDivisa = DB::table('Productos')
+                        ->where('ID', $productoId)
+                        ->value('CostoDivisa') ?? 0;
+                    
+                    $pvpActual = $item->producto['pvp_divisa'] ?? 0;
+                    
+                    // Verificar si ya fue procesado recientemente
+                    $fechaUltimoCambio = DB::table('ProductoSucursal')
+                        ->where('ProductoId', $productoId)
+                        ->where('SucursalId', $sucursalId)
+                        ->value('FechaNuevoPrecio');
+                    
+                    if ($fechaUltimoCambio && Carbon::parse($fechaUltimoCambio) > $fechaLimiteReproceso) {
+                        $contadorCategorias['saltadosReproceso']++;
+                        $productosSaltadosPorReproceso[] = [
+                            'id' => $productoId,
+                            'codigo' => $codigo,
+                            'descripcion' => $descripcion,
+                            'fecha_ultimo_cambio' => Carbon::parse($fechaUltimoCambio)->format('Y-m-d H:i:s')
+                        ];
+                        continue;
+                    }
+                    
+                    // Calcular antigüedad en meses
+                    $mesesAntiguedad = now()->diffInMonths($fechaCreacion);
+                    
+                    // Determinar porcentaje de descuento según antigüedad
+                    $porcentajeDescuento = 0;
+                    $categoria = '';
+                    
+                    if ($mesesAntiguedad >= 2 && $mesesAntiguedad < 5) {
+                        $porcentajeDescuento = 20;
+                        $categoria = 'Rotacion Lenta';
+                        $contadorCategorias['rotacionLenta']++;
+                    } elseif ($mesesAntiguedad >= 5 && $mesesAntiguedad < 8) {
+                        $porcentajeDescuento = 30;
+                        $categoria = 'Riesgo Estancamiento';
+                        $contadorCategorias['riesgoEstancamiento']++;
+                    } elseif ($mesesAntiguedad >= 8 && $mesesAntiguedad < 12) {
+                        $porcentajeDescuento = 50;
+                        $categoria = 'Mercancia Critica';
+                        $contadorCategorias['mercanciaCritica']++;
+                    } elseif ($mesesAntiguedad >= 12) {
+                        $porcentajeDescuento = 100;
+                        $categoria = 'Remate Total';
+                        $contadorCategorias['remateTotal']++;
+                    } else {
+                        $contadorCategorias['nuevaColeccion']++;
+                        continue;
+                    }
+                    
+                    // Calcular ganancia actual
+                    $gananciaActual = $pvpActual - $costoDivisa;
+                    
+                    // ============================================
+                    // REGLA CORREGIDA: Productos con pérdida o sin ganancia
+                    // ============================================
+                    if ($gananciaActual <= 0) {
+                        // NO hacer nada, mantener el precio actual
+                        $contadorCategorias['preciosMantenidos']++;
+                        
+                        \Log::info("[PRECIO MANTENIDO] Producto ID: {$productoId}, Sucursal: {$sucursalId}");
+                        \Log::info("   Codigo: {$codigo}");
+                        \Log::info("   Costo: $" . number_format($costoDivisa, 2));
+                        \Log::info("   PVP Actual: $" . number_format($pvpActual, 2));
+                        \Log::info("   Ganancia: $" . number_format($gananciaActual, 2) . " (Perdida o sin ganancia)");
+                        \Log::info("   -> Se MANTIENE el precio actual: $" . number_format($pvpActual, 2));
+                        
+                        $productosPrecioMantenido[] = [
+                            'id' => $productoId,
+                            'codigo' => $codigo,
+                            'descripcion' => $descripcion,
+                            'costo' => round($costoDivisa, 2),
+                            'pvp_actual' => round($pvpActual, 2),
+                            'ganancia' => round($gananciaActual, 2),
+                            'razon' => 'Producto en perdida o sin ganancia'
+                        ];
+                        
+                        continue; // Saltar al siguiente producto, NO actualizar
+                    }
+                    
+                    // ============================================
+                    // Producto con ganancia positiva: aplicar descuento
+                    // ============================================
+                    $reduccion = $gananciaActual * ($porcentajeDescuento / 100);
+                    $nuevoPvp = $pvpActual - $reduccion;
+                    
+                    // Asegurar que el nuevo precio no sea menor al costo
+                    if ($nuevoPvp < $costoDivisa) {
+                        $nuevoPvp = $costoDivisa;
+                    }
+                    $nuevoPvp = round($nuevoPvp, 2);
+                    
+                    // Si el precio actual ya es menor o igual al propuesto, mantener
+                    if ($pvpActual <= $nuevoPvp) {
+                        $contadorCategorias['preciosMantenidos']++;
+                        \Log::info("[PRECIO MANTENIDO] {$codigo} - Actual: \${$pvpActual} <= Propuesto: \${$nuevoPvp}");
+                        continue;
+                    }
+                    
+                    // Log para productos que se van a actualizar
+                    if ($lote == 0 && $index < 10) {
+                        \Log::info("[ACTUALIZANDO] Producto ID: {$productoId}, Sucursal: {$sucursalId}");
+                        \Log::info("   Codigo: {$codigo}");
+                        \Log::info("   Costo: $" . number_format($costoDivisa, 2));
+                        \Log::info("   Precio Actual: $" . number_format($pvpActual, 2));
+                        \Log::info("   Ganancia: $" . number_format($gananciaActual, 2));
+                        \Log::info("   Antiguedad: {$mesesAntiguedad} meses, Categoria: {$categoria}");
+                        \Log::info("   Descuento aplicado: {$porcentajeDescuento}%");
+                        \Log::info("   Reduccion: $" . number_format($reduccion, 2));
+                        \Log::info("   -> Nuevo Precio: $" . number_format($nuevoPvp, 2));
+                    }
+                    
+                    try {
+                        $existe = DB::table('ProductoSucursal')
+                            ->where('ProductoId', $productoId)
+                            ->where('SucursalId', $sucursalId)
+                            ->exists();
+                        
+                        if (!$existe) {
+                            \Log::warning("[ADVERTENCIA] No existe registro para ProductoId: {$productoId}");
+                            continue;
+                        }
+                        
+                        $actualizado = DB::table('ProductoSucursal')
+                            ->where('ProductoId', $productoId)
+                            ->where('SucursalId', $sucursalId)
+                            ->update([
+                                'PvpAnterior' => $pvpActual,
+                                'NuevoPvp' => $nuevoPvp,
+                                'PvpDivisa' => $nuevoPvp,
+                                'FechaNuevoPrecio' => now()
+                            ]);
+                        
+                        if ($actualizado) {
+                            $productosProcesados[] = [
+                                'id' => $productoId,
+                                'codigo' => $codigo,
+                                'descripcion' => $descripcion,
+                                'categoria' => $categoria,
+                                'antiguedad_meses' => round($mesesAntiguedad, 1),
+                                'precio_anterior' => round($pvpActual, 2),
+                                'nuevo_precio' => round($nuevoPvp, 2),
+                                'porcentaje_descuento' => $porcentajeDescuento,
+                                'costo' => round($costoDivisa, 2),
+                                'existencia' => $existencia,
+                                'reduccion' => round($pvpActual - $nuevoPvp, 2)
+                            ];
+                        }
+                        
+                    } catch (\Exception $e) {
+                        $productosConError[] = [
+                            'id' => $productoId,
+                            'error' => $e->getMessage()
+                        ];
+                        \Log::error("[ERROR] Producto {$productoId}: " . $e->getMessage());
+                    }
+                }
+                
+                unset($loteProductos);
+                gc_collect_cycles();
+                
+                \Log::info("Lote " . ($lote + 1) . " completado. Actualizados: " . count($productosProcesados));
+            }
+            
+            // ============================================
+            // REGISTRAR RESUMEN FINAL EN LOG
+            // ============================================
+            \Log::info('========== RESUMEN FINAL AUTOMATIZACION ==========');
+            \Log::info("Sucursal: {$nombreSucursal} (ID: {$sucursalId})");
+            \Log::info('Estadisticas:');
+            \Log::info("   |- Total productos encontrados: " . $totalProductos);
+            \Log::info("   |- Nueva Coleccion (sin cambios): " . $contadorCategorias['nuevaColeccion']);
+            \Log::info("   |- Saltados por reproceso: " . $contadorCategorias['saltadosReproceso']);
+            \Log::info("   |- Precios mantenidos (perdida o ya menor): " . $contadorCategorias['preciosMantenidos']);
+            \Log::info("   |- Rotacion Lenta (20%): " . $contadorCategorias['rotacionLenta']);
+            \Log::info("   |- Riesgo Estancamiento (30%): " . $contadorCategorias['riesgoEstancamiento']);
+            \Log::info("   |- Mercancia Critica (50%): " . $contadorCategorias['mercanciaCritica']);
+            \Log::info("   |- Remate Total (100%): " . $contadorCategorias['remateTotal']);
+            \Log::info("   '- Total productos actualizados: " . count($productosProcesados));
+            
+            \Log::info('========== FIN AUTOMATIZACION ==========');
+            
+            return response()->json([
+                'success' => true,
+                'mensaje' => "Se actualizaron " . count($productosProcesados) . " productos en {$nombreSucursal}",
+                'sucursal_id' => $sucursalId,
+                'sucursal_nombre' => $nombreSucursal,
+                'total_analizados' => $totalProductos,
+                'productos_afectados' => count($productosProcesados),
+                'productos_mantenidos' => $contadorCategorias['preciosMantenidos'],
+                'productos_saltados_reproceso' => $contadorCategorias['saltadosReproceso'],
+                'dias_gracia' => $diasGracia,
+                'categorias' => $contadorCategorias,
+                'detalles' => $productosProcesados,           // 432 productos actualizados
+                'detalles_mantenidos' => $productosPrecioMantenido,  // ← 148 productos mantenidos
+                'detalles_saltados' => $productosSaltadosPorReproceso, // ← productos saltados (si hay)
+                'errores' => $productosConError
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('ERROR GENERAL en automatizacion: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'success' => false,
+                'mensaje' => 'Error: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

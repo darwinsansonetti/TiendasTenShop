@@ -14,6 +14,7 @@ use App\Http\Controllers\CuadreController;
 use App\Http\Controllers\VentasController;
 use App\Http\Controllers\ContabilidadController;
 use App\Http\Controllers\EmpleadosController;
+use App\Http\Controllers\ProveedoresController;
 
 /*
 |--------------------------------------------------------------------------
@@ -209,6 +210,9 @@ Route::middleware('auth')->group(function() {
     // Guardar nuevo empleado
     Route::post('/cpanel/empleados/internos/store', [EmpleadosController::class, 'guardarEmpleado'])->name('cpanel.empleados.internos.guardar');
 
+    // Guardar Usuario como empleado interno
+    Route::post('/cpanel/vendedores/crear-identity', [EmpleadosController::class, 'crearUsuarioIdentity'])->name('cpanel.vendedores.crear-identity');
+
     // Obtener siguiente codigo de vendedor a asignar
     Route::get('/cpanel/empleados/obtener-proximo-vendedor-id/{sucursalId}', [EmpleadosController::class, 'obtenerProximoVendedorId'])->name('cpanel.empleados.obtener.proximo.vendedor.id');
 
@@ -280,6 +284,57 @@ Route::middleware('auth')->group(function() {
     // Cerra Liberalidad
     Route::post('/cpanel/empleados/liberalidad/cerrar', [EmpleadosController::class, 'cerrarLiberalidad'])
     ->name('cpanel.empleados.liberalidad.cerrar');
+
+    // Listado de proveedores de mercancia
+    Route::get('/cpanel/proveedores/mercancias/listado', [ProveedoresController::class, 'listado_proveedores_mercancia'])->name('cpanel.proveedor.mercancia.listado');
+
+    // Proveedores - Crear nuevo
+    Route::get('/cpanel/proveedores/crear', [ProveedoresController::class, 'crearProveedor'])->name('cpanel.proveedores.crear');
+
+    // Proveedores - Guardar nuevo
+    Route::post('/cpanel/proveedores/guardar', [ProveedoresController::class, 'guardarProveedor'])->name('cpanel.proveedores.guardar');
+
+    // Proveedores - Editar
+    Route::get('/cpanel/proveedores/editar/{id}', [ProveedoresController::class, 'editarProveedor'])
+        ->name('cpanel.proveedores.editar');
+
+    Route::put('/cpanel/proveedores/actualizar/{id}', [ProveedoresController::class, 'actualizarProveedor'])
+        ->name('cpanel.proveedores.actualizar');
+
+    // Eliminar proveedor
+    Route::delete('/cpanel/proveedores/eliminar', [ProveedoresController::class, 'eliminarProveedor'])
+        ->name('cpanel.proveedores.eliminar');
+
+    // Proveedores - Detalle
+    Route::get('/cpanel/proveedores/detalle/{id}', [ProveedoresController::class, 'detalleProveedor'])
+        ->name('cpanel.proveedores.detalle');
+
+    // Registrar Pagos - Listado de proveedores
+    Route::get('/proveedor/registrar-pagos', [ProveedoresController::class, 'registrarPagosIndex'])
+        ->name('cpanel.proveedor.mercancia.registrar_pagos');
+
+    // Obtener facturas pendientes de un proveedor (para AJAX)
+    Route::get('/proveedor/{id}/facturas/pendientes', [ProveedoresController::class, 'getFacturasPendientes'])
+        ->name('cpanel.proveedor.facturas.pendientes');
+
+    // Registrar pago a proveedor
+    Route::get('/proveedor/listar-proveedores', [ProveedoresController::class, 'registrarPagosIndex'])
+        ->defaults('modo', 'pagos')
+        ->name('cpanel.proveedor.mercancia.registrar_pagos');
+
+    // Proveedores - Registrar Pago
+    Route::get('/cpanel/proveedores/registrar/pago/{id}', [ProveedoresController::class, 'pagarProveedor'])
+        ->name('cpanel.proveedores.pagar');
+
+    // Registrar Facturas
+    Route::get('/proveedor/registrar-facturas', [ProveedoresController::class, 'registrarPagosIndex'])
+        ->defaults('modo', 'facturas')
+        ->name('cpanel.proveedor.mercancia.registrar_facturas');
+
+    // Ruta para la automatización
+    Route::post('/cpanel/automatizacion/ejecutar', [CpanelController::class, 'ejecutarAutomatizacion'])
+        ->name('cpanel.automatizacion.ejecutar')
+        ->middleware('auth');
 });
 
 

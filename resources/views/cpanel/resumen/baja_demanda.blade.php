@@ -299,13 +299,13 @@
                                 
                                 <!-- Código -->
                                 <td>
-                                    <span class="badge bg-light text-dark border">{{ $detalle->producto['codigo'] }}</span>
+                                    <span class="badge bg-light text-dark border" title="{{ $detalle->producto['sucursal_nombre'] ?? '' }}">{{ $detalle->producto['codigo'] }}</span>
                                 </td>
                                 
                                 <!-- Descripción -->
                                 <td>
                                     <div class="d-flex flex-column">
-                                        <span class="fw-bold text-dark" data-bs-toggle="tooltip" title="{{ $detalle->producto['descripcion'] ?? '' }}">
+                                        <span class="fw-bold text-dark" data-bs-toggle="tooltip" title="{{ $detalle->producto['sucursal_nombre'] ?? '' }}">
                                             {{ Str::limit($detalle->producto['descripcion'] ?? 'Sin descripción', 40) }}
                                         </span>
                                     </div>
@@ -606,6 +606,22 @@
       </div>
     </div>
   </div>
+</div>
+
+<!-- Botón flotante de automatización -->
+<div class="position-fixed" style="bottom: 30px; right: 30px; z-index: 1000;">
+    <button type="button" 
+            class="btn btn-success btn-lg rounded-circle shadow-lg d-flex align-items-center justify-content-center"
+            id="btnEjecutarAutomatizacion"
+            style="width: 80px; height: 80px; background: linear-gradient(135deg, #28a745, #20c997); border: none; box-shadow: 0 5px 20px rgba(40,167,69,0.4);"
+            data-bs-toggle="tooltip"
+            data-bs-placement="left"
+            title="Ejecutar Automatización de Precios">
+        <i class="bi bi-robot" style="font-size: 40px; color: white;"></i>
+        <span class="position-absolute top-0 start-100 translate-middle p-2 bg-danger border border-light rounded-circle animate-pulse">
+            <span class="visually-hidden">Nuevo</span>
+        </span>
+    </button>
 </div>
 
 @endsection
@@ -2040,6 +2056,1078 @@
         var ruta = '{{ url("/") }}' + '/productos/' + id;
         window.location.href = ruta;
     }
+
+    // ============================================
+    // AUTOMATIZACIÓN DE BAJA DEMANDA
+    // ============================================
+
+    // Variable para controlar si ya está ejecutando
+    let ejecutandoAutomatizacion = false;
+
+    // Evento del botón de automatización
+    document.getElementById('btnEjecutarAutomatizacion')?.addEventListener('click', function() {
+        if (ejecutandoAutomatizacion) {
+            showToast('Ya hay una automatización en ejecución', 'warning');
+            return;
+        }
+        
+        mostrarModalConfirmacion();
+    });
+
+    // Función para mostrar modal de confirmación con información detallada
+    function mostrarModalConfirmacion() {
+        const fechaInicio = document.getElementById('fecha_inicio').value;
+        const fechaFin = document.getElementById('fecha_fin').value;
+        const sucursalNombre = '{{ session('sucursal_nombre', 'Todas las sucursales') }}';
+        
+        Swal.fire({
+            title: '<i class="bi bi-robot me-2" style="font-size: 28px;"></i> Automatización de Precios',
+            html: `
+                <div class="container-fluid px-0">
+                    <!-- Descripción breve -->
+                    <p class="mb-3 text-muted" style="font-size: 14px;">
+                        Se aplicarán descuentos automáticos según la antigüedad de los productos.
+                        Solo se procesarán productos con más de 2 meses de creación.
+                    </p>
+                    
+                    <!-- Tabla de descuentos -->
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <div class="border rounded p-2 text-center">
+                                <small class="text-muted">2 - 5 meses</small>
+                                <h5 class="mb-0 text-danger">-20%</h5>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-2 text-center">
+                                <small class="text-muted">5 - 8 meses</small>
+                                <h5 class="mb-0 text-danger">-30%</h5>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-2 text-center">
+                                <small class="text-muted">8 - 12 meses</small>
+                                <h5 class="mb-0 text-danger">-50%</h5>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-2 text-center">
+                                <small class="text-muted">&gt; 12 meses</small>
+                                <h5 class="mb-0 text-danger">-100%</h5>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Información adicional -->
+                    <div class="small text-center text-muted">
+                        <i class="bi bi-building me-1 ms-2"></i> ${sucursalNombre}
+                    </div>
+                </div>
+            `,
+            icon: 'info',
+            showCancelButton: true,
+            confirmButtonColor: '#28a745',
+            confirmButtonText: '<i class="bi bi-play-fill me-1"></i> Ejecutar',
+            cancelButtonText: '<i class="bi bi-x-circle me-1"></i> Cancelar',
+            width: '420px',
+            customClass: {
+                popup: 'rounded-4',
+                title: 'fs-4 fw-bold'
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                ejecutarAutomatizacion();
+            }
+        });
+    }
+
+    // Función para ejecutar la automatización
+    async function ejecutarAutomatizacion() {
+        // Validar que haya una sucursal seleccionada
+        const sucursalId = {{ session('sucursal_id', 0) }};
+        const sucursalNombre = '{{ session('sucursal_nombre', '') }}';
+        
+        if (sucursalId === 0 || sucursalId === '0') {
+            Swal.fire({
+                title: '<i class="bi bi-exclamation-triangle me-2"></i> Sucursal no seleccionada',
+                html: `
+                    <div class="text-start">
+                        <p>Para ejecutar la automatización, debes seleccionar una sucursal específica.</p>
+                        <div class="alert alert-warning mt-3">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>¿Cómo seleccionar una sucursal?</strong>
+                            <ul class="mt-2 mb-0">
+                                <li>Ve al filtro superior de la página</li>
+                                <li>Selecciona una sucursal específica (3, 4, 5 o 7)</li>
+                                <li>Luego vuelve a intentar ejecutar la automatización</li>
+                            </ul>
+                        </div>
+                        <p class="small text-muted mt-3">
+                            <i class="bi bi-shield-check"></i> 
+                            La automatización solo puede ejecutarse por sucursal para evitar sobrecarga del sistema.
+                        </p>
+                    </div>
+                `,
+                icon: 'warning',
+                confirmButtonText: '<i class="bi bi-check-circle me-2"></i>Entendido',
+                confirmButtonColor: '#ffc107'
+            });
+            return;
+        }
+        
+        // Verificar que la sucursal sea válida (3,4,5,7 - excluyendo almacén)
+        const sucursalesValidas = [3, 4, 5, 7];
+        if (!sucursalesValidas.includes(parseInt(sucursalId))) {
+            Swal.fire({
+                title: '<i class="bi bi-exclamation-triangle me-2"></i> Sucursal no válida',
+                html: `
+                    <div class="text-start">
+                        <p>La sucursal seleccionada no es válida para ejecutar la automatización.</p>
+                        <div class="alert alert-danger mt-3">
+                            <i class="bi bi-shop me-2"></i>
+                            <strong>Sucursal actual:</strong> ${sucursalNombre || 'ID: ' + sucursalId}
+                        </div>
+                        <p class="mt-2">Las sucursales válidas para automatización son:</p>
+                        <ul>
+                            <li>Sucursal 3</li>
+                            <li>Sucursal 4</li>
+                            <li>Sucursal 5</li>
+                            <li>Sucursal 7</li>
+                        </ul>
+                        <p class="small text-muted mt-2">
+                            <i class="bi bi-info-circle"></i> 
+                            La sucursal 6 (Almacén) no está disponible para ventas.
+                        </p>
+                    </div>
+                `,
+                icon: 'error',
+                confirmButtonText: '<i class="bi bi-check-circle me-2"></i>Entendido',
+                confirmButtonColor: '#dc3545'
+            });
+            return;
+        }
+        
+        ejecutandoAutomatizacion = true;
+        
+        // Mostrar progreso
+        Swal.fire({
+            title: '<i class="bi bi-robot me-2"></i> Ejecutando Automatización',
+            html: `
+                <div class="text-center">
+                    <div class="spinner-border text-success mb-3" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p id="mensajeProgreso" class="mb-2">Iniciando análisis de productos...</p>
+                    <div class="alert alert-info py-1 mb-2">
+                        <small><i class="bi bi-shop me-1"></i> Sucursal: <strong>${sucursalNombre}</strong></small>
+                    </div>
+                    <div class="progress mt-3" style="height: 10px;">
+                        <div id="barraProgreso" class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                            role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <div class="mt-2">
+                        <small id="detalleProgreso" class="text-muted">Preparando datos...</small>
+                    </div>
+                </div>
+            `,
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                simularProgreso();
+            }
+        });
+        
+        try {
+            // Obtener datos del filtro
+            const fechaInicio = document.getElementById('fecha_inicio').value;
+            const fechaFin = document.getElementById('fecha_fin').value;
+            
+            // Actualizar mensaje
+            actualizarMensajeProgreso('Analizando productos con baja demanda...', 20);
+            
+            // Llamada AJAX a la automatización
+            const response = await fetch('{{ route("cpanel.automatizacion.ejecutar") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    fecha_inicio: fechaInicio,
+                    fecha_fin: fechaFin,
+                    sucursal_id: sucursalId
+                })
+            });
+            
+            actualizarMensajeProgreso('Aplicando ajustes de precio...', 60);
+            
+            const data = await response.json();
+            
+            actualizarMensajeProgreso('Finalizando y generando reporte...', 90);
+            
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            if (window.progresoInterval) clearInterval(window.progresoInterval);
+            
+            if (data.success) {
+                mostrarResultadoExitoso(data);
+            } else {
+                mostrarResultadoError(data);
+            }
+            
+        } catch (error) {
+            console.error('Error en automatización:', error);
+            if (window.progresoInterval) clearInterval(window.progresoInterval);
+            
+            Swal.fire({
+                title: '<i class="bi bi-exclamation-triangle me-2"></i> Error',
+                html: `
+                    <div class="text-start">
+                        <p>Ocurrió un error al ejecutar la automatización:</p>
+                        <div class="alert alert-danger">
+                            <i class="bi bi-bug me-2"></i>
+                            ${error.message || 'Error de conexión con el servidor'}
+                        </div>
+                        <p class="mb-0 small">Por favor, intente nuevamente o contacte al administrador.</p>
+                    </div>
+                `,
+                icon: 'error',
+                confirmButtonText: '<i class="bi bi-check-circle me-2"></i>Cerrar'
+            });
+        } finally {
+            ejecutandoAutomatizacion = false;
+        }
+    }
+
+    // Función para simular progreso
+    function simularProgreso() {
+        let progreso = 0;
+        const interval = setInterval(() => {
+            if (progreso < 95) {
+                progreso += Math.random() * 10;
+                if (progreso > 95) progreso = 95;
+                const barra = document.getElementById('barraProgreso');
+                if (barra) barra.style.width = progreso + '%';
+            }
+        }, 1000);
+        
+        // Guardar interval para limpiar después
+        window.progresoInterval = interval;
+    }
+
+    // Función para actualizar mensaje de progreso
+    function actualizarMensajeProgreso(mensaje, porcentaje) {
+        const mensajeEl = document.getElementById('mensajeProgreso');
+        const barraEl = document.getElementById('barraProgreso');
+        const detalleEl = document.getElementById('detalleProgreso');
+        
+        if (mensajeEl) mensajeEl.textContent = mensaje;
+        if (barraEl) barraEl.style.width = porcentaje + '%';
+        if (detalleEl) {
+            const mensajesDetalle = [
+                'Procesando información...',
+                'Calculando...',
+                'Aplicando reglas de negocio...',
+                'Generando sugerencias...',
+                'Actualizando base de datos...'
+            ];
+            const idx = Math.floor(Math.random() * mensajesDetalle.length);
+            detalleEl.textContent = mensajesDetalle[idx];
+        }
+    }
+
+    // Función para mostrar resultado exitoso
+    function mostrarResultadoExitoso(data) {
+        // Limpiar interval de progreso
+        if (window.progresoInterval) clearInterval(window.progresoInterval);
+        
+        // Calcular productos omitidos
+        const productosMantenidos = data.productos_mantenidos || 0;
+        const productosSaltados = data.productos_saltados_reproceso || 0;
+        const totalAnalizados = data.total_analizados || 0;
+        const productosAfectados = data.productos_afectados || 0;
+        const categorias = data.categorias || {};
+        const sucursalNombre = data.sucursal_nombre || 'N/A';
+        
+        // Mostrar el modal
+        Swal.fire({
+            title: '<i class="bi bi-check-circle-fill text-success me-2"></i> ¡Automatización Completada!',
+            html: `
+                <div class="text-start">
+                    <div class="alert alert-success">
+                        <i class="bi bi-info-circle me-2"></i>
+                        ${data.mensaje || 'La automatización se ejecutó correctamente'}
+                    </div>
+                    
+                    <!-- Tarjetas de resumen -->
+                    <div class="row mb-3">
+                        <div class="col-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center py-2">
+                                    <h4 class="mb-0 text-primary">${totalAnalizados}</h4>
+                                    <small>Productos analizados</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center py-2">
+                                    <h4 class="mb-0 text-success">${productosAfectados}</h4>
+                                    <small>Productos afectados</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center py-2">
+                                    <h4 class="mb-0 text-warning">${productosMantenidos}</h4>
+                                    <small>Precios mantenidos</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center py-2">
+                                    <h4 class="mb-0 text-secondary">${productosSaltados}</h4>
+                                    <small>Saltados (reproceso)</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Desglose por categoría -->
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header py-1">
+                                    <small class="fw-bold">Desglose por categoría</small>
+                                </div>
+                                <div class="card-body py-2">
+                                    <div class="row">
+                                        <div class="col-4">
+                                            <small class="text-muted">Rotación Lenta (20%):</small>
+                                            <h6 class="mb-0">${categorias.rotacionLenta || 0}</h6>
+                                        </div>
+                                        <div class="col-4">
+                                            <small class="text-muted">Riesgo Estancamiento (30%):</small>
+                                            <h6 class="mb-0">${categorias.riesgoEstancamiento || 0}</h6>
+                                        </div>
+                                        <div class="col-4">
+                                            <small class="text-muted">Mercancía Crítica (50%):</small>
+                                            <h6 class="mb-0">${categorias.mercanciaCritica || 0}</h6>
+                                        </div>
+                                        <div class="col-4 mt-1">
+                                            <small class="text-muted">Remate Total (100%):</small>
+                                            <h6 class="mb-0">${categorias.remateTotal || 0}</h6>
+                                        </div>
+                                        <div class="col-4 mt-1">
+                                            <small class="text-muted">Nueva Colección:</small>
+                                            <h6 class="mb-0">${categorias.nuevaColeccion || 0}</h6>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Productos Actualizados -->
+                    ${data.detalles && data.detalles.length > 0 ? `
+                        <div class="mb-3">
+                            <h6 class="text-success">
+                                <i class="bi bi-check-circle me-2"></i>
+                                Productos Actualizados (${data.detalles.length}):
+                            </h6>
+                            <div style="max-height: 200px; overflow-y: auto;">
+                                <table class="table table-sm table-hover">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Código</th>
+                                            <th>Producto</th>
+                                            <th class="text-end">Precio Actual</th>
+                                            <th class="text-end">Nuevo Precio</th>
+                                            <th class="text-center">Descuento</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${data.detalles.slice(0, 10).map(d => `
+                                            <tr>
+                                                <td><small>${d.codigo || 'N/A'}</small></td>
+                                                <td><small>${(d.descripcion || '').substring(0, 30)}...</small></td>
+                                                <td class="text-end text-danger">$${d.precio_anterior || 0}</td>
+                                                <td class="text-end text-success fw-bold">$${d.nuevo_precio || 0}</td>
+                                                <td class="text-center"><span class="badge bg-success">-${d.porcentaje_descuento || 0}%</span></td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                            ${data.detalles.length > 10 ? `<p class="text-muted small text-center mt-1">... y ${data.detalles.length - 10} productos más</p>` : ''}
+                        </div>
+                    ` : '<p class="text-muted text-center">No hay productos actualizados</p>'}
+                    
+                    <!-- Botones de exportación -->
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <button onclick="exportarResultadosActualizacionExcel(${JSON.stringify(data).replace(/"/g, '&quot;')})" 
+                                    class="btn btn-success btn-sm w-100">
+                                <i class="bi bi-file-excel me-2"></i>Exportar a Excel
+                            </button>
+                        </div>
+                        <div class="col-6">
+                            <button onclick="exportarResultadosActualizacionPDF(${JSON.stringify(data).replace(/"/g, '&quot;')})" 
+                                    class="btn btn-danger btn-sm w-100">
+                                <i class="bi bi-file-pdf me-2"></i>Exportar a PDF
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Información adicional -->
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-calendar-clock me-2"></i>
+                        <strong>Días de gracia:</strong> ${data.dias_gracia || 90} días
+                        <span class="mx-2">|</span>
+                        <i class="bi bi-shop me-2"></i>
+                        <strong>Sucursal:</strong> ${sucursalNombre}
+                        <span class="mx-2">|</span>
+                        <i class="bi bi-clock-history me-2"></i>
+                        <strong>Fecha:</strong> ${new Date().toLocaleString()}
+                    </div>
+                </div>
+            `,
+            icon: 'success',
+            confirmButtonText: '<i class="bi bi-check-circle me-2"></i>Aceptar',
+            showCancelButton: true,
+            cancelButtonText: '<i class="bi bi-arrow-repeat me-2"></i>Recargar página',
+            width: '850px'
+        }).then((result) => {
+            if (result.dismiss === Swal.DismissReason.cancel) {
+                location.reload();
+            }
+        });
+        
+        // ✅ Exportación automática SILENCIOSA (sin ningún tipo de alerta)
+        setTimeout(() => {
+            const sucursalNombre = data.sucursal_nombre || 'Todas';
+            const fecha = new Date().toISOString().split('T')[0];
+            const hora = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
+            
+            // Preparar datos para el Excel
+            const excelData = [];
+            
+            excelData.push(['REPORTE DE AUTOMATIZACIÓN DE PRECIOS']);
+            excelData.push(['Sucursal:', sucursalNombre]);
+            excelData.push(['Fecha:', new Date().toLocaleString()]);
+            excelData.push(['Días de gracia:', data.dias_gracia || 90]);
+            excelData.push([]);
+            
+            excelData.push(['RESUMEN GENERAL']);
+            excelData.push(['Total productos analizados', data.total_analizados || 0]);
+            excelData.push(['Productos afectados', data.productos_afectados || 0]);
+            excelData.push(['Precios mantenidos', data.productos_mantenidos || 0]);
+            excelData.push(['Saltados por reproceso', data.productos_saltados_reproceso || 0]);
+            excelData.push([]);
+            
+            const categorias = data.categorias || {};
+            excelData.push(['DESGLOSE POR CATEGORÍA']);
+            excelData.push(['Rotación Lenta (20%)', categorias.rotacionLenta || 0]);
+            excelData.push(['Riesgo Estancamiento (30%)', categorias.riesgoEstancamiento || 0]);
+            excelData.push(['Mercancía Crítica (50%)', categorias.mercanciaCritica || 0]);
+            excelData.push(['Remate Total (100%)', categorias.remateTotal || 0]);
+            excelData.push(['Nueva Colección', categorias.nuevaColeccion || 0]);
+            excelData.push([]);
+            
+            if (data.detalles && data.detalles.length > 0) {
+                excelData.push(['PRODUCTOS ACTUALIZADOS']);
+                excelData.push(['Código', 'Descripción', 'Categoría', 'Precio Anterior', 'Nuevo Precio', 'Descuento', 'Costo', 'Existencia']);
+                
+                data.detalles.forEach(d => {
+                    excelData.push([
+                        d.codigo || 'N/A',
+                        d.descripcion || '',
+                        d.categoria || '',
+                        d.precio_anterior || 0,
+                        d.nuevo_precio || 0,
+                        d.porcentaje_descuento || 0,
+                        d.costo || 0,
+                        d.existencia || 0
+                    ]);
+                });
+            }
+            
+            // Crear y descargar Excel SILENCIOSAMENTE
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet(excelData);
+            ws['!cols'] = [{ wch: 25 }, { wch: 50 }, { wch: 25 }, { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 15 }, { wch: 12 }];
+            XLSX.utils.book_append_sheet(wb, ws, 'Automatizacion');
+            
+            const nombreArchivo = `Automatizacion_${sucursalNombre}_${fecha}_${hora}.xlsx`;
+            XLSX.writeFile(wb, nombreArchivo);
+            
+            // Sin ningún tipo de alerta
+        }, 500);
+    }
+
+    // Función para mostrar error
+    function mostrarResultadoError(data) {
+        if (window.progresoInterval) clearInterval(window.progresoInterval);
+        
+        Swal.fire({
+            title: '<i class="bi bi-exclamation-triangle text-warning me-2"></i> Automatización Parcial',
+            html: `
+                <div class="text-start">
+                    <div class="alert alert-warning">
+                        <i class="bi bi-info-circle me-2"></i>
+                        ${data.mensaje || 'La automatización se completó con advertencias'}
+                    </div>
+                    
+                    ${data.errores && data.errores.length > 0 ? `
+                        <h6><i class="bi bi-exclamation-circle text-danger me-2"></i>Productos con error:</h6>
+                        <div style="max-height: 200px; overflow-y: auto;">
+                            <ul class="list-group list-group-flush small">
+                                ${data.errores.map(e => `
+                                    <li class="list-group-item text-danger">
+                                        <i class="bi bi-x-circle me-2"></i>
+                                        ${e}
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                    ` : ''}
+                </div>
+            `,
+            icon: 'warning',
+            confirmButtonText: '<i class="bi bi-check-circle me-2"></i>Cerrar'
+        });
+    }
+
+    // Función para descargar reporte
+    function descargarReporteAutomatizacion() {
+        // Implementar descarga de Excel con los resultados
+        showToast('Descargando reporte...', 'info');
+        
+        // Aquí puedes llamar a tu función de exportación
+        setTimeout(() => {
+            exportarExcelBajaDemanda();
+        }, 500);
+    }
+
+    function exportarExcelBajaDemanda() {
+        const tabla = document.getElementById('tablaIndiceRotacion');
+
+        if (!tabla) {
+            alert('No se encontró la tabla para exportar');
+            return;
+        }
+
+        const datos = [];
+
+        /* =========================
+        ENCABEZADOS
+        ========================== */
+        const headers = ['ID', 'Sucursal'];
+
+        tabla.querySelectorAll('thead th').forEach((th, index) => {
+            // Saltar Check (0) e Imagen (1)
+            if (index < 2) return;
+
+            const texto = th.textContent.trim();
+
+            if (!texto.toLowerCase().includes('accion') &&
+                !texto.toLowerCase().includes('acción')) {
+
+                headers.push(texto);
+
+                // 👉 Insertar "Paralelo" justo después de PVP
+                if (texto.toLowerCase().includes('pvp')) {
+                    headers.push('Paralelo');
+                }
+            }
+        });
+
+        datos.push(headers);
+
+        /* =========================
+        FILAS
+        ========================== */
+        tabla.querySelectorAll('tbody tr').forEach(fila => {
+            if (fila.style.display === 'none') return;
+
+            const rowData = [];
+
+            // --- Columna A: ID producto y Sucursal ---
+            const checkbox = fila.querySelector('.checkProductoRotacion');
+            const productoId = checkbox ? checkbox.value : '';
+            const sucursal = checkbox ? checkbox.dataset.sucursal : '';
+
+            rowData.push(productoId);
+            rowData.push(sucursal);
+
+            // --- Valor Paralelo desde el DOM ---
+            const paralelo = (() => {
+                const paraleloEl = fila.querySelector('#paralelo-' + productoId);
+                if (!paraleloEl) return '';
+                return parseFloat(
+                    paraleloEl.innerText
+                        .replace('P:', '')
+                        .replace('$', '')
+                        .trim()
+                ) || '';
+            })();
+
+            // --- Resto de columnas ---
+            fila.querySelectorAll('td').forEach((td, index) => {
+                if (index < 2) return;
+
+                const th = tabla.querySelector(`thead th:nth-child(${index + 1})`);
+                if (!th) return;
+
+                const textoTh = th.textContent.trim();
+
+                if (textoTh.toLowerCase().includes('accion') ||
+                    textoTh.toLowerCase().includes('acción')) {
+                    return;
+                }
+
+                let texto = '';
+
+                // ============================================
+                // MANEJO ESPECIAL PARA LA COLUMNA PVP
+                // ============================================
+                if (textoTh.toLowerCase().includes('pvp')) {
+                    // Buscar el precio real dentro de .precioPVP
+                    const precioSpan = td.querySelector('.precioPVP');
+                    if (precioSpan) {
+                        texto = precioSpan.textContent.replace('$', '').trim();
+                    } else {
+                        // Fallback: buscar cualquier número con $
+                        const pvpMatch = td.textContent.match(/\$([0-9.]+)/);
+                        if (pvpMatch) {
+                            texto = pvpMatch[1];
+                        } else {
+                            texto = td.textContent.trim().replace(/\n/g, ' ').replace(/\s+/g, ' ');
+                        }
+                    }
+                    
+                    // Convertir a número
+                    const numero = parseFloat(texto.replace(',', '.'));
+                    if (!isNaN(numero)) texto = numero;
+                    
+                    // Agregar el valor
+                    rowData.push(texto);
+                    
+                    // Agregar Paralelo justo después
+                    rowData.push(paralelo);
+                    return; // Salir porque ya procesamos esta columna
+                }
+                
+                // ============================================
+                // MANEJO ESPECIAL PARA LA COLUMNA COSTO
+                // ============================================
+                if (textoTh.toLowerCase().includes('costo')) {
+                    // Buscar el costo (es texto plano con $)
+                    const costoMatch = td.textContent.match(/\$([0-9.]+)/);
+                    if (costoMatch) {
+                        texto = costoMatch[1];
+                    } else {
+                        texto = td.textContent.trim().replace(/\n/g, ' ').replace(/\s+/g, ' ');
+                    }
+                    
+                    const numero = parseFloat(texto.replace(',', '.'));
+                    if (!isNaN(numero)) texto = numero;
+                    
+                    rowData.push(texto);
+                    return;
+                }
+                
+                // ============================================
+                // MANEJO GENERAL PARA OTRAS COLUMNAS
+                // ============================================
+                
+                // Verificar si tiene badge (pero NO para PVP porque ya lo procesamos)
+                const badge = td.querySelector('.badge');
+                if (badge && !textoTh.toLowerCase().includes('pvp')) {
+                    texto = badge.textContent.trim();
+                } else {
+                    texto = td.textContent.trim().replace(/\n/g, ' ').replace(/\s+/g, ' ');
+                }
+
+                // Índice
+                if (textoTh.includes('Índice') || textoTh.includes('Indice')) {
+                    const numero = parseFloat(texto.replace(',', '.'));
+                    if (!isNaN(numero)) texto = numero;
+                }
+
+                rowData.push(texto);
+            });
+
+            datos.push(rowData);
+        });
+
+        if (datos.length <= 1) {
+            alert('No hay datos para exportar');
+            return;
+        }
+
+        /* =========================
+        EXCEL
+        ========================== */
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(datos);
+
+        // Auto ancho columnas
+        const maxColLengths = [];
+        datos.forEach(row => {
+            row.forEach((cell, colIndex) => {
+                const length = String(cell).length;
+                maxColLengths[colIndex] = Math.max(maxColLengths[colIndex] || 10, length);
+            });
+        });
+
+        ws['!cols'] = maxColLengths.map(l => ({ wch: Math.min(l, 50) }));
+
+        XLSX.utils.book_append_sheet(wb, ws, 'Productos Baja Demanda');
+
+        const fecha = new Date().toISOString().split('T')[0];
+        XLSX.writeFile(wb, `Productos_Baja_Demanda_${fecha}.xlsx`);
+    }
+
+    // Función para exportar resultados a Excel
+    function exportarResultadosActualizacionExcel(data) {
+        const sucursalNombre = data.sucursal_nombre || 'Todas';
+        const fecha = new Date().toISOString().split('T')[0];
+        const hora = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
+        
+        // Preparar datos para el Excel
+        const excelData = [];
+        
+        // Encabezados principales
+        excelData.push(['REPORTE DE AUTOMATIZACIÓN DE PRECIOS']);
+        excelData.push(['Sucursal:', sucursalNombre]);
+        excelData.push(['Fecha:', new Date().toLocaleString()]);
+        excelData.push(['Días de gracia:', data.dias_gracia || 90]);
+        excelData.push([]);
+        
+        // Resumen
+        excelData.push(['RESUMEN GENERAL']);
+        excelData.push(['Total productos analizados', data.total_analizados || 0]);
+        excelData.push(['Productos afectados (actualizados)', data.productos_afectados || 0]);
+        excelData.push(['Precios mantenidos (sin cambios)', data.productos_mantenidos || 0]);
+        excelData.push(['Saltados por reproceso', data.productos_saltados_reproceso || 0]);
+        excelData.push([]);
+        
+        // Desglose por categoría
+        const categorias = data.categorias || {};
+        excelData.push(['DESGLOSE POR CATEGORÍA']);
+        excelData.push(['Rotación Lenta (20%)', categorias.rotacionLenta || 0]);
+        excelData.push(['Riesgo Estancamiento (30%)', categorias.riesgoEstancamiento || 0]);
+        excelData.push(['Mercancía Crítica (50%)', categorias.mercanciaCritica || 0]);
+        excelData.push(['Remate Total (100%)', categorias.remateTotal || 0]);
+        excelData.push(['Nueva Colección', categorias.nuevaColeccion || 0]);
+        excelData.push(['Precios mantenidos', categorias.preciosMantenidos || 0]);
+        excelData.push([]);
+        
+        // ============================================
+        // PRODUCTOS ACTUALIZADOS
+        // ============================================
+        if (data.detalles && data.detalles.length > 0) {
+            excelData.push(['PRODUCTOS ACTUALIZADOS (' + data.detalles.length + ')']);
+            excelData.push(['Código', 'Descripción', 'Categoría', 'Precio Anterior', 'Nuevo Precio', 'Descuento', 'Costo', 'Existencia']);
+            
+            data.detalles.forEach(d => {
+                excelData.push([
+                    d.codigo || 'N/A',
+                    d.descripcion || '',
+                    d.categoria || '',
+                    d.precio_anterior || 0,
+                    d.nuevo_precio || 0,
+                    d.porcentaje_descuento || 0,
+                    d.costo || 0,
+                    d.existencia || 0
+                ]);
+            });
+            excelData.push([]);
+        }
+        
+        // ============================================
+        // PRODUCTOS MANTENIDOS (NUEVO)
+        // ============================================
+        if (data.detalles_mantenidos && data.detalles_mantenidos.length > 0) {
+            excelData.push(['PRODUCTOS MANTENIDOS (' + data.detalles_mantenidos.length + ') - Sin cambios por pérdida']);
+            excelData.push(['Código', 'Descripción', 'Precio Actual', 'Costo', 'Ganancia', 'Razón']);
+            
+            data.detalles_mantenidos.forEach(d => {
+                excelData.push([
+                    d.codigo || 'N/A',
+                    d.descripcion || '',
+                    d.pvp_actual || d.precio_actual || 0,
+                    d.costo || 0,
+                    d.ganancia || 0,
+                    d.razon || 'Producto en pérdida o sin ganancia'
+                ]);
+            });
+            excelData.push([]);
+        }
+        
+        // ============================================
+        // PRODUCTOS SALTADOS POR REPROCESO (NUEVO)
+        // ============================================
+        if (data.detalles_saltados && data.detalles_saltados.length > 0) {
+            excelData.push(['PRODUCTOS SALTADOS POR REPROCESO (' + data.detalles_saltados.length + ')']);
+            excelData.push(['Código', 'Descripción', 'Fecha Último Cambio']);
+            
+            data.detalles_saltados.forEach(d => {
+                excelData.push([
+                    d.codigo || 'N/A',
+                    d.descripcion || '',
+                    d.fecha_ultimo_cambio || 'N/A'
+                ]);
+            });
+            excelData.push([]);
+        }
+        
+        // Crear y descargar Excel
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(excelData);
+        
+        // Ajustar anchos de columna
+        ws['!cols'] = [
+            { wch: 25 }, { wch: 50 }, { wch: 25 }, { wch: 18 }, 
+            { wch: 18 }, { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 30 }
+        ];
+        
+        XLSX.utils.book_append_sheet(wb, ws, 'Automatizacion');
+        
+        const nombreArchivo = `Automatizacion_${sucursalNombre}_${fecha}_${hora}.xlsx`;
+        XLSX.writeFile(wb, nombreArchivo);
+        
+        Swal.fire({
+            title: 'Exportación completada',
+            text: `Archivo Excel generado: ${nombreArchivo}`,
+            icon: 'success',
+            timer: 2000,
+            showConfirmButton: false
+        });
+    }
+
+    // Función para exportar resultados a PDF
+    function exportarResultadosActualizacionPDF(data) {
+        const sucursalNombre = data.sucursal_nombre || 'Todas';
+        const fecha = new Date().toLocaleString();
+        const categorias = data.categorias || {};
+        
+        // Mostrar loading
+        Swal.fire({
+            title: 'Generando PDF...',
+            text: 'Por favor espere',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        
+        // Crear documento PDF
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('landscape', 'mm', 'a4');
+        
+        // Título principal
+        doc.setFontSize(16);
+        doc.setTextColor(40, 167, 69);
+        doc.text('REPORTE DE AUTOMATIZACIÓN DE PRECIOS', 14, 20);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Sucursal: ${sucursalNombre}`, 14, 30);
+        doc.text(`Fecha: ${fecha}`, 14, 36);
+        doc.text(`Días de gracia: ${data.dias_gracia || 90} días`, 14, 42);
+        
+        let startY = 50;
+        
+        // ============================================
+        // TABLA DE RESUMEN GENERAL
+        // ============================================
+        doc.setFontSize(12);
+        doc.setTextColor(255, 255, 255);
+        doc.setFillColor(40, 167, 69);
+        doc.rect(14, startY, 180, 8, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.text('RESUMEN GENERAL', 16, startY + 6);
+        
+        startY += 10;
+        
+        const resumenData = [
+            ['Total productos analizados', data.total_analizados || 0],
+            ['Productos afectados (actualizados)', data.productos_afectados || 0],
+            ['Precios mantenidos (sin cambios)', data.productos_mantenidos || 0],
+            ['Saltados por reproceso', data.productos_saltados_reproceso || 0]
+        ];
+        
+        doc.autoTable({
+            startY: startY,
+            head: [['Concepto', 'Cantidad']],
+            body: resumenData,
+            theme: 'striped',
+            headStyles: { fillColor: [52, 58, 64], textColor: 255, fontSize: 10 },
+            bodyStyles: { fontSize: 9 },
+            margin: { left: 14 },
+            tableWidth: 90
+        });
+        
+        startY = doc.lastAutoTable.finalY + 5;
+        
+        // ============================================
+        // TABLA DE DESGLOSE POR CATEGORÍA
+        // ============================================
+        doc.setFillColor(40, 167, 69);
+        doc.rect(14, startY, 180, 8, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.text('DESGLOSE POR CATEGORÍA', 16, startY + 6);
+        
+        startY += 10;
+        
+        const categoriaData = [
+            ['Rotación Lenta (20%)', categorias.rotacionLenta || 0],
+            ['Riesgo Estancamiento (30%)', categorias.riesgoEstancamiento || 0],
+            ['Mercancía Crítica (50%)', categorias.mercanciaCritica || 0],
+            ['Remate Total (100%)', categorias.remateTotal || 0],
+            ['Nueva Colección', categorias.nuevaColeccion || 0]
+        ];
+        
+        doc.autoTable({
+            startY: startY,
+            head: [['Categoría', 'Cantidad']],
+            body: categoriaData,
+            theme: 'striped',
+            headStyles: { fillColor: [52, 58, 64], textColor: 255, fontSize: 10 },
+            bodyStyles: { fontSize: 9 },
+            margin: { left: 14 },
+            tableWidth: 90
+        });
+        
+        startY = doc.lastAutoTable.finalY + 10;
+        
+        // ============================================
+        // PRODUCTOS ACTUALIZADOS
+        // ============================================
+        if (data.detalles && data.detalles.length > 0) {
+            // Verificar si necesitamos nueva página
+            if (startY > 250) {
+                doc.addPage();
+                startY = 20;
+            }
+            
+            doc.setFillColor(40, 167, 69);
+            doc.rect(14, startY, 260, 8, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.text(`PRODUCTOS ACTUALIZADOS (${data.detalles.length})`, 16, startY + 6);
+            
+            startY += 10;
+            
+            const productosData = data.detalles.map(d => ([
+                d.codigo || 'N/A',
+                (d.descripcion || '').substring(0, 35),
+                d.categoria || '',
+                `$${d.precio_anterior || 0}`,
+                `$${d.nuevo_precio || 0}`,
+                `-${d.porcentaje_descuento || 0}%`
+            ]));
+            
+            doc.autoTable({
+                startY: startY,
+                head: [['Código', 'Descripción', 'Categoría', 'Precio Anterior', 'Nuevo Precio', 'Descuento']],
+                body: productosData,
+                theme: 'striped',
+                headStyles: { fillColor: [52, 58, 64], textColor: 255, fontSize: 9 },
+                bodyStyles: { fontSize: 8 },
+                columnStyles: {
+                    0: { cellWidth: 25 },
+                    1: { cellWidth: 60 },
+                    2: { cellWidth: 35 },
+                    3: { cellWidth: 30 },
+                    4: { cellWidth: 30 },
+                    5: { cellWidth: 20 }
+                },
+                margin: { left: 14 }
+            });
+            
+            startY = doc.lastAutoTable.finalY + 10;
+        }
+        
+        // ============================================
+        // PRODUCTOS MANTENIDOS
+        // ============================================
+        if (data.detalles_mantenidos && data.detalles_mantenidos.length > 0) {
+            // Verificar si necesitamos nueva página
+            if (startY > 250) {
+                doc.addPage();
+                startY = 20;
+            }
+            
+            doc.setFillColor(255, 152, 0);
+            doc.rect(14, startY, 260, 8, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.text(`PRODUCTOS MANTENIDOS (${data.detalles_mantenidos.length}) - Sin cambios por pérdida`, 16, startY + 6);
+            
+            startY += 10;
+            
+            const mantenidosData = data.detalles_mantenidos.map(d => [
+                d.codigo || 'N/A',
+                (d.descripcion || '').substring(0, 35),
+                `$${d.pvp_actual || d.precio_actual || 0}`,
+                `$${d.costo || 0}`,
+                `$${d.ganancia || 0}`,
+                d.razon || 'Producto en pérdida'
+            ]);
+            
+            doc.autoTable({
+                startY: startY,
+                head: [['Código', 'Descripción', 'Precio Actual', 'Costo', 'Ganancia', 'Razón']],
+                body: mantenidosData,
+                theme: 'striped',
+                headStyles: { fillColor: [52, 58, 64], textColor: 255, fontSize: 9 },
+                bodyStyles: { fontSize: 8 },
+                columnStyles: {
+                    0: { cellWidth: 25 },
+                    1: { cellWidth: 60 },
+                    2: { cellWidth: 25 },
+                    3: { cellWidth: 25 },
+                    4: { cellWidth: 25 },
+                    5: { cellWidth: 50 }
+                },
+                margin: { left: 14 }
+            });
+            
+            startY = doc.lastAutoTable.finalY + 10;
+        }
+        
+        // Pie de página
+        const totalPaginas = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= totalPaginas; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor(150, 150, 150);
+            doc.text(
+                `Reporte generado automáticamente - TiendasTenShop | Página ${i} de ${totalPaginas}`,
+                doc.internal.pageSize.width / 2,
+                doc.internal.pageSize.height - 10,
+                { align: 'center' }
+            );
+        }
+        
+        // Cerrar loading y descargar
+        Swal.close();
+        
+        const nombreArchivo = `Automatizacion_${sucursalNombre}_${new Date().toISOString().split('T')[0]}.pdf`;
+        doc.save(nombreArchivo);
+        
+        Swal.fire({
+            title: 'Exportación completada',
+            text: `Archivo PDF generado para ${sucursalNombre}`,
+            icon: 'success',
+            timer: 2000,
+            showConfirmButton: false
+        });
+    }
 </script>
 
 <style>
@@ -2278,6 +3366,47 @@
         background-color: #ffc107;
         border-color: #ffc107;
         color: #000;
+    }
+
+    /* Animación de pulso para el botón */
+    @keyframes pulse {
+        0% {
+            box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+            transform: scale(1);
+        }
+        70% {
+            box-shadow: 0 0 0 15px rgba(40, 167, 69, 0);
+            transform: scale(1.05);
+        }
+        100% {
+            box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+            transform: scale(1);
+        }
+    }
+
+    .animate-pulse {
+        animation: pulse 1.5s infinite;
+    }
+
+    /* Hover efecto para el botón */
+    #btnEjecutarAutomatizacion:hover {
+        transform: scale(1.1);
+        transition: transform 0.3s ease;
+        box-shadow: 0 8px 25px rgba(40, 167, 69, 0.5);
+    }
+
+    /* Al final de tu style */
+    .rounded-4 {
+        border-radius: 16px !important;
+    }
+
+    /* Animar el botón de confirmación */
+    .swal2-confirm {
+        transition: all 0.3s ease;
+    }
+
+    .swal2-confirm:hover {
+        transform: scale(1.02);
     }
 </style>
 @endsection

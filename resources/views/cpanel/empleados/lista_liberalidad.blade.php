@@ -331,6 +331,68 @@
         @else
             <!-- Tabla de resultados -->
             @if($liberalidad && $liberalidad->detalles && $liberalidad->detalles->count() > 0)
+
+                {{-- NUEVO: Resumen por Sucursal --}}
+                @if(isset($liberalidadPorSucursal) && $liberalidadPorSucursal->count() > 0)
+                <div class="card mb-4">
+                    <div class="card-header bg-gradient-info text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-store me-2"></i> Resumen de Liberalidad por Sucursal
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover">
+                                <thead class="table-light">
+                                    <tr class="text-center">
+                                        <th>Sucursal</th>
+                                        <th>Cantidad de Vendedores</th>
+                                        <th>Monto Liberalidad (USD)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @php
+                                        $totalGeneral = $liberalidadPorSucursal->sum('MontoLiberalidadSucursal');
+                                        $totalVendedores = $liberalidadPorSucursal->sum('CantidadVendedores');
+                                    @endphp
+                                    @foreach($liberalidadPorSucursal as $sucursal)
+                                    <tr>
+                                        <td>
+                                            <strong>
+                                                <i class="fas fa-store me-2 text-warning"></i>
+                                                {{ $sucursal['SucursalNombre'] }}
+                                            </strong>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge bg-primary">
+                                                {{ $sucursal['CantidadVendedores'] }}
+                                            </span>
+                                        </td>
+                                        <td class="text-end fw-bold text-success">
+                                            $ {{ number_format($sucursal['MontoLiberalidadSucursal'], 2, ',', '.') }}
+                                        </td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                                <tfoot class="table-secondary">
+                                    <tr class="fw-bold">
+                                        <td class="text-end">TOTAL GENERAL:</td>
+                                        <td class="text-center">
+                                            <span class="badge bg-dark">
+                                                {{ $totalVendedores }} vendedores
+                                            </span>
+                                        </td>
+                                        <td class="text-end text-success">
+                                            $ {{ number_format($totalGeneral, 2, ',', '.') }}
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                @endif
+            
             <div class="card">
                 <div class="card-header">
                     <div class="row align-items-center">
@@ -583,6 +645,9 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
+
+    const liberalidadPorSucursal = @json($liberalidadPorSucursal ?? []);
+    const periodoActual = '{{ $periodo ?? date("Y-m") }}';
     
     document.addEventListener("DOMContentLoaded", function() {
         // Tooltips
@@ -779,15 +844,169 @@
     function pdfTablaLiberalidad() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('landscape');
+        let yPosition = 20;
         
-        doc.autoTable({ 
-            html: '#tablaLiberalidad',
-            startY: 20,
-            styles: { fontSize: 8 },
-            headStyles: { fillColor: [41, 128, 185] }
-        });
+        // Título principal
+        doc.setFontSize(16);
+        doc.setTextColor(41, 128, 185);
+        doc.text('Reporte de Liberalidad', 14, yPosition);
+        yPosition += 8;
         
-        doc.save(`Liberalidad_${new Date().toISOString().slice(0,10)}.pdf`);
+        // Información del período
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Período: ${periodoActual}`, 14, yPosition);
+        yPosition += 7;
+        doc.text(`Fecha de generación: ${new Date().toLocaleString('es-VE')}`, 14, yPosition);
+        yPosition += 10;
+        
+        // ============================================
+        // AGREGAR RESUMEN POR SUCURSAL SI EXISTE
+        // ============================================
+        if (liberalidadPorSucursal && liberalidadPorSucursal.length > 0) {
+            // Preparar datos del resumen
+            const resumenHeaders = [['Sucursal', 'Cantidad Vendedores', 'Monto Liberalidad (USD)']];
+            const resumenBody = [];
+            let totalVendedores = 0;
+            let totalMonto = 0;
+            
+            liberalidadPorSucursal.forEach(sucursal => {
+                totalVendedores += sucursal.CantidadVendedores;
+                totalMonto += sucursal.MontoLiberalidadSucursal;
+                resumenBody.push([
+                    sucursal.SucursalNombre,
+                    sucursal.CantidadVendedores.toString(),
+                    `$ ${sucursal.MontoLiberalidadSucursal.toFixed(2)}`
+                ]);
+            });
+            
+            // Agregar fila de totales
+            resumenBody.push([
+                'TOTAL GENERAL',
+                totalVendedores.toString(),
+                `$ ${totalMonto.toFixed(2)}`
+            ]);
+            
+            // Título del resumen
+            doc.setFontSize(12);
+            doc.setTextColor(0, 0, 0);
+            doc.text('Resumen por Sucursal', 14, yPosition);
+            yPosition += 5;
+            
+            // Tabla de resumen
+            doc.autoTable({
+                head: resumenHeaders,
+                body: resumenBody,
+                startY: yPosition,
+                theme: 'grid',
+                headStyles: {
+                    fillColor: [52, 152, 219],
+                    textColor: [255, 255, 255],
+                    fontSize: 9,
+                    fontStyle: 'bold',
+                    halign: 'center'
+                },
+                bodyStyles: {
+                    fontSize: 8,
+                    cellPadding: 3
+                },
+                columnStyles: {
+                    0: { cellWidth: 80 },
+                    1: { cellWidth: 40, halign: 'center' },
+                    2: { cellWidth: 45, halign: 'right' }
+                },
+                didDrawPage: function(data) {
+                    yPosition = data.cursor.y + 10;
+                }
+            });
+            
+            yPosition = doc.lastAutoTable.finalY + 10;
+        }
+        
+        // ============================================
+        // AGREGAR TABLA DE EMPLEADOS
+        // ============================================
+        const tabla = document.getElementById('tablaLiberalidad');
+        if (tabla) {
+            // Clonar la tabla para no modificar la original
+            const tablaClone = tabla.cloneNode(true);
+            
+            // OBTENER TODAS LAS FILAS (incluyendo thead y tbody)
+            const todasLasFilas = tablaClone.querySelectorAll('tr');
+            
+            // Ocultar la primera columna (Foto) en TODAS las filas
+            todasLasFilas.forEach(row => {
+                const primeraCelda = row.querySelector('th:first-child, td:first-child');
+                if (primeraCelda) {
+                    primeraCelda.style.display = 'none';
+                }
+            });
+            
+            // También eliminar específicamente el texto "Foto" del encabezado si quedara
+            const thead = tablaClone.querySelector('thead');
+            if (thead) {
+                const thumbs = thead.querySelectorAll('th');
+                if (thumbs.length > 0 && thumbs[0].innerText.trim() === 'Foto') {
+                    thumbs[0].style.display = 'none';
+                }
+            }
+            
+            // Opcional: Ocultar columna de Detalle si existe (última columna)
+            const headers = thead ? thead.querySelectorAll('th') : [];
+            if (headers.length > 0) {
+                const lastHeader = headers[headers.length - 1];
+                if (lastHeader && lastHeader.innerText.includes('Detalle')) {
+                    const lastColIndex = headers.length - 1;
+                    tablaClone.querySelectorAll('tr').forEach(row => {
+                        const celdas = row.children;
+                        if (celdas[lastColIndex]) {
+                            celdas[lastColIndex].style.display = 'none';
+                        }
+                    });
+                }
+            }
+            
+            // Generar tabla de empleados
+            doc.autoTable({
+                html: tablaClone,
+                startY: yPosition,
+                theme: 'grid',
+                styles: { 
+                    fontSize: 7,
+                    cellPadding: 2
+                },
+                headStyles: { 
+                    fillColor: [41, 128, 185],
+                    textColor: [255, 255, 255],
+                    fontSize: 8,
+                    fontStyle: 'bold',
+                    halign: 'center'
+                },
+                alternateRowStyles: {
+                    fillColor: [245, 245, 245]
+                },
+                didDrawPage: function(data) {
+                    // Número de página
+                    const pageCount = doc.internal.getNumberOfPages();
+                    doc.setFontSize(8);
+                    doc.setTextColor(150, 150, 150);
+                    doc.text(
+                        `Página ${data.pageNumber} de ${pageCount}`,
+                        doc.internal.pageSize.getWidth() - 30,
+                        doc.internal.pageSize.getHeight() - 10
+                    );
+                }
+            });
+        } else {
+            // Si no hay tabla, mostrar mensaje
+            doc.setFontSize(10);
+            doc.setTextColor(150, 150, 150);
+            doc.text('No hay datos de empleados para mostrar', 14, yPosition);
+        }
+        
+        // Guardar PDF
+        const fecha = new Date().toISOString().slice(0, 10);
+        doc.save(`Liberalidad_${periodoActual}_${fecha}.pdf`);
     }
     
     function exportarExcelLiberalidad() {
@@ -804,12 +1023,7 @@
     function generarPDFLiberalidadConDatos(periodo) {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('landscape');
-        
-        const tabla = document.getElementById('tablaLiberalidad');
-        if (!tabla) {
-            console.error('No se encontró la tabla');
-            return;
-        }
+        let yPosition = 20;
         
         // ============================================
         // FUNCIÓN AUXILIAR PARA LIMPIAR NÚMEROS
@@ -834,8 +1048,138 @@
         };
         
         // ============================================
+        // OBTENER RESUMEN POR SUCURSAL
+        // ============================================
+        let resumenData = null;
+        
+        // Intentar obtener de la variable global
+        if (typeof liberalidadPorSucursal !== 'undefined' && liberalidadPorSucursal && liberalidadPorSucursal.length > 0) {
+            resumenData = liberalidadPorSucursal;
+        } 
+        // Intentar obtener del sessionStorage (para después del reload)
+        else if (sessionStorage.getItem('resumenPorSucursal')) {
+            resumenData = JSON.parse(sessionStorage.getItem('resumenPorSucursal'));
+            // Limpiar después de usar
+            sessionStorage.removeItem('resumenPorSucursal');
+        }
+        // Intentar obtener del DOM
+        else {
+            const resumenCard = document.querySelector('.card.mb-4:has(.bg-gradient-info)');
+            if (resumenCard) {
+                const tablaResumen = resumenCard.querySelector('table');
+                if (tablaResumen) {
+                    resumenData = [];
+                    const filasResumen = tablaResumen.querySelectorAll('tbody tr');
+                    filasResumen.forEach(fila => {
+                        const celdas = fila.querySelectorAll('td');
+                        if (celdas.length >= 3) {
+                            resumenData.push({
+                                SucursalNombre: celdas[0]?.innerText.trim() || '',
+                                CantidadVendedores: parseInt(celdas[1]?.innerText.replace(/[^0-9]/g, '')) || 0,
+                                MontoLiberalidadSucursal: parseFloat(celdas[2]?.innerText.replace('$', '').replace(/\./g, '').replace(',', '.')) || 0
+                            });
+                        }
+                    });
+                }
+            }
+        }
+        
+        // ============================================
+        // AGREGAR RESUMEN POR SUCURSAL SI EXISTE
+        // ============================================
+        if (resumenData && resumenData.length > 0) {
+            // Título principal
+            doc.setFontSize(16);
+            doc.setTextColor(41, 128, 185);
+            doc.text('Reporte de Liberalidad', 14, yPosition);
+            yPosition += 8;
+            
+            // Información del período
+            doc.setFontSize(10);
+            doc.setTextColor(100, 100, 100);
+            doc.text(`Período: ${periodo}`, 14, yPosition);
+            yPosition += 7;
+            doc.text(`Fecha de generación: ${new Date().toLocaleString('es-VE')}`, 14, yPosition);
+            yPosition += 10;
+            
+            // Preparar datos del resumen
+            const resumenHeaders = [['Sucursal', 'Cantidad Vendedores', 'Monto Liberalidad (USD)']];
+            const resumenBody = [];
+            let totalVendedores = 0;
+            let totalMonto = 0;
+            
+            resumenData.forEach(sucursal => {
+                totalVendedores += sucursal.CantidadVendedores;
+                totalMonto += sucursal.MontoLiberalidadSucursal;
+                resumenBody.push([
+                    sucursal.SucursalNombre,
+                    sucursal.CantidadVendedores.toString(),
+                    `$ ${sucursal.MontoLiberalidadSucursal.toFixed(2)}`
+                ]);
+            });
+            
+            // Agregar fila de totales
+            resumenBody.push([
+                'TOTAL GENERAL',
+                totalVendedores.toString(),
+                `$ ${totalMonto.toFixed(2)}`
+            ]);
+            
+            // Título del resumen
+            doc.setFontSize(12);
+            doc.setTextColor(0, 0, 0);
+            doc.text('Resumen por Sucursal', 14, yPosition);
+            yPosition += 5;
+            
+            // Tabla de resumen
+            doc.autoTable({
+                head: resumenHeaders,
+                body: resumenBody,
+                startY: yPosition,
+                theme: 'grid',
+                headStyles: {
+                    fillColor: [52, 152, 219],
+                    textColor: [255, 255, 255],
+                    fontSize: 9,
+                    fontStyle: 'bold',
+                    halign: 'center'
+                },
+                bodyStyles: {
+                    fontSize: 8,
+                    cellPadding: 3
+                },
+                columnStyles: {
+                    0: { cellWidth: 80 },
+                    1: { cellWidth: 40, halign: 'center' },
+                    2: { cellWidth: 45, halign: 'right' }
+                }
+            });
+            
+            yPosition = doc.lastAutoTable.finalY + 15;
+        } else {
+            // Si no hay resumen, mostrar solo el encabezado normal
+            doc.setFontSize(16);
+            doc.setTextColor(41, 128, 185);
+            doc.text('Reporte de Liberalidad', 14, yPosition);
+            yPosition += 8;
+            
+            doc.setFontSize(10);
+            doc.setTextColor(100, 100, 100);
+            doc.text(`Período: ${periodo}`, 14, yPosition);
+            yPosition += 7;
+            doc.text(`Fecha de generación: ${new Date().toLocaleString('es-VE')}`, 14, yPosition);
+            yPosition += 10;
+        }
+        
+        // ============================================
         // EXTRAER DATOS DE LA TABLA
         // ============================================
+        const tabla = document.getElementById('tablaLiberalidad');
+        if (!tabla) {
+            console.error('No se encontró la tabla');
+            return;
+        }
+        
         const headers = [
             ['Empleado', 'Sucursal', 'Unidades', 'Ventas USD', 'Bonos USD', 'Deducciones USD', 'Liberalidad USD', 'Neto USD']
         ];
@@ -908,21 +1252,12 @@
         });
         
         // ============================================
-        // GENERAR PDF
+        // GENERAR TABLA DE EMPLEADOS
         // ============================================
-        doc.setFontSize(16);
-        doc.setTextColor(41, 128, 185);
-        doc.text('Reporte de Liberalidad', 14, 15);
-        
-        doc.setFontSize(10);
-        doc.setTextColor(100, 100, 100);
-        doc.text(`Período: ${periodo}`, 14, 22);
-        doc.text(`Generado: ${new Date().toLocaleString('es-VE')}`, 14, 29);
-        
         doc.autoTable({
             head: headers,
             body: filasFormateadas,
-            startY: 40,
+            startY: yPosition,
             theme: 'grid',
             headStyles: {
                 fillColor: [41, 128, 185],
@@ -949,7 +1284,6 @@
                 7: { cellWidth: 25, halign: 'right' }    // Neto
             },
             didDrawPage: function(data) {
-                // Número de página
                 const pageCount = doc.internal.getNumberOfPages();
                 doc.setFontSize(8);
                 doc.setTextColor(150, 150, 150);
@@ -985,6 +1319,34 @@
     function cerrarLiberalidad() {
         const periodo = document.getElementById('periodo').value;
         
+        // Guardar el resumen por sucursal si existe antes de cerrar
+        if (typeof liberalidadPorSucursal !== 'undefined' && liberalidadPorSucursal && liberalidadPorSucursal.length > 0) {
+            sessionStorage.setItem('resumenPorSucursal', JSON.stringify(liberalidadPorSucursal));
+        } else {
+            // Intentar extraer el resumen del DOM si no está en la variable
+            const resumenCard = document.querySelector('.card.mb-4:has(.bg-gradient-info)');
+            if (resumenCard) {
+                const tablaResumen = resumenCard.querySelector('table');
+                if (tablaResumen) {
+                    const resumenData = [];
+                    const filasResumen = tablaResumen.querySelectorAll('tbody tr');
+                    filasResumen.forEach(fila => {
+                        const celdas = fila.querySelectorAll('td');
+                        if (celdas.length >= 3) {
+                            resumenData.push({
+                                SucursalNombre: celdas[0]?.innerText.trim() || '',
+                                CantidadVendedores: parseInt(celdas[1]?.innerText.replace(/[^0-9]/g, '')) || 0,
+                                MontoLiberalidadSucursal: parseFloat(celdas[2]?.innerText.replace('$', '').replace(/\./g, '').replace(',', '.')) || 0
+                            });
+                        }
+                    });
+                    if (resumenData.length > 0) {
+                        sessionStorage.setItem('resumenPorSucursal', JSON.stringify(resumenData));
+                    }
+                }
+            }
+        }
+        
         Swal.fire({
             title: '¿Cerrar Liberalidad?',
             html: `Esta acción no se puede deshacer.<br>
@@ -994,7 +1356,8 @@
             confirmButtonColor: '#28a745',
             cancelButtonColor: '#dc3545',
             confirmButtonText: 'Sí, cerrar',
-            cancelButtonText: 'Cancelar'    }).then((result) => {
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
             if (result.isConfirmed) {
                 Swal.fire({
                     title: 'Cerrando liberalidad...',
@@ -1018,12 +1381,11 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        // Recargar la página para ver los datos actualizados
-                        location.reload();
-                        
                         // Guardar flag para generar PDF después de la recarga
                         sessionStorage.setItem('generarPDF', 'true');
                         sessionStorage.setItem('periodoPDF', periodo);
+                        // Recargar la página
+                        location.reload();
                     } else {
                         Swal.fire('Error', data.message, 'error');
                     }
