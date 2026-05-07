@@ -1550,11 +1550,13 @@ class GeneralHelper
     {
         // ❌ NO usar las fechas del filtro
         // $fechaInicio = $filtro->fechaInicio->startOfDay();
-        // $fechaFin    = $filtro->fechaFin->startOfDay();
+        $fechaFin    = $filtro->fechaFin->startOfDay();
         
         // ✅ Usar últimos 2 meses como período fijo
-        $fechaInicio = now()->subMonths(2)->startOfDay();
-        $fechaFin = now()->endOfDay();
+        // $fechaInicio = now()->subMonths(2)->startOfDay();
+        // $fechaFin = now()->endOfDay();
+
+        $fechaInicio = (clone $fechaFin)->subMonths(2)->startOfDay();
 
         // \Log::info('=== ObtenerAutomaticamenteProductosBajaDemanda ===');
         // \Log::info('Período fijo (últimos 2 meses): ' . $fechaInicio->format('Y-m-d') . ' al ' . $fechaFin->format('Y-m-d'));
@@ -1688,7 +1690,7 @@ class GeneralHelper
             // ->where('p.FechaCreacion', '<', now()->subMonths(2))
             ->where(function($query) {
                 $query->where('p.FechaCreacion', '<', now()->subMonths(2))
-                    ->orWhere('p.FechaActualizacion', '<', now()->subMonths(2));
+                        ->where('p.FechaActualizacion', '<', now()->subMonths(2));
             })
             ->when($sucursalId != 0, fn ($q) =>
                 $q->where('ps.SucursalId', $sucursalId)
@@ -1741,6 +1743,8 @@ class GeneralHelper
                     ]
                 );
             });
+
+            // dd($sinVenta);
 
         // \Log::info('=== PRODUCTOS SIN VENTAS ===');
         // foreach ($sinVenta as $s) {

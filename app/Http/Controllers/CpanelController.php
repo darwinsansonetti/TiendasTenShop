@@ -12,6 +12,8 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
+use App\Models\DivisaValor;
+
 class CpanelController extends Controller
 {
     // Acceso al Inicio o Dashboard
@@ -516,14 +518,22 @@ class CpanelController extends Controller
     // Productos poco vendidos
     public function baja_demanda(Request $request)
     {       
-        // 🚀 Aquí: usar fechas del request si existen
-        $fechaInicio = $request->input('fecha_inicio')
-            ? Carbon::parse($request->input('fecha_inicio'))->startOfDay()
-            : null;
+        // // 🚀 Aquí: usar fechas del request si existen
+        // $fechaInicio = $request->input('fecha_inicio')
+        //     ? Carbon::parse($request->input('fecha_inicio'))->startOfDay()
+        //     : null;
 
+        // $fechaFin = $request->input('fecha_fin')
+        //     ? Carbon::parse($request->input('fecha_fin'))->startOfDay()
+        //     : null;
+
+        // Obtener fecha fin (puede venir del request o usar fecha actual)
         $fechaFin = $request->input('fecha_fin')
-            ? Carbon::parse($request->input('fecha_fin'))->startOfDay()
-            : null;
+            ? Carbon::parse($request->input('fecha_fin'))->endOfDay()
+            : now()->endOfDay();
+        
+        // Calcular fecha inicio = 30 días hacia atrás de fecha fin
+        $fechaInicio = (clone $fechaFin)->subDays(30)->startOfDay();
 
         $filtroFecha = new ParametrosFiltroFecha(
             null,
@@ -540,20 +550,69 @@ class CpanelController extends Controller
             'submenu_active' => 'Baja Demanda'
         ]);
 
-        // 5️⃣ Obtener sucursal activa
+        // Obtener sucursal activa
         $sucursalId = session('sucursal_id');
+        
+        // // ✅ Verificar si ya se ejecutó la automatización en los últimos 90 días
+        // $diasGracia = 30;
+        // $fechaLimite = now()->subDays($diasGracia);
+        $fechaUltimaEjecucion = null;
+        $ejecucionReciente = false;
+        $ultimoReporte = null; 
 
-        // $indices = GeneralHelper::ObtenerSinVentaSucursales($filtroFecha, $sucursalId);
+        if ($sucursalId && $sucursalId != 0) {
+            $ultimoCambio = DB::table('ProductoSucursal')
+                ->where('SucursalId', $sucursalId)
+                // ->where('FechaBajaPrecio', '>', $fechaLimite)
+                ->where('FechaBajaPrecio', '>', $fechaInicio)
+                ->max('FechaBajaPrecio');
+            
+            if ($ultimoCambio) {
+                $ejecucionReciente = true;
+                $fechaUltimaEjecucion = Carbon::parse($ultimoCambio)->format('d/m/Y H:i:s');
+            }
+
+            $ultimoReporteDB = DB::table('automatizacion_reportes')
+                ->where('sucursal_id', $sucursalId)
+                ->orderBy('fecha_ejecucion', 'desc')
+                ->first();
+            
+            if ($ultimoReporteDB) {
+                // Decodificar los datos JSON
+                $datos = json_decode($ultimoReporteDB->datos, true);
+                
+                // Construir objeto completo para el frontend
+                $ultimoReporte = [
+                    'sucursal_nombre' => $ultimoReporteDB->sucursal_nombre,
+                    'total_analizados' => $ultimoReporteDB->total_analizados,
+                    'productos_afectados' => $ultimoReporteDB->productos_afectados,
+                    'productos_mantenidos' => $ultimoReporteDB->productos_mantenidos,
+                    'productos_saltados_reproceso' => $ultimoReporteDB->productos_saltados,
+                    'dias_gracia' => $datos['dias_gracia'] ?? 30,
+                    'categorias' => $datos['categorias'] ?? [],
+                    'detalles' => $datos['detalles'] ?? [],
+                    'detalles_mantenidos' => $datos['detalles_mantenidos'] ?? [],
+                    'detalles_saltados' => $datos['detalles_saltados'] ?? []
+                ];
+            }
+        }
+
+        // Obtener productos
         $indices = GeneralHelper::ObtenerAutomaticamenteProductosBajaDemanda($filtroFecha, $sucursalId);
 
-        // dd($indices->detalles->first()); //SucursalNombre
-
-        return view('cpanel.resumen.baja_demanda', compact('indices'));
+        return view('cpanel.resumen.baja_demanda', compact('indices', 'ejecucionReciente', 'fechaUltimaEjecucion', 'ultimoReporte'));
     } 
 
     public function ejecutarAutomatizacion(Request $request)
     {
         try {
+            $tasaBcv = DivisaValor::orderBy('ID', 'desc')->first();
+            $tasaValor = $tasaBcv->Valor;
+
+            // Obtener Tasa Paralelo
+            $tasaParalelo = DB::table('Paralelo')->orderByDesc('id')->first();
+            $paralelo = $tasaParalelo->valor;
+
             // Aumentar tiempo de ejecución
             set_time_limit(600);
             
@@ -564,18 +623,21 @@ class CpanelController extends Controller
                 'sucursal_id' => 'required|integer|in:3,4,5,7' // Obligatorio y solo sucursales válidas
             ]);
 
-            // Usar últimos 2 meses como período fijo
-            $fechaInicio = now()->subMonths(2)->startOfDay();
-            $fechaFin = now()->endOfDay();
+            // // Usar últimos 2 meses como período fijo
+            // $fechaInicio = now()->subMonths(2)->startOfDay();
+            // $fechaFin = now()->endOfDay();
 
-            \Log::info('========== INICIO AUTOMATIZACION ==========');
-            \Log::info('Fecha proceso: ' . now()->format('Y-m-d H:i:s'));
-            \Log::info('Periodo analisis: ' . $fechaInicio->format('Y-m-d') . ' al ' . $fechaFin->format('Y-m-d'));
+            // Obtener fecha fin (puede venir del request o usar fecha actual)
+            $fechaFin = $request->input('fecha_fin')
+                ? Carbon::parse($request->input('fecha_fin'))->endOfDay()
+                : now()->endOfDay();
+            
+            // Calcular fecha inicio = 30 días hacia atrás de fecha fin
+            $fechaInicio = (clone $fechaFin)->subDays(30)->startOfDay();
 
-            // Configurar días de gracia para no reprocesar
-            $diasGracia = 90;
-            $fechaLimiteReproceso = now()->subDays($diasGracia);
-            \Log::info("No se reprocesaran productos actualizados en los ultimos {$diasGracia} dias");
+            // // Configurar días de gracia para no reprocesar
+            $diasGracia = 30;
+            // $fechaLimiteReproceso = now()->subDays($diasGracia);
 
             $filtroFecha = new ParametrosFiltroFecha(
                 null,
@@ -592,14 +654,11 @@ class CpanelController extends Controller
             $nombreSucursal = DB::table('Sucursales')
                 ->where('Id', $sucursalId)
                 ->value('Nombre') ?? 'Sucursal ' . $sucursalId;
-            
-            \Log::info("Procesando sucursal: {$nombreSucursal} (ID: {$sucursalId})");
 
             // Obtener productos con baja demanda para UNA sucursal
             $bajaDemanda = GeneralHelper::ObtenerAutomaticamenteProductosBajaDemanda($filtroFecha, $sucursalId);
             
             $totalProductos = $bajaDemanda->detalles->count();
-            \Log::info('Total productos encontrados: ' . $totalProductos);
             
             if ($totalProductos == 0) {
                 return response()->json([
@@ -614,8 +673,6 @@ class CpanelController extends Controller
             $loteSize = 50;
             $totalLotes = ceil($totalProductos / $loteSize);
             
-            \Log::info("Procesando en {$totalLotes} lotes de {$loteSize} productos");
-            
             $productosProcesados = [];
             $productosConError = [];
             $productosPrecioMantenido = [];
@@ -626,6 +683,7 @@ class CpanelController extends Controller
                 'riesgoEstancamiento' => 0,
                 'mercanciaCritica' => 0,
                 'remateTotal' => 0,
+                'superRemateTotal' => 0,
                 'nuevaColeccion' => 0,
                 'preciosMantenidos' => 0,
                 'saltadosReproceso' => 0
@@ -636,8 +694,6 @@ class CpanelController extends Controller
             for ($lote = 0; $lote < $totalLotes; $lote++) {
                 $inicio = $lote * $loteSize;
                 $loteProductos = $productosArray->slice($inicio, $loteSize);
-                
-                \Log::info("Procesando lote " . ($lote + 1) . " de {$totalLotes}");
                 
                 foreach ($loteProductos as $index => $item) {
                     $productoId = $item->producto_id;
@@ -657,9 +713,11 @@ class CpanelController extends Controller
                     $fechaUltimoCambio = DB::table('ProductoSucursal')
                         ->where('ProductoId', $productoId)
                         ->where('SucursalId', $sucursalId)
-                        ->value('FechaNuevoPrecio');
+                        ->value('FechaBajaPrecio');
+                        // ->value('FechaNuevoPrecio');
                     
-                    if ($fechaUltimoCambio && Carbon::parse($fechaUltimoCambio) > $fechaLimiteReproceso) {
+                    // if ($fechaUltimoCambio && Carbon::parse($fechaUltimoCambio) > $fechaLimiteReproceso) {
+                    if ($fechaUltimoCambio && Carbon::parse($fechaUltimoCambio) > $fechaInicio) {
                         $contadorCategorias['saltadosReproceso']++;
                         $productosSaltadosPorReproceso[] = [
                             'id' => $productoId,
@@ -682,17 +740,21 @@ class CpanelController extends Controller
                         $categoria = 'Rotacion Lenta';
                         $contadorCategorias['rotacionLenta']++;
                     } elseif ($mesesAntiguedad >= 5 && $mesesAntiguedad < 8) {
-                        $porcentajeDescuento = 30;
+                        $porcentajeDescuento = 35;
                         $categoria = 'Riesgo Estancamiento';
                         $contadorCategorias['riesgoEstancamiento']++;
                     } elseif ($mesesAntiguedad >= 8 && $mesesAntiguedad < 12) {
                         $porcentajeDescuento = 50;
                         $categoria = 'Mercancia Critica';
                         $contadorCategorias['mercanciaCritica']++;
-                    } elseif ($mesesAntiguedad >= 12) {
+                    } elseif ($mesesAntiguedad >= 12 && $mesesAntiguedad < 15) {
                         $porcentajeDescuento = 100;
                         $categoria = 'Remate Total';
                         $contadorCategorias['remateTotal']++;
+                    } elseif ($mesesAntiguedad >= 15) {
+                        $porcentajeDescuento = 140;
+                        $categoria = 'Super Remate Total';
+                        $contadorCategorias['superRemateTotal']++;
                     } else {
                         $contadorCategorias['nuevaColeccion']++;
                         continue;
@@ -707,13 +769,6 @@ class CpanelController extends Controller
                     if ($gananciaActual <= 0) {
                         // NO hacer nada, mantener el precio actual
                         $contadorCategorias['preciosMantenidos']++;
-                        
-                        \Log::info("[PRECIO MANTENIDO] Producto ID: {$productoId}, Sucursal: {$sucursalId}");
-                        \Log::info("   Codigo: {$codigo}");
-                        \Log::info("   Costo: $" . number_format($costoDivisa, 2));
-                        \Log::info("   PVP Actual: $" . number_format($pvpActual, 2));
-                        \Log::info("   Ganancia: $" . number_format($gananciaActual, 2) . " (Perdida o sin ganancia)");
-                        \Log::info("   -> Se MANTIENE el precio actual: $" . number_format($pvpActual, 2));
                         
                         $productosPrecioMantenido[] = [
                             'id' => $productoId,
@@ -734,10 +789,11 @@ class CpanelController extends Controller
                     $reduccion = $gananciaActual * ($porcentajeDescuento / 100);
                     $nuevoPvp = $pvpActual - $reduccion;
                     
-                    // Asegurar que el nuevo precio no sea menor al costo
-                    if ($nuevoPvp < $costoDivisa) {
-                        $nuevoPvp = $costoDivisa;
-                    }
+                    // // Asegurar que el nuevo precio no sea menor al costo
+                    // if ($nuevoPvp < $costoDivisa) {
+                    //     $nuevoPvp = $costoDivisa;
+                    // }
+                    
                     $nuevoPvp = round($nuevoPvp, 2);
                     
                     // Si el precio actual ya es menor o igual al propuesto, mantener
@@ -747,19 +803,6 @@ class CpanelController extends Controller
                         continue;
                     }
                     
-                    // Log para productos que se van a actualizar
-                    if ($lote == 0 && $index < 10) {
-                        \Log::info("[ACTUALIZANDO] Producto ID: {$productoId}, Sucursal: {$sucursalId}");
-                        \Log::info("   Codigo: {$codigo}");
-                        \Log::info("   Costo: $" . number_format($costoDivisa, 2));
-                        \Log::info("   Precio Actual: $" . number_format($pvpActual, 2));
-                        \Log::info("   Ganancia: $" . number_format($gananciaActual, 2));
-                        \Log::info("   Antiguedad: {$mesesAntiguedad} meses, Categoria: {$categoria}");
-                        \Log::info("   Descuento aplicado: {$porcentajeDescuento}%");
-                        \Log::info("   Reduccion: $" . number_format($reduccion, 2));
-                        \Log::info("   -> Nuevo Precio: $" . number_format($nuevoPvp, 2));
-                    }
-                    
                     try {
                         $existe = DB::table('ProductoSucursal')
                             ->where('ProductoId', $productoId)
@@ -767,7 +810,6 @@ class CpanelController extends Controller
                             ->exists();
                         
                         if (!$existe) {
-                            \Log::warning("[ADVERTENCIA] No existe registro para ProductoId: {$productoId}");
                             continue;
                         }
                         
@@ -778,22 +820,77 @@ class CpanelController extends Controller
                                 'PvpAnterior' => $pvpActual,
                                 'NuevoPvp' => $nuevoPvp,
                                 'PvpDivisa' => $nuevoPvp,
-                                'FechaNuevoPrecio' => now()
+                                'FechaNuevoPrecio' => now(),
+                                'FechaBajaPrecio' => now()
                             ]);
                         
+                        // if ($actualizado) {
+                        //     $productosProcesados[] = [
+                        //         'id' => $productoId,
+                        //         'codigo' => $codigo,
+                        //         'descripcion' => $descripcion,
+                        //         'categoria' => $categoria,
+                        //         'antiguedad_meses' => round($mesesAntiguedad, 1),
+                        //         'precio_anterior' => round($pvpActual, 2),
+                        //         'nuevo_precio' => round($nuevoPvp, 2),
+                        //         'porcentaje_descuento' => $porcentajeDescuento,
+                        //         'costo' => round($costoDivisa, 2),
+                        //         'existencia' => $existencia,
+                        //         'reduccion' => round($pvpActual - $nuevoPvp, 2)
+                        //     ];
+                        // }
+
+                        // Dentro del try, después de la actualización exitosa:
                         if ($actualizado) {
+                            // Calcular precios convertidos usando tus tasas
+                            $precioAnteriorConvertido = 0;
+                            $nuevoPrecioConvertido = 0;
+                            
+                            if ($paralelo > 0 && $tasaValor > 0) {
+                                $precioAnteriorConvertido = round(($pvpActual * $paralelo) / $tasaValor, 2);
+                                $nuevoPrecioConvertido = round(($nuevoPvp * $paralelo) / $tasaValor, 2);
+                            } else {
+                                // Si no hay tasas, usar los valores originales
+                                $precioAnteriorConvertido = round($pvpActual, 2);
+                                $nuevoPrecioConvertido = round($nuevoPvp, 2);
+                            }
+
+                            // Dentro del try, después de obtener las tasas
+                            \Log::info('========== TASAS Y CONVERSIONES ==========');
+                            \Log::info('Tasa BCV: ' . $tasaValor);
+                            \Log::info('Tasa Paralelo: ' . $paralelo);
+
+                            // Dentro del foreach, después de calcular $nuevoPvp y antes de actualizar
+                            \Log::info('========== PRODUCTO ==========');
+                            \Log::info('Código: ' . $codigo);
+                            \Log::info('Precio Actual (USD): ' . $pvpActual);
+                            \Log::info('Nuevo Precio (USD): ' . $nuevoPvp);
+                            \Log::info('Tasa BCV: ' . $tasaValor);
+                            \Log::info('Tasa Paralelo: ' . $paralelo);
+
+                            $precioAnteriorConvertido = round(($pvpActual * $paralelo) / $tasaValor, 2);
+                            $nuevoPrecioConvertido = round(($nuevoPvp * $paralelo) / $tasaValor, 2);
+
+                            \Log::info('Precio Anterior Convertido: ' . $precioAnteriorConvertido);
+                            \Log::info('Nuevo Precio Convertido: ' . $nuevoPrecioConvertido);
+                            \Log::info('Fórmula: (' . $pvpActual . ' * ' . $paralelo . ') / ' . $tasaValor . ' = ' . $precioAnteriorConvertido);
+                            
                             $productosProcesados[] = [
                                 'id' => $productoId,
                                 'codigo' => $codigo,
                                 'descripcion' => $descripcion,
                                 'categoria' => $categoria,
                                 'antiguedad_meses' => round($mesesAntiguedad, 1),
-                                'precio_anterior' => round($pvpActual, 2),
-                                'nuevo_precio' => round($nuevoPvp, 2),
+                                'precio_anterior' => $precioAnteriorConvertido,
+                                'nuevo_precio' => $nuevoPrecioConvertido,
+                                // 'precio_anterior_usd' => round($pvpActual, 2),       // ← Opcional: valor original USD
+                                // 'nuevo_precio_usd' => round($nuevoPvp, 2),           // ← Opcional: valor original USD
                                 'porcentaje_descuento' => $porcentajeDescuento,
                                 'costo' => round($costoDivisa, 2),
                                 'existencia' => $existencia,
-                                'reduccion' => round($pvpActual - $nuevoPvp, 2)
+                                'reduccion' => round($precioAnteriorConvertido - $nuevoPrecioConvertido, 2),
+                                'tasa_bcv' => $tasaValor,
+                                'tasa_paralelo' => $paralelo
                             ];
                         }
                         
@@ -808,27 +905,30 @@ class CpanelController extends Controller
                 
                 unset($loteProductos);
                 gc_collect_cycles();
-                
-                \Log::info("Lote " . ($lote + 1) . " completado. Actualizados: " . count($productosProcesados));
             }
-            
+
             // ============================================
-            // REGISTRAR RESUMEN FINAL EN LOG
+            // GUARDAR REPORTE EN LA BASE DE DATOS
             // ============================================
-            \Log::info('========== RESUMEN FINAL AUTOMATIZACION ==========');
-            \Log::info("Sucursal: {$nombreSucursal} (ID: {$sucursalId})");
-            \Log::info('Estadisticas:');
-            \Log::info("   |- Total productos encontrados: " . $totalProductos);
-            \Log::info("   |- Nueva Coleccion (sin cambios): " . $contadorCategorias['nuevaColeccion']);
-            \Log::info("   |- Saltados por reproceso: " . $contadorCategorias['saltadosReproceso']);
-            \Log::info("   |- Precios mantenidos (perdida o ya menor): " . $contadorCategorias['preciosMantenidos']);
-            \Log::info("   |- Rotacion Lenta (20%): " . $contadorCategorias['rotacionLenta']);
-            \Log::info("   |- Riesgo Estancamiento (30%): " . $contadorCategorias['riesgoEstancamiento']);
-            \Log::info("   |- Mercancia Critica (50%): " . $contadorCategorias['mercanciaCritica']);
-            \Log::info("   |- Remate Total (100%): " . $contadorCategorias['remateTotal']);
-            \Log::info("   '- Total productos actualizados: " . count($productosProcesados));
+            $reporteData = [
+                'sucursal_id' => $sucursalId,
+                'sucursal_nombre' => $nombreSucursal,
+                'fecha_ejecucion' => now(),
+                'total_analizados' => $totalProductos,
+                'productos_afectados' => count($productosProcesados),
+                'productos_mantenidos' => $contadorCategorias['preciosMantenidos'],
+                'productos_saltados' => $contadorCategorias['saltadosReproceso'],
+                'datos' => json_encode([
+                    'categorias' => $contadorCategorias,
+                    'detalles' => $productosProcesados,
+                    'detalles_mantenidos' => $productosPrecioMantenido,
+                    'detalles_saltados' => $productosSaltadosPorReproceso,
+                    'dias_gracia' => $diasGracia
+                ]),
+                'created_at' => now(),
+            ];
             
-            \Log::info('========== FIN AUTOMATIZACION ==========');
+            DB::table('automatizacion_reportes')->insert($reporteData);
             
             return response()->json([
                 'success' => true,
@@ -844,7 +944,8 @@ class CpanelController extends Controller
                 'detalles' => $productosProcesados,           // 432 productos actualizados
                 'detalles_mantenidos' => $productosPrecioMantenido,  // ← 148 productos mantenidos
                 'detalles_saltados' => $productosSaltadosPorReproceso, // ← productos saltados (si hay)
-                'errores' => $productosConError
+                'errores' => $productosConError,
+                'reporte_guardado' => true
             ]);
             
         } catch (\Exception $e) {

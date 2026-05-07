@@ -783,7 +783,7 @@ class VentasController extends Controller
                                         $tasaCambio = DivisaValor::where('Fecha', $saleDate)->first();
                                         if (!$tasaCambio) {
                                             // Si no hay tasa para esa fecha, usar la última (como hace el SP)
-                                            $tasaCambio = DivisaValor::orderBy('Fecha', 'desc')->first();
+                                            $tasaCambio = DivisaValor::orderBy('ID', 'desc')->first();
                                         }
                                         $tasaValor = $tasaCambio->Valor;
                                         
@@ -1104,7 +1104,7 @@ class VentasController extends Controller
                                                     // 1. OBTENER LA TASA DE CAMBIO (como hace el SP)
                                                     $tasaCambio = DivisaValor::where('Fecha', $saleDate)->first();
                                                     if (!$tasaCambio) {
-                                                        $tasaCambio = DivisaValor::orderBy('Fecha', 'desc')->first();
+                                                        $tasaCambio = DivisaValor::orderBy('ID', 'desc')->first();
                                                     }
                                                     $tasaValor = $tasaCambio->Valor;
                                                     

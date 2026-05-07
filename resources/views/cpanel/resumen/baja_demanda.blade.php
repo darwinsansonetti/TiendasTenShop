@@ -42,37 +42,35 @@
             <div class="card-body">
                 <form action="{{ route('cpanel.baja.ventas') }}" method="GET" id="filtroForm">
                     @csrf
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label for="fecha_inicio" class="form-label">
-                                <i class="fas fa-calendar-alt me-1"></i>Fecha Inicio
+                    <div class="row g-3 align-items-end">
+                        <!-- Campo oculto fecha_inicio -->
+                        <input type="hidden" 
+                            id="fecha_inicio" 
+                            name="fecha_inicio"
+                            value="{{ request('fecha_inicio', now()->startOfMonth()->format('Y-m-d')) }}">
+                        
+                        <!-- Campo Fecha Fin visible -->
+                        <div class="col-md-8">
+                            <label for="fecha_fin" class="form-label fw-semibold">
+                                <i class="fas fa-calendar-alt text-primary me-1"></i>Seleccionar Fecha
                             </label>
                             <div class="input-group">
+                                <span class="input-group-text bg-light border-end-0">
+                                    <i class="fas fa-calendar-day text-muted"></i>
+                                </span>
                                 <input type="date" 
-                                       class="form-control" 
-                                       id="fecha_inicio" 
-                                       name="fecha_inicio"
-                                       value="{{ request('fecha_inicio', now()->startOfMonth()->format('Y-m-d')) }}"
-                                       required>
+                                    class="form-control border-start-0 ps-0" 
+                                    id="fecha_fin" 
+                                    name="fecha_fin"
+                                    value="{{ request('fecha_fin', now()->format('Y-m-d')) }}"
+                                    style="border-left: none;"
+                                    required>
                             </div>
                         </div>
                         
+                        <!-- Botón Buscar -->
                         <div class="col-md-4">
-                            <label for="fecha_fin" class="form-label">
-                                <i class="fas fa-calendar-alt me-1"></i>Fecha Fin
-                            </label>
-                            <div class="input-group">
-                                <input type="date" 
-                                       class="form-control" 
-                                       id="fecha_fin" 
-                                       name="fecha_fin"
-                                       value="{{ request('fecha_fin', now()->format('Y-m-d')) }}"
-                                       required>
-                            </div>
-                        </div>
-                        
-                        <div class="col-md-4 d-flex align-items-end">
-                            <button type="submit" class="btn btn-primary w-100">
+                            <button type="submit" class="btn btn-primary w-100 py-2">
                                 <i class="fas fa-search me-2"></i>Buscar
                             </button>
                         </div>
@@ -2064,6 +2062,11 @@
     // Variable para controlar si ya está ejecutando
     let ejecutandoAutomatizacion = false;
 
+    // Variables de ejecución reciente
+    const ejecucionReciente = {{ $ejecucionReciente ? 'true' : 'false' }};
+    const fechaUltimaEjecucion = '{{ $fechaUltimaEjecucion ?? '' }}';
+    const ultimoReporte = @json($ultimoReporte ?? null); 
+
     // Evento del botón de automatización
     document.getElementById('btnEjecutarAutomatizacion')?.addEventListener('click', function() {
         if (ejecutandoAutomatizacion) {
@@ -2071,6 +2074,154 @@
             return;
         }
         
+        // Verificar si ya se ejecutó recientemente (desde variable de PHP)
+        if (ejecucionReciente) {
+            // ✅ CORREGIDO: Verificar si tenemos el reporte guardado (tiene detalles)
+            if (ultimoReporte && ultimoReporte.detalles && ultimoReporte.detalles.length > 0) {
+                // Usar los datos guardados para exportar
+                Swal.fire({
+                    title: '<i class="bi bi-exclamation-triangle me-2"></i> Ejecución reciente detectada',
+                    html: `
+                        <div class="text-start">
+                            <p>Ya se ejecutó una automatización en esta sucursal hace menos de 30 días.</p>
+                            <div class="alert alert-warning mt-2">
+                                <i class="bi bi-calendar-clock me-2"></i>
+                                <strong>Última ejecución:</strong> ${fechaUltimaEjecucion}
+                            </div>
+                            <div class="alert alert-info mt-2">
+                                <i class="bi bi-calendar-clock me-2"></i>
+                                <strong>Productos analizados:</strong> ${ultimoReporte.total_analizados || 0}<br>
+                                <i class="bi bi-calendar-clock me-2"></i>
+                                <strong>Productos afectados:</strong> ${ultimoReporte.productos_afectados || 0}
+                            </div>
+                            <p class="mt-2 mb-0 fw-bold">¿Deseas exportar el reporte de la última ejecución?</p>
+                        </div>
+                    `,
+                    icon: 'warning',
+                    showCancelButton: false,
+                    showConfirmButton: true,
+                    showDenyButton: true,
+                    confirmButtonText: '<i class="bi bi-file-pdf me-2"></i>Exportar a PDF',
+                    denyButtonText: '<i class="bi bi-file-excel me-2"></i>Exportar a Excel',
+                    confirmButtonColor: '#dc3545',
+                    denyButtonColor: '#28a745'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        // ✅ Usar exportarResultadosAutomatizacionPDF con ultimoReporte directamente
+                        Swal.fire({
+                            title: 'Generando PDF...',
+                            text: 'Por favor espere',
+                            allowOutsideClick: false,
+                            didOpen: () => {
+                                Swal.showLoading();
+                                setTimeout(() => {
+                                    exportarResultadosAutomatizacionPDF(ultimoReporte);
+                                    Swal.close();
+                                }, 500);
+                            }
+                        });
+                    } else if (result.isDenied) {
+                        // ✅ Usar exportarResultadosAutomatizacionExcel con ultimoReporte directamente
+                        Swal.fire({
+                            title: 'Generando Excel...',
+                            text: 'Por favor espere',
+                            allowOutsideClick: false,
+                            didOpen: () => {
+                                Swal.showLoading();
+                                setTimeout(() => {
+                                    exportarResultadosAutomatizacionExcel(ultimoReporte);
+                                    Swal.close();
+                                }, 500);
+                            }
+                        });
+                    }
+                });
+                return;
+            } else {
+                // Si no hay datos guardados, exportar la tabla actual
+                Swal.fire({
+                    title: '<i class="bi bi-exclamation-triangle me-2"></i> Ejecución reciente detectada',
+                    html: `
+                        <div class="text-start">
+                            <p>Ya se ejecutó una automatización en esta sucursal hace menos de 30 días.</p>
+                            <div class="alert alert-warning mt-2">
+                                <i class="bi bi-calendar-clock me-2"></i>
+                                <strong>Última ejecución:</strong> ${fechaUltimaEjecucion}
+                            </div>
+                            <p class="mt-2 mb-0 fw-bold">¿Deseas exportar la información actual?</p>
+                        </div>
+                    `,
+                    icon: 'warning',
+                    showCancelButton: false,
+                    showConfirmButton: true,
+                    showDenyButton: true,
+                    confirmButtonText: '<i class="bi bi-file-pdf me-2"></i>Exportar a PDF',
+                    denyButtonText: '<i class="bi bi-file-excel me-2"></i>Exportar a Excel',
+                    confirmButtonColor: '#dc3545',
+                    denyButtonColor: '#28a745'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        Swal.fire({
+                            title: 'Generando PDF...',
+                            text: 'Por favor espere',
+                            allowOutsideClick: false,
+                            didOpen: () => {
+                                Swal.showLoading();
+                                setTimeout(() => {
+                                    pdfTablaConImagenes();
+                                    Swal.close();
+                                }, 500);
+                            }
+                        });
+                    } else if (result.isDenied) {
+                        Swal.fire({
+                            title: 'Generando Excel...',
+                            text: 'Por favor espere',
+                            allowOutsideClick: false,
+                            didOpen: () => {
+                                Swal.showLoading();
+                                setTimeout(() => {
+                                    exportarExcelBajaDemanda();
+                                    Swal.close();
+                                }, 500);
+                            }
+                        });
+                    }
+                });
+                return;
+            }
+        } else {
+            // ✅ NO hay ejecución reciente (más de 30 días o nunca)
+        
+            // ✅ Validar que la fecha seleccionada sea la fecha actual
+            const fechaFinSeleccionada = document.getElementById('fecha_fin').value;
+            const fechaActual = new Date().toISOString().split('T')[0];
+            
+            if (fechaFinSeleccionada !== fechaActual) {
+                // La fecha seleccionada no es hoy, mostrar advertencia
+                Swal.fire({
+                    title: '<i class="bi bi-exclamation-triangle me-2"></i> Fecha no válida',
+                    html: `
+                        <div class="text-start">
+                            <p>La automatización de precios solo puede ejecutarse para la fecha actual.</p>
+                            <div class="alert alert-warning mt-2">
+                                <i class="bi bi-calendar-date me-2"></i>
+                                <strong>Fecha seleccionada:</strong> ${fechaFinSeleccionada}<br>
+                                <i class="bi bi-calendar-date me-2"></i>
+                                <strong>Fecha actual:</strong> ${fechaActual}
+                            </div>
+                            <p class="mt-2 mb-0">Por favor, selecciona la fecha actual para ejecutar la automatización.</p>
+                        </div>
+                    `,
+                    icon: 'warning',
+                    confirmButtonText: '<i class="bi bi-check-circle me-2"></i>Entendido',
+                    confirmButtonColor: '#ffc107'
+                });
+                return;
+            }
+        }
+        
+        // Si no hay ejecución reciente, mostrar el modal normal
         mostrarModalConfirmacion();
     });
 
@@ -2096,24 +2247,36 @@
                             <div class="border rounded p-2 text-center">
                                 <small class="text-muted">2 - 5 meses</small>
                                 <h5 class="mb-0 text-danger">-20%</h5>
+                                <small class="text-muted">Rotación Lenta</small>
                             </div>
                         </div>
                         <div class="col-6">
                             <div class="border rounded p-2 text-center">
                                 <small class="text-muted">5 - 8 meses</small>
-                                <h5 class="mb-0 text-danger">-30%</h5>
+                                <h5 class="mb-0 text-danger">-35%</h5>
+                                <small class="text-muted">Riesgo Estancamiento</small>
                             </div>
                         </div>
                         <div class="col-6">
                             <div class="border rounded p-2 text-center">
                                 <small class="text-muted">8 - 12 meses</small>
                                 <h5 class="mb-0 text-danger">-50%</h5>
+                                <small class="text-muted">Mercancía Crítica</small>
                             </div>
                         </div>
                         <div class="col-6">
                             <div class="border rounded p-2 text-center">
-                                <small class="text-muted">&gt; 12 meses</small>
+                                <small class="text-muted">12 - 15 meses</small>
                                 <h5 class="mb-0 text-danger">-100%</h5>
+                                <small class="text-muted">Remate Total</small>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="border rounded p-2 text-center" style="background: #fff3cd; border-color: #ff9800;">
+                                <small class="text-muted">&gt; 15 meses</small>
+                                <h5 class="mb-0 text-danger fw-bold">-140%</h5>
+                                <small class="text-muted fw-bold">Super Remate Total</small>
+                                <small class="d-block text-muted" style="font-size: 10px;">⚠️ Puede quedar por debajo del costo</small>
                             </div>
                         </div>
                     </div>
@@ -2129,7 +2292,7 @@
             confirmButtonColor: '#28a745',
             confirmButtonText: '<i class="bi bi-play-fill me-1"></i> Ejecutar',
             cancelButtonText: '<i class="bi bi-x-circle me-1"></i> Cancelar',
-            width: '420px',
+            width: '450px',
             customClass: {
                 popup: 'rounded-4',
                 title: 'fs-4 fw-bold'
@@ -2485,7 +2648,7 @@
                     <!-- Información adicional -->
                     <div class="alert alert-info mb-0">
                         <i class="bi bi-calendar-clock me-2"></i>
-                        <strong>Días de gracia:</strong> ${data.dias_gracia || 90} días
+                        <strong>Días de gracia:</strong> ${data.dias_gracia || 30} días
                         <span class="mx-2">|</span>
                         <i class="bi bi-shop me-2"></i>
                         <strong>Sucursal:</strong> ${sucursalNombre}
@@ -2497,13 +2660,10 @@
             `,
             icon: 'success',
             confirmButtonText: '<i class="bi bi-check-circle me-2"></i>Aceptar',
-            showCancelButton: true,
-            cancelButtonText: '<i class="bi bi-arrow-repeat me-2"></i>Recargar página',
             width: '850px'
         }).then((result) => {
-            if (result.dismiss === Swal.DismissReason.cancel) {
-                location.reload();
-            }
+            // Recargar en cualquier caso: click en Aceptar, click en Recargar, o cerrar modal
+            location.reload();
         });
         
         // ✅ Exportación automática SILENCIOSA (sin ningún tipo de alerta)
@@ -2518,7 +2678,7 @@
             excelData.push(['REPORTE DE AUTOMATIZACIÓN DE PRECIOS']);
             excelData.push(['Sucursal:', sucursalNombre]);
             excelData.push(['Fecha:', new Date().toLocaleString()]);
-            excelData.push(['Días de gracia:', data.dias_gracia || 90]);
+            excelData.push(['Días de gracia:', data.dias_gracia || 30]);
             excelData.push([]);
             
             excelData.push(['RESUMEN GENERAL']);
@@ -2531,9 +2691,10 @@
             const categorias = data.categorias || {};
             excelData.push(['DESGLOSE POR CATEGORÍA']);
             excelData.push(['Rotación Lenta (20%)', categorias.rotacionLenta || 0]);
-            excelData.push(['Riesgo Estancamiento (30%)', categorias.riesgoEstancamiento || 0]);
+            excelData.push(['Riesgo Estancamiento (35%)', categorias.riesgoEstancamiento || 0]);  // ✅ Corregido: 35%
             excelData.push(['Mercancía Crítica (50%)', categorias.mercanciaCritica || 0]);
             excelData.push(['Remate Total (100%)', categorias.remateTotal || 0]);
+            excelData.push(['Super Remate Total (140%)', categorias.superRemateTotal || 0]);  // ✅ Agregado
             excelData.push(['Nueva Colección', categorias.nuevaColeccion || 0]);
             excelData.push([]);
             
@@ -2805,7 +2966,7 @@
         excelData.push(['REPORTE DE AUTOMATIZACIÓN DE PRECIOS']);
         excelData.push(['Sucursal:', sucursalNombre]);
         excelData.push(['Fecha:', new Date().toLocaleString()]);
-        excelData.push(['Días de gracia:', data.dias_gracia || 90]);
+        excelData.push(['Días de gracia:', data.dias_gracia || 30]);  // ✅ Corregido: 30 días
         excelData.push([]);
         
         // Resumen
@@ -2816,13 +2977,14 @@
         excelData.push(['Saltados por reproceso', data.productos_saltados_reproceso || 0]);
         excelData.push([]);
         
-        // Desglose por categoría
+        // Desglose por categoría (con Super Remate Total)
         const categorias = data.categorias || {};
         excelData.push(['DESGLOSE POR CATEGORÍA']);
         excelData.push(['Rotación Lenta (20%)', categorias.rotacionLenta || 0]);
-        excelData.push(['Riesgo Estancamiento (30%)', categorias.riesgoEstancamiento || 0]);
+        excelData.push(['Riesgo Estancamiento (35%)', categorias.riesgoEstancamiento || 0]);  // ✅ Corregido: 35%
         excelData.push(['Mercancía Crítica (50%)', categorias.mercanciaCritica || 0]);
         excelData.push(['Remate Total (100%)', categorias.remateTotal || 0]);
+        excelData.push(['Super Remate Total (140%)', categorias.superRemateTotal || 0]);  // ✅ Agregado
         excelData.push(['Nueva Colección', categorias.nuevaColeccion || 0]);
         excelData.push(['Precios mantenidos', categorias.preciosMantenidos || 0]);
         excelData.push([]);
@@ -2850,7 +3012,7 @@
         }
         
         // ============================================
-        // PRODUCTOS MANTENIDOS (NUEVO)
+        // PRODUCTOS MANTENIDOS
         // ============================================
         if (data.detalles_mantenidos && data.detalles_mantenidos.length > 0) {
             excelData.push(['PRODUCTOS MANTENIDOS (' + data.detalles_mantenidos.length + ') - Sin cambios por pérdida']);
@@ -2870,7 +3032,7 @@
         }
         
         // ============================================
-        // PRODUCTOS SALTADOS POR REPROCESO (NUEVO)
+        // PRODUCTOS SALTADOS POR REPROCESO
         // ============================================
         if (data.detalles_saltados && data.detalles_saltados.length > 0) {
             excelData.push(['PRODUCTOS SALTADOS POR REPROCESO (' + data.detalles_saltados.length + ')']);
@@ -2939,7 +3101,337 @@
         doc.setTextColor(0, 0, 0);
         doc.text(`Sucursal: ${sucursalNombre}`, 14, 30);
         doc.text(`Fecha: ${fecha}`, 14, 36);
-        doc.text(`Días de gracia: ${data.dias_gracia || 90} días`, 14, 42);
+        doc.text(`Días de gracia: ${data.dias_gracia || 30} días`, 14, 42);
+        
+        let startY = 50;
+        
+        // ============================================
+        // TABLA DE RESUMEN GENERAL
+        // ============================================
+        doc.setFontSize(12);
+        doc.setTextColor(255, 255, 255);
+        doc.setFillColor(40, 167, 69);
+        doc.rect(14, startY, 180, 8, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.text('RESUMEN GENERAL', 16, startY + 6);
+        
+        startY += 10;
+        
+        const resumenData = [
+            ['Total productos analizados', data.total_analizados || 0],
+            ['Productos afectados (actualizados)', data.productos_afectados || 0],
+            ['Precios mantenidos (sin cambios)', data.productos_mantenidos || 0],
+            ['Saltados por reproceso', data.productos_saltados_reproceso || 0]
+        ];
+        
+        doc.autoTable({
+            startY: startY,
+            head: [['Concepto', 'Cantidad']],
+            body: resumenData,
+            theme: 'striped',
+            headStyles: { fillColor: [52, 58, 64], textColor: 255, fontSize: 10 },
+            bodyStyles: { fontSize: 9 },
+            margin: { left: 14 },
+            tableWidth: 90
+        });
+        
+        startY = doc.lastAutoTable.finalY + 5;
+        
+        // ============================================
+        // TABLA DE DESGLOSE POR CATEGORÍA (CON SUPER REMATE TOTAL)
+        // ============================================
+        doc.setFillColor(40, 167, 69);
+        doc.rect(14, startY, 180, 8, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.text('DESGLOSE POR CATEGORÍA', 16, startY + 6);
+        
+        startY += 10;
+        
+        const categoriaData = [
+            ['Rotación Lenta (20%)', categorias.rotacionLenta || 0],
+            ['Riesgo Estancamiento (35%)', categorias.riesgoEstancamiento || 0],
+            ['Mercancía Crítica (50%)', categorias.mercanciaCritica || 0],
+            ['Remate Total (100%)', categorias.remateTotal || 0],
+            ['Super Remate Total (140%)', categorias.superRemateTotal || 0],
+            ['Nueva Colección', categorias.nuevaColeccion || 0]
+        ];
+        
+        doc.autoTable({
+            startY: startY,
+            head: [['Categoría', 'Cantidad']],
+            body: categoriaData,
+            theme: 'striped',
+            headStyles: { fillColor: [52, 58, 64], textColor: 255, fontSize: 10 },
+            bodyStyles: { fontSize: 9 },
+            margin: { left: 14 },
+            tableWidth: 90
+        });
+        
+        startY = doc.lastAutoTable.finalY + 10;
+        
+        // ============================================
+        // PRODUCTOS ACTUALIZADOS
+        // ============================================
+        if (data.detalles && data.detalles.length > 0) {
+            // Verificar si necesitamos nueva página
+            if (startY > 250) {
+                doc.addPage();
+                startY = 20;
+            }
+            
+            doc.setFillColor(40, 167, 69);
+            doc.rect(14, startY, 260, 8, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.text(`PRODUCTOS ACTUALIZADOS (${data.detalles.length})`, 16, startY + 6);
+            
+            startY += 10;
+            
+            // Limitar a 100 productos para evitar problemas de ancho
+            const productosData = data.detalles.map(d => ([
+                d.codigo || 'N/A',
+                (d.descripcion || '').substring(0, 30),
+                d.categoria || '',
+                `$${d.precio_anterior || 0}`,
+                `$${d.nuevo_precio || 0}`,
+                `-${d.porcentaje_descuento || 0}%`
+            ]));
+            
+            doc.autoTable({
+                startY: startY,
+                head: [['Código', 'Descripción', 'Categoría', 'Precio Anterior', 'Nuevo Precio', 'Descuento']],
+                body: productosData,
+                theme: 'striped',
+                headStyles: { fillColor: [52, 58, 64], textColor: 255, fontSize: 9 },
+                bodyStyles: { fontSize: 8 },
+                columnStyles: {
+                    0: { cellWidth: 20 },
+                    1: { cellWidth: 50 },
+                    2: { cellWidth: 30 },
+                    3: { cellWidth: 25 },
+                    4: { cellWidth: 25 },
+                    5: { cellWidth: 20 }
+                },
+                margin: { left: 14 }
+            });
+            
+            startY = doc.lastAutoTable.finalY + 10;
+        }
+        
+        // ============================================
+        // PRODUCTOS MANTENIDOS
+        // ============================================
+        if (data.detalles_mantenidos && data.detalles_mantenidos.length > 0) {
+            // Verificar si necesitamos nueva página
+            if (startY > 250) {
+                doc.addPage();
+                startY = 20;
+            }
+            
+            doc.setFillColor(255, 152, 0);
+            doc.rect(14, startY, 260, 8, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.text(`PRODUCTOS MANTENIDOS (${data.detalles_mantenidos.length}) - Sin cambios por pérdida`, 16, startY + 6);
+            
+            startY += 10;
+            
+            const mantenidosData = data.detalles_mantenidos.map(d => ([
+                d.codigo || 'N/A',
+                (d.descripcion || '').substring(0, 30),
+                `$${d.pvp_actual || d.precio_actual || 0}`,
+                `$${d.costo || 0}`,
+                `$${d.ganancia || 0}`,
+                d.razon || 'Producto en pérdida'
+            ]));
+            
+            doc.autoTable({
+                startY: startY,
+                head: [['Código', 'Descripción', 'Precio Actual', 'Costo', 'Ganancia', 'Razón']],
+                body: mantenidosData,
+                theme: 'striped',
+                headStyles: { fillColor: [52, 58, 64], textColor: 255, fontSize: 9 },
+                bodyStyles: { fontSize: 8 },
+                columnStyles: {
+                    0: { cellWidth: 20 },
+                    1: { cellWidth: 50 },
+                    2: { cellWidth: 20 },
+                    3: { cellWidth: 20 },
+                    4: { cellWidth: 20 },
+                    5: { cellWidth: 40 }
+                },
+                margin: { left: 14 }
+            });
+            
+            startY = doc.lastAutoTable.finalY + 10;
+        }
+        
+        // Pie de página
+        const totalPaginas = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= totalPaginas; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor(150, 150, 150);
+            doc.text(
+                `Reporte generado automáticamente - TiendasTenShop | Página ${i} de ${totalPaginas}`,
+                doc.internal.pageSize.width / 2,
+                doc.internal.pageSize.height - 10,
+                { align: 'center' }
+            );
+        }
+        
+        // Cerrar loading y descargar
+        Swal.close();
+        
+        const nombreArchivo = `Automatizacion_${sucursalNombre}_${new Date().toISOString().split('T')[0]}.pdf`;
+        doc.save(nombreArchivo);
+        
+        Swal.fire({
+            title: 'Exportación completada',
+            text: `Archivo PDF generado para ${sucursalNombre}`,
+            icon: 'success',
+            timer: 2000,
+            showConfirmButton: false
+        });
+    }
+
+    // ============================================
+    // EXPORTAR RESULTADOS DE AUTOMATIZACIÓN (usando datos guardados)
+    // ============================================
+
+    // Función para exportar resultados a Excel desde datos guardados
+    function exportarResultadosAutomatizacionExcel(data) {
+        const sucursalNombre = data.sucursal_nombre || 'Todas';
+        const fecha = new Date().toISOString().split('T')[0];
+        const hora = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
+        
+        // Preparar datos para el Excel
+        const excelData = [];
+        
+        // Encabezados principales
+        excelData.push(['REPORTE DE AUTOMATIZACIÓN DE PRECIOS']);
+        excelData.push(['Sucursal:', sucursalNombre]);
+        excelData.push(['Fecha:', new Date().toLocaleString()]);
+        excelData.push(['Días de gracia:', data.dias_gracia || 30]);
+        excelData.push([]);
+        
+        // Resumen
+        excelData.push(['RESUMEN GENERAL']);
+        excelData.push(['Total productos analizados', data.total_analizados || 0]);
+        excelData.push(['Productos afectados (actualizados)', data.productos_afectados || 0]);
+        excelData.push(['Precios mantenidos (sin cambios)', data.productos_mantenidos || 0]);
+        excelData.push(['Saltados por reproceso', data.productos_saltados_reproceso || 0]);
+        excelData.push([]);
+        
+        // Desglose por categoría
+        const categorias = data.categorias || {};
+        excelData.push(['DESGLOSE POR CATEGORÍA']);
+        excelData.push(['Rotación Lenta (20%)', categorias.rotacionLenta || 0]);
+        excelData.push(['Riesgo Estancamiento (35%)', categorias.riesgoEstancamiento || 0]);
+        excelData.push(['Mercancía Crítica (50%)', categorias.mercanciaCritica || 0]);
+        excelData.push(['Remate Total (100%)', categorias.remateTotal || 0]);
+        excelData.push(['Super Remate Total (140%)', categorias.superRemateTotal || 0]);
+        excelData.push(['Nueva Colección', categorias.nuevaColeccion || 0]);
+        excelData.push(['Precios mantenidos', categorias.preciosMantenidos || 0]);
+        excelData.push([]);
+        
+        // Productos actualizados
+        if (data.detalles && data.detalles.length > 0) {
+            excelData.push(['PRODUCTOS ACTUALIZADOS (' + data.detalles.length + ')']);
+            excelData.push(['Código', 'Descripción', 'Categoría', 'Precio Anterior', 'Nuevo Precio', 'Descuento', 'Costo', 'Existencia']);
+            
+            data.detalles.forEach(d => {
+                excelData.push([
+                    d.codigo || 'N/A',
+                    d.descripcion || '',
+                    d.categoria || '',
+                    d.precio_anterior || 0,
+                    d.nuevo_precio || 0,
+                    d.porcentaje_descuento || 0,
+                    d.costo || 0,
+                    d.existencia || 0
+                ]);
+            });
+            excelData.push([]);
+        }
+        
+        // Productos mantenidos
+        if (data.detalles_mantenidos && data.detalles_mantenidos.length > 0) {
+            excelData.push(['PRODUCTOS MANTENIDOS (' + data.detalles_mantenidos.length + ') - Sin cambios por pérdida']);
+            excelData.push(['Código', 'Descripción', 'Precio Actual', 'Costo', 'Ganancia', 'Razón']);
+            
+            data.detalles_mantenidos.forEach(d => {
+                excelData.push([
+                    d.codigo || 'N/A',
+                    d.descripcion || '',
+                    d.pvp_actual || d.precio_actual || 0,
+                    d.costo || 0,
+                    d.ganancia || 0,
+                    d.razon || 'Producto en pérdida o sin ganancia'
+                ]);
+            });
+            excelData.push([]);
+        }
+        
+        // Productos saltados
+        if (data.detalles_saltados && data.detalles_saltados.length > 0) {
+            excelData.push(['PRODUCTOS SALTADOS POR REPROCESO (' + data.detalles_saltados.length + ')']);
+            excelData.push(['Código', 'Descripción', 'Fecha Último Cambio']);
+            
+            data.detalles_saltados.forEach(d => {
+                excelData.push([
+                    d.codigo || 'N/A',
+                    d.descripcion || '',
+                    d.fecha_ultimo_cambio || 'N/A'
+                ]);
+            });
+            excelData.push([]);
+        }
+        
+        // Crear y descargar Excel
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(excelData);
+        ws['!cols'] = [{ wch: 25 }, { wch: 50 }, { wch: 25 }, { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 15 }, { wch: 12 }];
+        XLSX.utils.book_append_sheet(wb, ws, 'Automatizacion');
+        
+        const nombreArchivo = `Automatizacion_${sucursalNombre}_${fecha}_${hora}.xlsx`;
+        XLSX.writeFile(wb, nombreArchivo);
+        
+        Swal.fire({
+            title: 'Exportación completada',
+            text: `Archivo Excel generado: ${nombreArchivo}`,
+            icon: 'success',
+            timer: 2000,
+            showConfirmButton: false
+        });
+    }
+
+    // Función para exportar resultados a PDF desde datos guardados (CORREGIDA)
+    function exportarResultadosAutomatizacionPDF(data) {
+        const sucursalNombre = data.sucursal_nombre || 'Todas';
+        const fecha = new Date().toLocaleString();
+        const categorias = data.categorias || {};
+        
+        Swal.fire({
+            title: 'Generando PDF...',
+            text: 'Por favor espere',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('landscape', 'mm', 'a4');
+        
+        // Título principal
+        doc.setFontSize(16);
+        doc.setTextColor(40, 167, 69);
+        doc.text('REPORTE DE AUTOMATIZACIÓN DE PRECIOS', 14, 20);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Sucursal: ${sucursalNombre}`, 14, 30);
+        doc.text(`Fecha: ${fecha}`, 14, 36);
+        doc.text(`Días de gracia: ${data.dias_gracia || 30} días`, 14, 42);
         
         let startY = 50;
         
@@ -2987,9 +3479,10 @@
         
         const categoriaData = [
             ['Rotación Lenta (20%)', categorias.rotacionLenta || 0],
-            ['Riesgo Estancamiento (30%)', categorias.riesgoEstancamiento || 0],
+            ['Riesgo Estancamiento (35%)', categorias.riesgoEstancamiento || 0],
             ['Mercancía Crítica (50%)', categorias.mercanciaCritica || 0],
             ['Remate Total (100%)', categorias.remateTotal || 0],
+            ['Super Remate Total (140%)', categorias.superRemateTotal || 0],
             ['Nueva Colección', categorias.nuevaColeccion || 0]
         ];
         
@@ -3007,10 +3500,9 @@
         startY = doc.lastAutoTable.finalY + 10;
         
         // ============================================
-        // PRODUCTOS ACTUALIZADOS
+        // PRODUCTOS ACTUALIZADOS (TODOS - SIN LÍMITE)
         // ============================================
         if (data.detalles && data.detalles.length > 0) {
-            // Verificar si necesitamos nueva página
             if (startY > 250) {
                 doc.addPage();
                 startY = 20;
@@ -3023,12 +3515,13 @@
             
             startY += 10;
             
+            // ✅ SIN LÍMITE - todos los productos
             const productosData = data.detalles.map(d => ([
                 d.codigo || 'N/A',
-                (d.descripcion || '').substring(0, 35),
+                (d.descripcion || '').substring(0, 30),
                 d.categoria || '',
-                `$${d.precio_anterior || 0}`,
-                `$${d.nuevo_precio || 0}`,
+                `$${parseFloat(d.precio_anterior).toFixed(2)}`,
+                `$${parseFloat(d.nuevo_precio).toFixed(2)}`,
                 `-${d.porcentaje_descuento || 0}%`
             ]));
             
@@ -3040,11 +3533,11 @@
                 headStyles: { fillColor: [52, 58, 64], textColor: 255, fontSize: 9 },
                 bodyStyles: { fontSize: 8 },
                 columnStyles: {
-                    0: { cellWidth: 25 },
-                    1: { cellWidth: 60 },
-                    2: { cellWidth: 35 },
-                    3: { cellWidth: 30 },
-                    4: { cellWidth: 30 },
+                    0: { cellWidth: 20 },
+                    1: { cellWidth: 50 },
+                    2: { cellWidth: 30 },
+                    3: { cellWidth: 25 },
+                    4: { cellWidth: 25 },
                     5: { cellWidth: 20 }
                 },
                 margin: { left: 14 }
@@ -3054,10 +3547,9 @@
         }
         
         // ============================================
-        // PRODUCTOS MANTENIDOS
+        // PRODUCTOS MANTENIDOS (TODOS - SIN LÍMITE)
         // ============================================
         if (data.detalles_mantenidos && data.detalles_mantenidos.length > 0) {
-            // Verificar si necesitamos nueva página
             if (startY > 250) {
                 doc.addPage();
                 startY = 20;
@@ -3070,14 +3562,15 @@
             
             startY += 10;
             
-            const mantenidosData = data.detalles_mantenidos.map(d => [
+            // ✅ SIN LÍMITE - todos los productos
+            const mantenidosData = data.detalles_mantenidos.map(d => ([
                 d.codigo || 'N/A',
-                (d.descripcion || '').substring(0, 35),
-                `$${d.pvp_actual || d.precio_actual || 0}`,
-                `$${d.costo || 0}`,
-                `$${d.ganancia || 0}`,
+                (d.descripcion || '').substring(0, 30),
+                `$${parseFloat(d.pvp_actual || d.precio_actual || 0).toFixed(2)}`,
+                `$${parseFloat(d.costo || 0).toFixed(2)}`,
+                `$${parseFloat(d.ganancia || 0).toFixed(2)}`,
                 d.razon || 'Producto en pérdida'
-            ]);
+            ]));
             
             doc.autoTable({
                 startY: startY,
@@ -3087,12 +3580,12 @@
                 headStyles: { fillColor: [52, 58, 64], textColor: 255, fontSize: 9 },
                 bodyStyles: { fontSize: 8 },
                 columnStyles: {
-                    0: { cellWidth: 25 },
-                    1: { cellWidth: 60 },
-                    2: { cellWidth: 25 },
-                    3: { cellWidth: 25 },
-                    4: { cellWidth: 25 },
-                    5: { cellWidth: 50 }
+                    0: { cellWidth: 20 },
+                    1: { cellWidth: 50 },
+                    2: { cellWidth: 20 },
+                    3: { cellWidth: 20 },
+                    4: { cellWidth: 20 },
+                    5: { cellWidth: 40 }
                 },
                 margin: { left: 14 }
             });
@@ -3114,9 +3607,7 @@
             );
         }
         
-        // Cerrar loading y descargar
         Swal.close();
-        
         const nombreArchivo = `Automatizacion_${sucursalNombre}_${new Date().toISOString().split('T')[0]}.pdf`;
         doc.save(nombreArchivo);
         
