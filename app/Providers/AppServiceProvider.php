@@ -63,8 +63,24 @@ class AppServiceProvider extends ServiceProvider
             $view->with(compact('tasa', 'paralelo'));
         });        
 
+        // // 🚀 IMPORTANTE: También compartir con las vistas que usan el layout
+        // View::composer('cpanel.resumen.baja_demanda', function ($view) {
+        //     // Reutilizar los mismos datos del layout
+        //     $tasa = GeneralHelper::obtenerTasaCambioDiaria(now());
+            
+        //     $valorParalelo = DB::table('Paralelo')
+        //         ->orderByDesc('id')
+        //         ->first();
+        //     $paralelo = $valorParalelo ? $valorParalelo->valor : 0;
+            
+        //     $view->with(compact('tasa', 'paralelo'));
+        // });  
+        
         // 🚀 IMPORTANTE: También compartir con las vistas que usan el layout
-        View::composer('cpanel.resumen.baja_demanda', function ($view) {
+        View::composer([
+            'cpanel.resumen.baja_demanda',
+            'cpanel.resumen.alta_demanda'  // ← Agregar esta línea
+        ], function ($view) {
             // Reutilizar los mismos datos del layout
             $tasa = GeneralHelper::obtenerTasaCambioDiaria(now());
             
@@ -74,7 +90,7 @@ class AppServiceProvider extends ServiceProvider
             $paralelo = $valorParalelo ? $valorParalelo->valor : 0;
             
             $view->with(compact('tasa', 'paralelo'));
-        });        
+        });
 
         // 🚀 IMPORTANTE: También compartir con las vistas que usan el layout
         View::composer('cpanel.ventas.cargar_ventas_diarias', function ($view) {

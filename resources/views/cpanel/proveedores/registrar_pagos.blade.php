@@ -174,16 +174,12 @@
                                                         <i class="bi bi-cash-stack"></i>
                                                 </a>
                                             @else
-                                                <button type="button" 
-                                                        class="btn btn-outline-primary" 
-                                                        data-bs-toggle="modal" 
-                                                        data-bs-target="#modalRegistrarFactura"
-                                                        data-proveedor-id="{{ $proveedorId }}"
-                                                        data-proveedor-nombre="{{ $nombre }}"
-                                                        title="Registrar Factura"
-                                                        data-bs-toggle="tooltip">
-                                                    <i class="bi bi-file-text me-1"></i>Factura
-                                                </button>
+                                                <a href="{{ route('cpanel.proveedores.nueva.factura', $proveedor->ProveedorId) }}"
+                                                    class="btn btn-sm btn-outline-primary"
+                                                    title="Registrar Factura"
+                                                    data-bs-toggle="tooltip">
+                                                        <i class="bi bi-file-text"></i>
+                                                </a> 
                                             @endif
                                         </div>
                                     </td>

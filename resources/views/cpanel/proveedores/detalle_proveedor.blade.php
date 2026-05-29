@@ -141,51 +141,75 @@
                             data-bs-target="#modalCrearFactura">
                         <i class="fas fa-file-invoice me-1"></i>Crear Factura
                     </button>
-                    @if($proveedor->Tipo == 0)
-                    <button type="button" 
-                            class="btn btn-info btn-sm" 
-                            data-bs-toggle="modal" 
-                            data-bs-target="#modalAsignarProducto">
-                        <i class="fas fa-boxes me-1"></i>Asignar Producto
-                    </button>
-                    @endif
                 </div>
-    </div>
+            </div>
         </div>
         </br>
 
         <!-- Tarjetas de Resumen -->
-        <div class="row mb-3">
+        <div class="row mb-4">
             <div class="col-md-4">
-                <div class="small-box bg-info">
-                    <div class="inner">
-                        <h3>$ {{ number_format($balanceFacturas->totalFacturas, 2) }}</h3>
-                        <p>Total Facturas</p>
-                    </div>
-                    <div class="icon">
-                        <i class="fas fa-file-invoice-dollar"></i>
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body text-center p-4">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="text-start">
+                                <h6 class="text-muted text-uppercase fw-bold small mb-2">Total Facturas</h6>
+                                <h3 class="fw-bold text-info mb-0">$ {{ number_format($balanceFacturas->totalFacturas, 2) }}</h3>
+                            </div>
+                            <div class="bg-info bg-opacity-10 rounded-circle p-3">
+                                <i class="fas fa-file-invoice-dollar text-info fs-3"></i>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <div class="progress" style="height: 4px;">
+                                <div class="progress-bar bg-info" style="width: 100%"></div>
+                            </div>
+                            <small class="text-muted mt-2 d-block">Total acumulado de todas las facturas</small>
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="col-md-4">
-                <div class="small-box bg-success">
-                    <div class="inner">
-                        <h3>$ {{ number_format($balanceFacturas->totalPagado, 2) }}</h3>
-                        <p>Total Pagado</p>
-                    </div>
-                    <div class="icon">
-                        <i class="fas fa-money-bill-wave"></i>
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body text-center p-4">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="text-start">
+                                <h6 class="text-muted text-uppercase fw-bold small mb-2">Total Pagado</h6>
+                                <h3 class="fw-bold text-success mb-0">$ {{ number_format($balanceFacturas->totalPagado, 2) }}</h3>
+                            </div>
+                            <div class="bg-success bg-opacity-10 rounded-circle p-3">
+                                <i class="fas fa-money-bill-wave text-success fs-3"></i>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <div class="progress" style="height: 4px;">
+                                <div class="progress-bar bg-success" style="width: {{ $balanceFacturas->totalFacturas > 0 ? ($balanceFacturas->totalPagado / $balanceFacturas->totalFacturas) * 100 : 0 }}%"></div>
+                            </div>
+                            <small class="text-muted mt-2 d-block">
+                                {{ number_format($balanceFacturas->porcentajePagado ?? 0, 1) }}% del total facturado
+                            </small>
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="col-md-4">
-                <div class="small-box bg-warning">
-                    <div class="inner">
-                        <h3>$ {{ number_format($balanceFacturas->saldoPendiente, 2) }}</h3>
-                        <p>Saldo Pendiente</p>
-                    </div>
-                    <div class="icon">
-                        <i class="fas fa-clock"></i>
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body text-center p-4">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="text-start">
+                                <h6 class="text-muted text-uppercase fw-bold small mb-2">Saldo Pendiente</h6>
+                                <h3 class="fw-bold text-warning mb-0">$ {{ number_format($balanceFacturas->saldoPendiente, 2) }}</h3>
+                            </div>
+                            <div class="bg-warning bg-opacity-10 rounded-circle p-3">
+                                <i class="fas fa-clock text-warning fs-3"></i>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <div class="progress" style="height: 4px;">
+                                <div class="progress-bar bg-warning" style="width: {{ $balanceFacturas->totalFacturas > 0 ? ($balanceFacturas->saldoPendiente / $balanceFacturas->totalFacturas) * 100 : 0 }}%"></div>
+                            </div>
+                            <small class="text-muted mt-2 d-block">Monto pendiente por pagar</small>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -307,9 +331,13 @@
                     <div class="tab-pane fade" id="facturas" role="tabpanel">
                         <div class="d-flex justify-content-end mb-2">
                             <div class="btn-group btn-group-sm">
-                                <button type="button" class="btn btn-outline-secondary" onclick="pdfTablaFacturas()">
+                                <a href="{{ route('cpanel.proveedores.recibo-facturas', $proveedor->ProveedorId) }}" 
+                                class="btn btn-outline-secondary btn-sm"
+                                title="Generar recibo de facturas en PDF"
+                                target="_blank"
+                                data-bs-toggle="tooltip">
                                     <i class="fas fa-print me-1"></i>PDF
-                                </button>
+                                </a>
                                 <button type="button" class="btn btn-outline-secondary" onclick="exportarExcelFacturas()">
                                     <i class="fas fa-file-excel me-1"></i>Excel
                                 </button>
@@ -325,6 +353,7 @@
                                         <th class="text-end">Pagado USD</th>
                                         <th class="text-end">Saldo USD</th>
                                         <th>Estatus</th>
+                                        <th class="text-center" style="width: 150px;">Acciones</th> <!-- NUEVA COLUMNA -->
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -348,10 +377,50 @@
                                             @endphp
                                             <span class="badge bg-{{ $estatusColor }}">{{ $estatusTexto }}</span>
                                         </td>
+                                        <td class="text-center">
+                                            <!-- Botones de Acción (siguiendo el mismo estilo que proveedores) -->
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                
+                                                <!-- Botón Detalle -->
+                                                <a href="{{ route('cpanel.facturas.detalle', $factura->ID) }}"
+                                                class="btn btn-sm btn-outline-info"
+                                                title="Ver detalle de factura"
+                                                data-bs-toggle="tooltip">
+                                                    <i class="bi bi-eye"></i>
+                                                </a>
+                                                
+                                                <a href="{{ route('cpanel.facturas.editar', $factura->ID) }}"
+                                                class="btn btn-sm btn-outline-warning"
+                                                title="Editar factura"
+                                                data-bs-toggle="tooltip">
+                                                    <i class="bi bi-pencil"></i>
+                                                </a>
+                                                
+                                                <!-- Botón Eliminar (solo si tiene saldo pendiente = 0 o está en proceso) -->
+                                                @if($factura->saldo_pendiente == 0 || $factura->Estatus == 1)
+                                                <button type="button" 
+                                                        class="btn btn-sm btn-outline-danger"
+                                                        onclick="eliminarFactura({{ $factura->ID }}, '{{ $factura->Numero }}')"
+                                                        title="Eliminar factura"
+                                                        data-bs-toggle="tooltip">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                                @else
+                                                <button type="button" 
+                                                        class="btn btn-sm btn-outline-secondary" 
+                                                        disabled
+                                                        title="No se puede eliminar (Tiene saldo pendiente)"
+                                                        data-bs-toggle="tooltip">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                                @endif
+                                                
+                                            </div>
+                                        </td>
                                     </tr>
                                     @empty
                                     <tr>
-                                        <td colspan="6" class="text-center">No hay facturas registradas</td>
+                                        <td colspan="7" class="text-center">No hay facturas registradas</td>
                                     </tr>
                                     @endforelse
                                 </tbody>
@@ -384,6 +453,7 @@
                                         <th class="text-end">Monto Bs</th>
                                         <th class="text-end">Tasa</th>
                                         <th class="text-center">Estatus</th>
+                                        <th class="text-center" style="width: 180px;">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -399,7 +469,8 @@
                                             @php
                                                 $estatusTexto = '';
                                                 $estatusColor = '';
-                                                switch($transaccion->Estatus) {
+                                                $estatusNumero = (int)($transaccion->Estatus ?? 0);
+                                                switch($estatusNumero) {
                                                     case 2: $estatusTexto = 'Pagada'; $estatusColor = 'success'; break;
                                                     case 4: $estatusTexto = 'Cerrada'; $estatusColor = 'secondary'; break;
                                                     default: $estatusTexto = 'Pendiente'; $estatusColor = 'warning';
@@ -407,10 +478,57 @@
                                             @endphp
                                             <span class="badge bg-{{ $estatusColor }}">{{ $estatusTexto }}</span>
                                         </td>
+                                        <td class="text-center align-middle">
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <!-- Ver Detalle -->
+                                                <a href="{{ route('cpanel.pagos.detalle', $transaccion->TransaccionId) }}" 
+                                                class="btn btn-sm btn-outline-info"
+                                                title="Ver detalle del pago"
+                                                data-bs-toggle="tooltip">
+                                                    <i class="bi bi-eye"></i>
+                                                </a>
+                                                
+                                                <!-- Editar (solo si Estatus es 1 o 2) -->
+                                                @if(in_array($estatusNumero, [1, 2]))
+                                                <a href="{{ route('cpanel.pagos.editar', $transaccion->TransaccionId) }}" 
+                                                class="btn btn-sm btn-outline-warning"
+                                                title="Editar pago"
+                                                data-bs-toggle="tooltip">
+                                                    <i class="bi bi-pencil"></i>
+                                                </a>
+                                                @else
+                                                <button type="button" 
+                                                        class="btn btn-sm btn-outline-secondary" 
+                                                        disabled
+                                                        title="No se puede editar (Pago {{ $estatusTexto }})"
+                                                        data-bs-toggle="tooltip">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                                @endif
+                                                
+                                                <!-- Imprimir Recibo -->
+                                                <a href="{{ route('cpanel.pagos.imprimir', $transaccion->TransaccionId) }}" 
+                                                class="btn btn-sm btn-outline-success"
+                                                title="Imprimir recibo de pago"
+                                                target="_blank"
+                                                data-bs-toggle="tooltip">
+                                                    <i class="bi bi-printer"></i>
+                                                </a>
+                                                
+                                                <!-- Eliminar -->
+                                                <button type="button" 
+                                                        class="btn btn-sm btn-outline-danger"
+                                                        onclick="eliminarPago({{ $transaccion->TransaccionId }}, '{{ $transaccion->NumeroOperacion }}')"
+                                                        title="Eliminar pago"
+                                                        data-bs-toggle="tooltip">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </td>
                                     </tr>
                                     @empty
                                     <tr>
-                                        <td colspan="7" class="text-center">No hay pagos registrados</td>
+                                        <td colspan="8" class="text-center">No hay pagos registrados</td>
                                     </tr>
                                     @endforelse
                                 </tbody>
@@ -677,6 +795,213 @@
         doc.autoTable({ html: '#tablaProductos', startY: 35, theme: 'grid', headStyles: { fillColor: [41, 128, 185] } });
         doc.save(`Productos_${new Date().toISOString().slice(0,10)}.pdf`);
     }
+
+
+    // ============================================
+    // FUNCIONES PARA FACTURAS
+    // ============================================
+
+    // Ver detalle de factura
+    function verDetalleFactura(facturaId) {
+        // Puedes abrir un modal con los detalles o redirigir a otra página
+        Swal.fire({
+            title: 'Cargando...',
+            text: 'Obteniendo detalles de la factura',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+                // Llamada AJAX para obtener los detalles
+                fetch(`/cpanel/facturas/${facturaId}/detalle`, {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Mostrar modal con los detalles
+                        mostrarModalDetalleFactura(data.factura);
+                    } else {
+                        Swal.fire('Error', data.message || 'Error al cargar los detalles', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire('Error', 'Error de conexión al servidor', 'error');
+                });
+            }
+        });
+    }
+
+    // Editar factura
+    function editarFactura(facturaId) {
+        Swal.fire({
+            title: '¿Editar factura?',
+            text: "Podrás modificar los datos de la factura",
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#ffc107',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, editar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Redirigir a la página de edición
+                window.location.href = `/cpanel/facturas/${facturaId}/editar`;
+            }
+        });
+    }
+
+    // ============================================
+    // FUNCIÓN PARA ELIMINAR FACTURA
+    // ============================================
+
+    function eliminarFactura(facturaId, facturaNumero) {
+        Swal.fire({
+            title: '¿Eliminar factura?',
+            html: `Estás a punto de eliminar la factura <strong>${facturaNumero}</strong><br><span style="color: red;">Esta acción no se puede deshacer.</span>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Mostrar loading
+                Swal.fire({
+                    title: 'Eliminando...',
+                    text: 'Procesando solicitud',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+                
+                // Llamada AJAX para eliminar
+                fetch(`/cpanel/facturas/${facturaId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            title: '¡Eliminada!',
+                            text: 'La factura ha sido eliminada correctamente',
+                            icon: 'success',
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(() => {
+                            // Recargar la página para actualizar la lista
+                            location.reload();
+                        });
+                    } else {
+                        Swal.fire('Error', data.message || 'Error al eliminar la factura', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire('Error', 'Error de conexión al servidor', 'error');
+                });
+            }
+        });
+    }
+
+    // Modal para mostrar detalle de factura (opcional)
+    function mostrarModalDetalleFactura(factura) {
+        // Puedes implementar un modal bonito con Bootstrap
+        // Por ahora usamos SweetAlert2 con HTML
+        let htmlContent = `
+            <div style="text-align: left;">
+                <p><strong>Número:</strong> ${factura.Numero}</p>
+                <p><strong>Fecha:</strong> ${new Date(factura.FechaCreacion).toLocaleDateString('es-VE')}</p>
+                <p><strong>Total USD:</strong> $ ${Number(factura.MontoDivisa).toFixed(2)}</p>
+                <p><strong>Pagado:</strong> $ ${Number(factura.total_pagado).toFixed(2)}</p>
+                <p><strong>Saldo Pendiente:</strong> $ ${Number(factura.saldo_pendiente).toFixed(2)}</p>
+                <p><strong>Estatus:</strong> ${getEstatusTexto(factura.Estatus)}</p>
+            </div>
+        `;
+        
+        Swal.fire({
+            title: 'Detalle de Factura',
+            html: htmlContent,
+            icon: 'info',
+            confirmButtonText: 'Cerrar'
+        });
+    }
+
+    // Helper para obtener texto de estatus
+    function getEstatusTexto(estatus) {
+        switch(estatus) {
+            case 1: return 'En Proceso';
+            case 2: return 'Recibiendo';
+            case 4: return 'Recibida';
+            default: return 'Desconocido';
+        }
+    }
+
+    // ============================================
+    // FUNCIÓN PARA ELIMINAR PAGO
+    // ============================================
+    function eliminarPago(pagoId, numeroOperacion) {
+        Swal.fire({
+            title: '¿Eliminar pago?',
+            html: `Estás a punto de eliminar el pago <strong>${numeroOperacion}</strong><br><span style="color: red;">Esta acción no se puede deshacer.</span>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire({
+                    title: 'Eliminando...',
+                    text: 'Procesando solicitud',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+                
+                fetch(`/cpanel/pagos/${pagoId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            title: '¡Eliminado!',
+                            text: 'El pago ha sido eliminado correctamente',
+                            icon: 'success',
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(() => {
+                            location.reload();
+                        });
+                    } else {
+                        Swal.fire('Error', data.message || 'Error al eliminar el pago', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire('Error', 'Error de conexión al servidor', 'error');
+                });
+            }
+        });
+    }
 </script>
 @endsection
 
@@ -848,6 +1173,24 @@
     .img-zoomable:hover {
         transform: scale(1.05);
         box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+
+    /* Tus estilos existentes ya incluyen estas clases */
+    .btn-outline-info {
+        color: #0dcaf0;
+        border-color: #0dcaf0;
+    }
+
+    .btn-outline-info:hover {
+        color: #000;
+        background-color: #0dcaf0;
+        border-color: #0dcaf0;
+    }
+
+    /* Para botones deshabilitados */
+    .btn-outline-secondary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
     }
 </style>
 @endpush

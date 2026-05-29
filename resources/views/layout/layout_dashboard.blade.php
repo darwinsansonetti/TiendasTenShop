@@ -522,6 +522,12 @@
                       <p>Baja Demanda</p>
                     </a>
                   </li>
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.alta.ventas') }}" class="nav-link {{ session('submenu_active') == 'Alta Demanda' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-circle"></i>
+                      <p>Alta Demanda</p>
+                    </a>
+                  </li>
                 </ul>
               </li>
               <li class="nav-item {{ session('menu_active') == 'Análisis de Ventas' ? 'menu-open' : '' }}">
@@ -740,6 +746,15 @@
                         class="nav-link {{ session('submenu_active') == 'Registrar Facturas' ? 'active' : '' }}">
                           <i class="nav-icon bi bi-circle"></i>
                           <p>Registrar Facturas</p>
+                      </a>
+                  </li>
+
+                  <!-- Contenedores -->
+                  <li class="nav-item">
+                      <a href="{{ route('cpanel.proveedor.mercancia.contenedores') }}" 
+                        class="nav-link {{ session('submenu_active') == 'Contenedores' ? 'active' : '' }}">
+                          <i class="nav-icon bi bi-circle"></i>
+                          <p>Contenedores</p>
                       </a>
                   </li>
                 </ul>

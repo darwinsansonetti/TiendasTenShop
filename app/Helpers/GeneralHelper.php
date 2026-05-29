@@ -1558,9 +1558,6 @@ class GeneralHelper
 
         $fechaInicio = (clone $fechaFin)->subMonths(2)->startOfDay();
 
-        // \Log::info('=== ObtenerAutomaticamenteProductosBajaDemanda ===');
-        // \Log::info('Período fijo (últimos 2 meses): ' . $fechaInicio->format('Y-m-d') . ' al ' . $fechaFin->format('Y-m-d'));
-
         /*
         |--------------------------------------------------------------------------
         | 1️⃣ PRODUCTOS CON BAJA DEMANDA (TIENEN VENTAS)
@@ -1578,7 +1575,6 @@ class GeneralHelper
             ->when($sucursalId != 0, fn ($q) =>
                 $q->where('v.SucursalId', $sucursalId)
             )
-            ->where('p.FechaCreacion', '<', now()->subMonths(2))
             ->groupBy(
                 'v.ProductoId',
                 'v.SucursalId',
@@ -1587,13 +1583,14 @@ class GeneralHelper
                 'p.Codigo',
                 'p.Descripcion',
                 'p.CostoDivisa',
+                'p.FechaCreacion',
+                'p.FechaActualizacion',
                 'v.PvpDivisa',
                 'v.PvpAnterior',
                 'v.NuevoPvp',
                 'v.FechaNuevoPrecio',
                 'v.FechaUltimaVenta',
-                'p.UrlFoto',
-                'p.FechaCreacion'
+                'p.UrlFoto'
             )
             ->havingRaw('SUM(v.Cantidad) > 0')
             ->havingRaw('SUM(v.Cantidad) <= (v.Existencia * 0.2)')
@@ -1606,50 +1603,55 @@ class GeneralHelper
                 'p.Codigo',
                 'p.Descripcion',
                 'p.CostoDivisa',
+                'p.FechaCreacion',
+                'p.FechaActualizacion',
                 'v.PvpDivisa',
                 'v.PvpAnterior',
                 'v.NuevoPvp',
                 'v.FechaNuevoPrecio',
                 'v.FechaUltimaVenta',
-                'p.UrlFoto',
-                'p.FechaCreacion'
+                'p.UrlFoto'
             )
             ->get();
 
-        $ventaTotal = $ventas->sum('TotalUnidades');
+        // ✅ FILTRAR PRIMERO por antigüedad (fecha más reciente >= 2 meses)
+        $ventasFiltradas = $ventas->filter(function ($item) {
+            $fechaCreacion = Carbon::parse($item->FechaCreacion);
+            $fechaReferencia = $fechaCreacion;
+            
+            if ($item->FechaActualizacion) {
+                $fechaActualizacion = Carbon::parse($item->FechaActualizacion);
+                if ($fechaActualizacion > $fechaCreacion) {
+                    $fechaReferencia = $fechaActualizacion;
+                }
+            }
+            
+            $mesesAntiguedad = now()->diffInMonths($fechaReferencia);
+            
+            // Solo productos con más de 2 meses
+            return $mesesAntiguedad >= 2;
+        });
 
-        // \Log::info('=== PRODUCTOS CON VENTAS ===');
-        // foreach ($ventas as $v) {
-        //     \Log::info("Producto: {$v->ProductoId}, Sucursal: {$v->SucursalId}, Ventas: {$v->TotalUnidades}");
-        // }
+        // ✅ Recalcular venta total con los productos filtrados
+        $ventaTotal = $ventasFiltradas->sum('TotalUnidades');
 
-        /*
-        |--------------------------------------------------------------------------
-        | 2️⃣ MAPEAR BAJA DEMANDA
-        |--------------------------------------------------------------------------
-        */
         $bajaDemanda = collect();
 
         if ($ventaTotal > 0) {
-            
-            // $factor = $ventas->reduce(function ($max, $item) use ($ventaTotal) {
-            //     $valor = ($item->TotalUnidades / $ventaTotal) * 365;
-            //     return $valor > $max ? $valor : $max;
-            // }, 0);
-
-            // $bajaDemanda = $ventas->map(function ($item) use ($ventaTotal, $factor) {
-            $bajaDemanda = $ventas->map(function ($item) use ($ventaTotal) {
-
+            $bajaDemanda = $ventasFiltradas->map(function ($item) use ($ventaTotal) {
+                $fechaCreacion = Carbon::parse($item->FechaCreacion);
+                $fechaReferencia = $fechaCreacion;
+                
+                if ($item->FechaActualizacion) {
+                    $fechaActualizacion = Carbon::parse($item->FechaActualizacion);
+                    if ($fechaActualizacion > $fechaCreacion) {
+                        $fechaReferencia = $fechaActualizacion;
+                    }
+                }
+                
                 $indice = ($item->TotalUnidades / $ventaTotal) * 365;
-
-                // if ($factor > 10000)       $indice = $base / 100;
-                // elseif ($factor > 1000)    $indice = $base / 10;
-                // elseif ($factor > 100)     $indice = $base;
-                // elseif ($factor > 10)      $indice = $base / 0.1;
-                // else                       $indice = $base * 0.9576;
-
                 $indice = round($indice, 2);
-
+                
                 return new IndiceDeRotacionDetallesDTO(
                     $item->ProductoId,
                     $item->TotalUnidades,
@@ -1665,13 +1667,24 @@ class GeneralHelper
                         'nuevo_pvp' => $item->NuevoPvp,
                         'fecha_nuevo_precio' => $item->FechaNuevoPrecio ? Carbon::parse($item->FechaNuevoPrecio) : null,
                         'fecha_ultima_venta' => $item->FechaUltimaVenta ? Carbon::parse($item->FechaUltimaVenta) : null,
-                        'fecha_creacion' => Carbon::parse($item->FechaCreacion),
+                        'fecha_creacion' => $fechaReferencia,
                         'url_foto' => strtolower($item->UrlFoto ?? ''),
                         'sucursal_id' => $item->SucursalId,
                         'sucursal_nombre' => $item->SucursalNombre
                     ]
                 );
             });
+        }
+
+        foreach ($ventasFiltradas as $item) {
+            $fechaCreacion = Carbon::parse($item->FechaCreacion);
+            $fechaReferencia = $fechaCreacion;
+            if ($item->FechaActualizacion) {
+                $fechaActualizacion = Carbon::parse($item->FechaActualizacion);
+                if ($fechaActualizacion > $fechaCreacion) {
+                    $fechaReferencia = $fechaActualizacion;
+                }
+            }
         }
 
         /*
@@ -1746,11 +1759,6 @@ class GeneralHelper
 
             // dd($sinVenta);
 
-        // \Log::info('=== PRODUCTOS SIN VENTAS ===');
-        // foreach ($sinVenta as $s) {
-        //     \Log::info("Producto: {$s->producto_id}, Sucursal: {$s->producto['sucursal_id']}");
-        // }
-
         /*
         |--------------------------------------------------------------------------
         | 4️⃣ UNIR Y ELIMINAR DUPLICADOS
@@ -1770,12 +1778,6 @@ class GeneralHelper
             }
         }
 
-        // \Log::info('=== TOTAL PRODUCTOS POR SUCURSAL ===');
-        // $porSucursal = $final->groupBy(fn($d) => $d->producto['sucursal_id']);
-        // foreach ($porSucursal as $sucId => $items) {
-        //     \Log::info("Sucursal {$sucId}: " . $items->count() . " productos");
-        // }
-
         /*
         |--------------------------------------------------------------------------
         | 5️⃣ ORDEN FINAL (MÁS ANTIGUOS PRIMERO)
@@ -1789,5 +1791,287 @@ class GeneralHelper
         // $detalles = $detalles->take(10);
 
         return new IndiceDeRotacionDTO($detalles, $fechaInicio, $fechaFin);
+    }
+
+
+    // public static function ObtenerProductosAltaDemanda(ParametrosFiltroFecha $filtro, ?int $sucursalId)
+    // {
+    //     $fechaInicio = $filtro->fechaInicio->startOfDay();
+    //     $fechaFin = $filtro->fechaFin->endOfDay();
+        
+    //     $productos = DB::table('VentaProductosView as v')
+    //         ->join('Productos as p', 'v.ProductoId', '=', 'p.ID')
+    //         ->join('ProductoSucursal as ps', function($join) {
+    //             $join->on('ps.ProductoId', '=', 'v.ProductoId')
+    //                 ->on('ps.SucursalId', '=', 'v.SucursalId');
+    //         })
+    //         ->select(
+    //             'v.ProductoId',
+    //             'v.SucursalId',
+    //             DB::raw('SUM(v.Cantidad) as TotalUnidades'),
+    //             'ps.Existencia',
+    //             'ps.PvpDivisa as pvp_actual',
+    //             // ❌ NO filtrar por FechaSubePrecio en la lista
+    //             'p.Codigo',
+    //             'p.Descripcion',
+    //             'p.CostoDivisa',
+    //             'p.FechaCreacion',
+    //             'p.FechaActualizacion'
+    //         )
+    //         ->where('v.Estatus', 1)
+    //         ->where('ps.Estatus', 1)
+    //         ->where('ps.Existencia', '>', 0)
+    //         ->where('p.Codigo', '<>', 'SALDO')
+    //         ->where('p.Descripcion', '<>', 'SALDO')
+    //         ->whereBetween('v.Fecha', [$fechaInicio, $fechaFin])
+    //         ->when($sucursalId != 0, function($q) use ($sucursalId) {
+    //             $q->where('v.SucursalId', $sucursalId);
+    //         })
+    //         ->groupBy('v.ProductoId', 'v.SucursalId', 'ps.Existencia', 'ps.PvpDivisa', 
+    //                 'p.Codigo', 'p.Descripcion', 'p.CostoDivisa', 
+    //                 'p.FechaCreacion', 'p.FechaActualizacion')
+    //         ->havingRaw('SUM(v.Cantidad) > 0')
+    //         ->orderByRaw('SUM(v.Cantidad) DESC')
+    //         ->get();
+
+    //     $maxVentas = $productos->max('TotalUnidades');
+    //     $resultados = [];
+
+    //     foreach ($productos as $item) {
+    //         // ✅ ELIMINAR el filtro de FechaSubePrecio - la lista muestra todos
+            
+    //         // ✅ Calcular utilidad actual
+    //         $utilidadActual = $item->pvp_actual - $item->CostoDivisa;
+            
+    //         // ❌ Productos con pérdida o sin ganancia NO deben subir precio
+    //         if ($utilidadActual <= 0) {
+    //             continue;
+    //         }
+            
+    //         // ✅ Calcular antigüedad real del producto
+    //         $fechaCreacion = Carbon::parse($item->FechaCreacion);
+    //         $fechaReferencia = $fechaCreacion;
+            
+    //         if ($item->FechaActualizacion) {
+    //             $fechaActualizacion = Carbon::parse($item->FechaActualizacion);
+    //             if ($fechaActualizacion > $fechaCreacion) {
+    //                 $fechaReferencia = $fechaActualizacion;
+    //             }
+    //         }
+            
+    //         $mesesAntiguedad = now()->diffInMonths($fechaReferencia);
+            
+    //         // ✅ Solo productos con más de 2 meses
+    //         if ($mesesAntiguedad < 2) {
+    //             continue;
+    //         }
+            
+    //         // Calcular estrellas según volumen de ventas
+    //         $porcentajeVentas = $maxVentas > 0 ? ($item->TotalUnidades / $maxVentas) * 100 : 0;
+            
+    //         if ($porcentajeVentas >= 90) {
+    //             $estrellas = 5;
+    //         } elseif ($porcentajeVentas >= 70) {
+    //             $estrellas = 4;
+    //         } elseif ($porcentajeVentas >= 50) {
+    //             $estrellas = 3;
+    //         } elseif ($porcentajeVentas >= 30) {
+    //             $estrellas = 2;
+    //         } else {
+    //             $estrellas = 1;
+    //         }
+            
+    //         // Solo mostrar 3, 4 y 5 estrellas (para la lista)
+    //         if ($estrellas >= 3) {
+    //             // Determinar porcentaje de subida (sugerido)
+    //             if ($estrellas >= 5) {
+    //                 $porcentajeSubida = 10;
+    //                 $categoria = 'Alta Demanda';
+    //             } elseif ($estrellas >= 4) {
+    //                 $porcentajeSubida = 8;
+    //                 $categoria = 'Buena Demanda';
+    //             } else {
+    //                 $porcentajeSubida = 5;
+    //                 $categoria = 'Demanda Media';
+    //             }
+                
+    //             $nuevoPvp = $item->pvp_actual * (1 + $porcentajeSubida / 100);
+    //             $nuevoPvp = round($nuevoPvp, 2);
+                
+    //             $resultados[] = [
+    //                 'id' => $item->ProductoId,
+    //                 'sucursal_id' => $item->SucursalId,
+    //                 'codigo' => $item->Codigo,
+    //                 'descripcion' => $item->Descripcion,
+    //                 'existencia' => $item->Existencia,
+    //                 'costo' => $item->CostoDivisa,
+    //                 'pvp_actual' => $item->pvp_actual,
+    //                 'nuevo_pvp' => $nuevoPvp,
+    //                 'porcentaje_subida' => $porcentajeSubida,
+    //                 'categoria' => $categoria,
+    //                 'estrellas' => $estrellas,
+    //                 'total_unidades' => $item->TotalUnidades,
+    //                 'porcentaje_ventas' => round($porcentajeVentas, 2)
+    //             ];
+    //         }
+    //     }
+        
+    //     return collect($resultados);
+    // }
+
+    public static function ObtenerProductosAltaDemanda(ParametrosFiltroFecha $filtro, ?int $sucursalId, $paraEjecucion = false)
+    {
+        $fechaInicio = $filtro->fechaInicio->startOfDay();
+        $fechaFin = $filtro->fechaFin->endOfDay();
+        
+        // ============================================
+        // SOLO PARA EJECUCIÓN: No considerar productos recientemente modificados
+        // ============================================
+        $diasGracia = 30;
+        $fechaLimiteReproceso = now()->subDays($diasGracia);
+        
+        $productos = DB::table('VentaProductosView as v')
+            ->join('Productos as p', 'v.ProductoId', '=', 'p.ID')
+            ->join('ProductoSucursal as ps', function($join) {
+                $join->on('ps.ProductoId', '=', 'v.ProductoId')
+                    ->on('ps.SucursalId', '=', 'v.SucursalId');
+            })
+            ->select(
+                'v.ProductoId',
+                'v.SucursalId',
+                DB::raw('SUM(v.Cantidad) as TotalUnidades'),
+                'ps.Existencia',
+                'ps.PvpDivisa as pvp_actual',
+                'ps.FechaBajaPrecio',      // ← Agregado
+                'ps.FechaNuevoPrecio',     // ← Agregado
+                'p.Codigo',
+                'p.Descripcion',
+                'p.CostoDivisa',
+                'p.FechaCreacion',
+                'p.FechaActualizacion'
+            )
+            ->where('v.Estatus', 1)
+            ->where('ps.Estatus', 1)
+            ->where('ps.Existencia', '>', 0)
+            ->where('p.Codigo', '<>', 'SALDO')
+            ->where('p.Descripcion', '<>', 'SALDO')
+            ->whereBetween('v.Fecha', [$fechaInicio, $fechaFin])
+            ->when($sucursalId != 0, function($q) use ($sucursalId) {
+                $q->where('v.SucursalId', $sucursalId);
+            })
+            ->groupBy('v.ProductoId', 'v.SucursalId', 'ps.Existencia', 'ps.PvpDivisa',
+                    'ps.FechaBajaPrecio', 'ps.FechaNuevoPrecio',  // ← Agregado
+                    'p.Codigo', 'p.Descripcion', 'p.CostoDivisa', 
+                    'p.FechaCreacion', 'p.FechaActualizacion')
+            ->havingRaw('SUM(v.Cantidad) > 0')
+            ->orderByRaw('SUM(v.Cantidad) DESC')
+            ->get();
+
+        $maxVentas = $productos->max('TotalUnidades');
+        $resultados = [];
+
+        foreach ($productos as $item) {
+            // ============================================
+            // SOLO PARA EJECUCIÓN: Filtrar productos recientemente modificados
+            // ============================================
+            if ($paraEjecucion) {
+                // Verificar si fue modificado recientemente (baja de precio)
+                $fueModificadoRecientemente = false;
+                
+                if ($item->FechaBajaPrecio) {
+                    $fechaBaja = Carbon::parse($item->FechaBajaPrecio);
+                    if ($fechaBaja->greaterThan($fechaLimiteReproceso)) {
+                        $fueModificadoRecientemente = true;
+                    }
+                }
+                
+                if ($item->FechaNuevoPrecio && !$fueModificadoRecientemente) {
+                    $fechaNuevo = Carbon::parse($item->FechaNuevoPrecio);
+                    if ($fechaNuevo->greaterThan($fechaLimiteReproceso)) {
+                        $fueModificadoRecientemente = true;
+                    }
+                }
+                
+                if ($fueModificadoRecientemente) {
+                    continue; // Saltar producto (fue modificado hace poco)
+                }
+            }
+            
+            // Calcular utilidad actual
+            $utilidadActual = $item->pvp_actual - $item->CostoDivisa;
+            
+            // Productos con pérdida o sin ganancia NO deben subir precio
+            if ($utilidadActual <= 0) {
+                continue;
+            }
+            
+            // Calcular antigüedad real del producto
+            $fechaCreacion = Carbon::parse($item->FechaCreacion);
+            $fechaReferencia = $fechaCreacion;
+            
+            if ($item->FechaActualizacion) {
+                $fechaActualizacion = Carbon::parse($item->FechaActualizacion);
+                if ($fechaActualizacion > $fechaCreacion) {
+                    $fechaReferencia = $fechaActualizacion;
+                }
+            }
+            
+            $mesesAntiguedad = now()->diffInMonths($fechaReferencia);
+            
+            // Solo productos con más de 2 meses
+            if ($mesesAntiguedad < 2) {
+                continue;
+            }
+            
+            // Calcular estrellas según volumen de ventas
+            $porcentajeVentas = $maxVentas > 0 ? ($item->TotalUnidades / $maxVentas) * 100 : 0;
+            
+            if ($porcentajeVentas >= 90) {
+                $estrellas = 5;
+            } elseif ($porcentajeVentas >= 70) {
+                $estrellas = 4;
+            } elseif ($porcentajeVentas >= 50) {
+                $estrellas = 3;
+            } elseif ($porcentajeVentas >= 30) {
+                $estrellas = 2;
+            } else {
+                $estrellas = 1;
+            }
+            
+            // Solo mostrar 3, 4 y 5 estrellas
+            if ($estrellas >= 3) {
+                if ($estrellas >= 5) {
+                    $porcentajeSubida = 10;
+                    $categoria = 'Alta Demanda';
+                } elseif ($estrellas >= 4) {
+                    $porcentajeSubida = 8;
+                    $categoria = 'Buena Demanda';
+                } else {
+                    $porcentajeSubida = 5;
+                    $categoria = 'Demanda Media';
+                }
+                
+                $nuevoPvp = $item->pvp_actual * (1 + $porcentajeSubida / 100);
+                $nuevoPvp = round($nuevoPvp, 2);
+                
+                $resultados[] = [
+                    'id' => $item->ProductoId,
+                    'sucursal_id' => $item->SucursalId,
+                    'codigo' => $item->Codigo,
+                    'descripcion' => $item->Descripcion,
+                    'existencia' => $item->Existencia,
+                    'costo' => $item->CostoDivisa,
+                    'pvp_actual' => $item->pvp_actual,
+                    'nuevo_pvp' => $nuevoPvp,
+                    'porcentaje_subida' => $porcentajeSubida,
+                    'categoria' => $categoria,
+                    'estrellas' => $estrellas,
+                    'total_unidades' => $item->TotalUnidades,
+                    'porcentaje_ventas' => round($porcentajeVentas, 2)
+                ];
+            }
+        }
+        
+        return collect($resultados);
     }
 }

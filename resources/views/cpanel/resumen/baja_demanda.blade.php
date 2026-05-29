@@ -2245,36 +2245,31 @@
                     <div class="row g-2 mb-3">
                         <div class="col-6">
                             <div class="border rounded p-2 text-center">
-                                <small class="text-muted">2 - 5 meses</small>
-                                <h5 class="mb-0 text-danger">-20%</h5>
+                                <small class="text-muted" style="display: block; margin-bottom: 1rem;">2 - 5 meses</small>
                                 <small class="text-muted">Rotación Lenta</small>
                             </div>
                         </div>
                         <div class="col-6">
                             <div class="border rounded p-2 text-center">
-                                <small class="text-muted">5 - 8 meses</small>
-                                <h5 class="mb-0 text-danger">-35%</h5>
+                                <small class="text-muted" style="display: block; margin-bottom: 1rem;">5 - 8 meses</small>
                                 <small class="text-muted">Riesgo Estancamiento</small>
                             </div>
                         </div>
                         <div class="col-6">
                             <div class="border rounded p-2 text-center">
-                                <small class="text-muted">8 - 12 meses</small>
-                                <h5 class="mb-0 text-danger">-50%</h5>
+                                <small class="text-muted" style="display: block; margin-bottom: 1rem;">8 - 12 meses</small>
                                 <small class="text-muted">Mercancía Crítica</small>
                             </div>
                         </div>
                         <div class="col-6">
                             <div class="border rounded p-2 text-center">
-                                <small class="text-muted">12 - 15 meses</small>
-                                <h5 class="mb-0 text-danger">-100%</h5>
+                                <small class="text-muted" style="display: block; margin-bottom: 1rem;">12 - 18 meses</small>
                                 <small class="text-muted">Remate Total</small>
                             </div>
                         </div>
                         <div class="col-12">
                             <div class="border rounded p-2 text-center" style="background: #fff3cd; border-color: #ff9800;">
-                                <small class="text-muted">&gt; 15 meses</small>
-                                <h5 class="mb-0 text-danger fw-bold">-140%</h5>
+                                <small class="text-muted" style="display: block; margin-bottom: 1rem;">&gt; 18 meses</small>
                                 <small class="text-muted fw-bold">Super Remate Total</small>
                                 <small class="d-block text-muted" style="font-size: 10px;">⚠️ Puede quedar por debajo del costo</small>
                             </div>
@@ -2569,19 +2564,19 @@
                                 <div class="card-body py-2">
                                     <div class="row">
                                         <div class="col-4">
-                                            <small class="text-muted">Rotación Lenta (20%):</small>
+                                            <small class="text-muted">Rotación Lenta:</small>
                                             <h6 class="mb-0">${categorias.rotacionLenta || 0}</h6>
                                         </div>
                                         <div class="col-4">
-                                            <small class="text-muted">Riesgo Estancamiento (30%):</small>
+                                            <small class="text-muted">Riesgo Estancamiento:</small>
                                             <h6 class="mb-0">${categorias.riesgoEstancamiento || 0}</h6>
                                         </div>
                                         <div class="col-4">
-                                            <small class="text-muted">Mercancía Crítica (50%):</small>
+                                            <small class="text-muted">Mercancía Crítica:</small>
                                             <h6 class="mb-0">${categorias.mercanciaCritica || 0}</h6>
                                         </div>
                                         <div class="col-4 mt-1">
-                                            <small class="text-muted">Remate Total (100%):</small>
+                                            <small class="text-muted">Remate Total:</small>
                                             <h6 class="mb-0">${categorias.remateTotal || 0}</h6>
                                         </div>
                                         <div class="col-4 mt-1">
@@ -2668,62 +2663,64 @@
         
         // ✅ Exportación automática SILENCIOSA (sin ningún tipo de alerta)
         setTimeout(() => {
-            const sucursalNombre = data.sucursal_nombre || 'Todas';
-            const fecha = new Date().toISOString().split('T')[0];
-            const hora = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
+            // const sucursalNombre = data.sucursal_nombre || 'Todas';
+            // const fecha = new Date().toISOString().split('T')[0];
+            // const hora = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
             
-            // Preparar datos para el Excel
-            const excelData = [];
+            // // Preparar datos para el Excel
+            // const excelData = [];
             
-            excelData.push(['REPORTE DE AUTOMATIZACIÓN DE PRECIOS']);
-            excelData.push(['Sucursal:', sucursalNombre]);
-            excelData.push(['Fecha:', new Date().toLocaleString()]);
-            excelData.push(['Días de gracia:', data.dias_gracia || 30]);
-            excelData.push([]);
+            // excelData.push(['REPORTE DE AUTOMATIZACIÓN DE PRECIOS']);
+            // excelData.push(['Sucursal:', sucursalNombre]);
+            // excelData.push(['Fecha:', new Date().toLocaleString()]);
+            // excelData.push(['Días de gracia:', data.dias_gracia || 30]);
+            // excelData.push([]);
             
-            excelData.push(['RESUMEN GENERAL']);
-            excelData.push(['Total productos analizados', data.total_analizados || 0]);
-            excelData.push(['Productos afectados', data.productos_afectados || 0]);
-            excelData.push(['Precios mantenidos', data.productos_mantenidos || 0]);
-            excelData.push(['Saltados por reproceso', data.productos_saltados_reproceso || 0]);
-            excelData.push([]);
+            // excelData.push(['RESUMEN GENERAL']);
+            // excelData.push(['Total productos analizados', data.total_analizados || 0]);
+            // excelData.push(['Productos afectados', data.productos_afectados || 0]);
+            // excelData.push(['Precios mantenidos', data.productos_mantenidos || 0]);
+            // excelData.push(['Saltados por reproceso', data.productos_saltados_reproceso || 0]);
+            // excelData.push([]);
             
-            const categorias = data.categorias || {};
-            excelData.push(['DESGLOSE POR CATEGORÍA']);
-            excelData.push(['Rotación Lenta (20%)', categorias.rotacionLenta || 0]);
-            excelData.push(['Riesgo Estancamiento (35%)', categorias.riesgoEstancamiento || 0]);  // ✅ Corregido: 35%
-            excelData.push(['Mercancía Crítica (50%)', categorias.mercanciaCritica || 0]);
-            excelData.push(['Remate Total (100%)', categorias.remateTotal || 0]);
-            excelData.push(['Super Remate Total (140%)', categorias.superRemateTotal || 0]);  // ✅ Agregado
-            excelData.push(['Nueva Colección', categorias.nuevaColeccion || 0]);
-            excelData.push([]);
+            // const categorias = data.categorias || {};
+            // excelData.push(['DESGLOSE POR CATEGORÍA']);
+            // excelData.push(['Rotación Lenta', categorias.rotacionLenta || 0]);
+            // excelData.push(['Riesgo Estancamiento', categorias.riesgoEstancamiento || 0]);  // ✅ Corregido: 35%
+            // excelData.push(['Mercancía Crítica', categorias.mercanciaCritica || 0]);
+            // excelData.push(['Remate Total', categorias.remateTotal || 0]);
+            // excelData.push(['Super Remate Total', categorias.superRemateTotal || 0]);  // ✅ Agregado
+            // excelData.push(['Nueva Colección', categorias.nuevaColeccion || 0]);
+            // excelData.push([]);
             
-            if (data.detalles && data.detalles.length > 0) {
-                excelData.push(['PRODUCTOS ACTUALIZADOS']);
-                excelData.push(['Código', 'Descripción', 'Categoría', 'Precio Anterior', 'Nuevo Precio', 'Descuento', 'Costo', 'Existencia']);
+            // if (data.detalles && data.detalles.length > 0) {
+            //     excelData.push(['PRODUCTOS ACTUALIZADOS']);
+            //     excelData.push(['Código', 'Descripción', 'Categoría', 'Precio Anterior', 'Nuevo Precio', 'Descuento', 'Costo', 'Existencia']);
                 
-                data.detalles.forEach(d => {
-                    excelData.push([
-                        d.codigo || 'N/A',
-                        d.descripcion || '',
-                        d.categoria || '',
-                        d.precio_anterior || 0,
-                        d.nuevo_precio || 0,
-                        d.porcentaje_descuento || 0,
-                        d.costo || 0,
-                        d.existencia || 0
-                    ]);
-                });
-            }
+            //     data.detalles.forEach(d => {
+            //         excelData.push([
+            //             d.codigo || 'N/A',
+            //             d.descripcion || '',
+            //             d.categoria || '',
+            //             d.precio_anterior || 0,
+            //             d.nuevo_precio || 0,
+            //             d.porcentaje_descuento || 0,
+            //             d.costo || 0,
+            //             d.existencia || 0
+            //         ]);
+            //     });
+            // }
             
-            // Crear y descargar Excel SILENCIOSAMENTE
-            const wb = XLSX.utils.book_new();
-            const ws = XLSX.utils.aoa_to_sheet(excelData);
-            ws['!cols'] = [{ wch: 25 }, { wch: 50 }, { wch: 25 }, { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 15 }, { wch: 12 }];
-            XLSX.utils.book_append_sheet(wb, ws, 'Automatizacion');
+            // // Crear y descargar Excel SILENCIOSAMENTE
+            // const wb = XLSX.utils.book_new();
+            // const ws = XLSX.utils.aoa_to_sheet(excelData);
+            // ws['!cols'] = [{ wch: 25 }, { wch: 50 }, { wch: 25 }, { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 15 }, { wch: 12 }];
+            // XLSX.utils.book_append_sheet(wb, ws, 'Automatizacion');
             
-            const nombreArchivo = `Automatizacion_${sucursalNombre}_${fecha}_${hora}.xlsx`;
-            XLSX.writeFile(wb, nombreArchivo);
+            // const nombreArchivo = `Automatizacion_${sucursalNombre}_${fecha}_${hora}.xlsx`;
+            // XLSX.writeFile(wb, nombreArchivo);
+
+            exportarResultadosAutomatizacionExcel(data);
             
             // Sin ningún tipo de alerta
         }, 500);
@@ -2953,51 +2950,176 @@
         XLSX.writeFile(wb, `Productos_Baja_Demanda_${fecha}.xlsx`);
     }
 
+    // // Función para exportar resultados a Excel
+    // function exportarResultadosActualizacionExcel(data) {
+    //     const sucursalNombre = data.sucursal_nombre || 'Todas';
+    //     const fecha = new Date().toISOString().split('T')[0];
+    //     const hora = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
+        
+    //     // Preparar datos para el Excel
+    //     const excelData = [];
+        
+    //     // Encabezados principales
+    //     excelData.push(['REPORTE DE AUTOMATIZACIÓN DE PRECIOS']);
+    //     excelData.push(['Sucursal:', sucursalNombre]);
+    //     excelData.push(['Fecha:', new Date().toLocaleString()]);
+    //     excelData.push(['Días de gracia:', data.dias_gracia || 30]);  // ✅ Corregido: 30 días
+    //     excelData.push([]);
+        
+    //     // Resumen
+    //     excelData.push(['RESUMEN GENERAL']);
+    //     excelData.push(['Total productos analizados', data.total_analizados || 0]);
+    //     excelData.push(['Productos afectados (actualizados)', data.productos_afectados || 0]);
+    //     excelData.push(['Precios mantenidos (sin cambios)', data.productos_mantenidos || 0]);
+    //     excelData.push(['Saltados por reproceso', data.productos_saltados_reproceso || 0]);
+    //     excelData.push([]);
+        
+    //     // Desglose por categoría (con Super Remate Total)
+    //     const categorias = data.categorias || {};
+    //     excelData.push(['DESGLOSE POR CATEGORÍA']);
+    //     excelData.push(['Rotación Lenta (20%)', categorias.rotacionLenta || 0]);
+    //     excelData.push(['Riesgo Estancamiento (35%)', categorias.riesgoEstancamiento || 0]);  // ✅ Corregido: 35%
+    //     excelData.push(['Mercancía Crítica (50%)', categorias.mercanciaCritica || 0]);
+    //     excelData.push(['Remate Total (100%)', categorias.remateTotal || 0]);
+    //     excelData.push(['Super Remate Total (140%)', categorias.superRemateTotal || 0]);  // ✅ Agregado
+    //     excelData.push(['Nueva Colección', categorias.nuevaColeccion || 0]);
+    //     excelData.push(['Precios mantenidos', categorias.preciosMantenidos || 0]);
+    //     excelData.push([]);
+        
+    //     // ============================================
+    //     // PRODUCTOS ACTUALIZADOS
+    //     // ============================================
+    //     if (data.detalles && data.detalles.length > 0) {
+    //         excelData.push(['PRODUCTOS ACTUALIZADOS (' + data.detalles.length + ')']);
+    //         excelData.push(['Código', 'Descripción', 'Categoría', 'Precio Anterior', 'Nuevo Precio', 'Descuento', 'Costo', 'Existencia']);
+            
+    //         data.detalles.forEach(d => {
+    //             excelData.push([
+    //                 d.codigo || 'N/A',
+    //                 d.descripcion || '',
+    //                 d.categoria || '',
+    //                 d.precio_anterior || 0,
+    //                 d.nuevo_precio || 0,
+    //                 d.porcentaje_descuento || 0,
+    //                 d.costo || 0,
+    //                 d.existencia || 0
+    //             ]);
+    //         });
+    //         excelData.push([]);
+    //     }
+        
+    //     // ============================================
+    //     // PRODUCTOS MANTENIDOS
+    //     // ============================================
+    //     if (data.detalles_mantenidos && data.detalles_mantenidos.length > 0) {
+    //         excelData.push(['PRODUCTOS MANTENIDOS (' + data.detalles_mantenidos.length + ') - Sin cambios por pérdida']);
+    //         excelData.push(['Código', 'Descripción', 'Precio Actual', 'Costo', 'Ganancia', 'Razón']);
+            
+    //         data.detalles_mantenidos.forEach(d => {
+    //             excelData.push([
+    //                 d.codigo || 'N/A',
+    //                 d.descripcion || '',
+    //                 d.pvp_actual || d.precio_actual || 0,
+    //                 d.costo || 0,
+    //                 d.ganancia || 0,
+    //                 d.razon || 'Producto en pérdida o sin ganancia'
+    //             ]);
+    //         });
+    //         excelData.push([]);
+    //     }
+        
+    //     // ============================================
+    //     // PRODUCTOS SALTADOS POR REPROCESO
+    //     // ============================================
+    //     if (data.detalles_saltados && data.detalles_saltados.length > 0) {
+    //         excelData.push(['PRODUCTOS SALTADOS POR REPROCESO (' + data.detalles_saltados.length + ')']);
+    //         excelData.push(['Código', 'Descripción', 'Fecha Último Cambio']);
+            
+    //         data.detalles_saltados.forEach(d => {
+    //             excelData.push([
+    //                 d.codigo || 'N/A',
+    //                 d.descripcion || '',
+    //                 d.fecha_ultimo_cambio || 'N/A'
+    //             ]);
+    //         });
+    //         excelData.push([]);
+    //     }
+        
+    //     // Crear y descargar Excel
+    //     const wb = XLSX.utils.book_new();
+    //     const ws = XLSX.utils.aoa_to_sheet(excelData);
+        
+    //     // Ajustar anchos de columna
+    //     ws['!cols'] = [
+    //         { wch: 25 }, { wch: 50 }, { wch: 25 }, { wch: 18 }, 
+    //         { wch: 18 }, { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 30 }
+    //     ];
+        
+    //     XLSX.utils.book_append_sheet(wb, ws, 'Automatizacion');
+        
+    //     const nombreArchivo = `Automatizacion_${sucursalNombre}_${fecha}_${hora}.xlsx`;
+    //     XLSX.writeFile(wb, nombreArchivo);
+        
+    //     Swal.fire({
+    //         title: 'Exportación completada',
+    //         text: `Archivo Excel generado: ${nombreArchivo}`,
+    //         icon: 'success',
+    //         timer: 2000,
+    //         showConfirmButton: false
+    //     });
+    // }
+
     // Función para exportar resultados a Excel
     function exportarResultadosActualizacionExcel(data) {
         const sucursalNombre = data.sucursal_nombre || 'Todas';
         const fecha = new Date().toISOString().split('T')[0];
         const hora = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
         
-        // Preparar datos para el Excel
-        const excelData = [];
-        
-        // Encabezados principales
-        excelData.push(['REPORTE DE AUTOMATIZACIÓN DE PRECIOS']);
-        excelData.push(['Sucursal:', sucursalNombre]);
-        excelData.push(['Fecha:', new Date().toLocaleString()]);
-        excelData.push(['Días de gracia:', data.dias_gracia || 30]);  // ✅ Corregido: 30 días
-        excelData.push([]);
-        
-        // Resumen
-        excelData.push(['RESUMEN GENERAL']);
-        excelData.push(['Total productos analizados', data.total_analizados || 0]);
-        excelData.push(['Productos afectados (actualizados)', data.productos_afectados || 0]);
-        excelData.push(['Precios mantenidos (sin cambios)', data.productos_mantenidos || 0]);
-        excelData.push(['Saltados por reproceso', data.productos_saltados_reproceso || 0]);
-        excelData.push([]);
-        
-        // Desglose por categoría (con Super Remate Total)
-        const categorias = data.categorias || {};
-        excelData.push(['DESGLOSE POR CATEGORÍA']);
-        excelData.push(['Rotación Lenta (20%)', categorias.rotacionLenta || 0]);
-        excelData.push(['Riesgo Estancamiento (35%)', categorias.riesgoEstancamiento || 0]);  // ✅ Corregido: 35%
-        excelData.push(['Mercancía Crítica (50%)', categorias.mercanciaCritica || 0]);
-        excelData.push(['Remate Total (100%)', categorias.remateTotal || 0]);
-        excelData.push(['Super Remate Total (140%)', categorias.superRemateTotal || 0]);  // ✅ Agregado
-        excelData.push(['Nueva Colección', categorias.nuevaColeccion || 0]);
-        excelData.push(['Precios mantenidos', categorias.preciosMantenidos || 0]);
-        excelData.push([]);
+        // Crear libro de Excel
+        const wb = XLSX.utils.book_new();
         
         // ============================================
-        // PRODUCTOS ACTUALIZADOS
+        // HOJA 1: RESUMEN GENERAL
+        // ============================================
+        const resumenData = [];
+        
+        resumenData.push(['REPORTE DE AUTOMATIZACIÓN DE PRECIOS']);
+        resumenData.push(['Sucursal:', sucursalNombre]);
+        resumenData.push(['Fecha:', new Date().toLocaleString()]);
+        resumenData.push(['Días de gracia:', data.dias_gracia || 30]);
+        resumenData.push([]);
+        
+        resumenData.push(['RESUMEN GENERAL']);
+        resumenData.push(['Total productos analizados', data.total_analizados || 0]);
+        resumenData.push(['Productos afectados (actualizados)', data.productos_afectados || 0]);
+        resumenData.push(['Precios mantenidos (sin cambios)', data.productos_mantenidos || 0]);
+        resumenData.push(['Saltados por reproceso', data.productos_saltados_reproceso || 0]);
+        resumenData.push([]);
+        
+        const categorias = data.categorias || {};
+        resumenData.push(['DESGLOSE POR CATEGORÍA']);
+        resumenData.push(['Rotación Lenta', categorias.rotacionLenta || 0]);
+        resumenData.push(['Riesgo Estancamiento', categorias.riesgoEstancamiento || 0]);
+        resumenData.push(['Mercancía Crítica', categorias.mercanciaCritica || 0]);
+        resumenData.push(['Remate Total', categorias.remateTotal || 0]);
+        resumenData.push(['Super Remate Total', categorias.superRemateTotal || 0]);
+        resumenData.push(['Nueva Colección', categorias.nuevaColeccion || 0]);
+        resumenData.push(['Precios mantenidos', categorias.preciosMantenidos || 0]);
+        
+        const wsResumen = XLSX.utils.aoa_to_sheet(resumenData);
+        wsResumen['!cols'] = [{ wch: 30 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
+        
+        // ============================================
+        // HOJA 2: PRODUCTOS ACTUALIZADOS
         // ============================================
         if (data.detalles && data.detalles.length > 0) {
-            excelData.push(['PRODUCTOS ACTUALIZADOS (' + data.detalles.length + ')']);
-            excelData.push(['Código', 'Descripción', 'Categoría', 'Precio Anterior', 'Nuevo Precio', 'Descuento', 'Costo', 'Existencia']);
+            const actualizadosData = [
+                ['Código', 'Descripción', 'Categoría', 'Precio Anterior', 'Nuevo Precio', 'Descuento', 'Costo', 'Existencia']
+            ];
             
             data.detalles.forEach(d => {
-                excelData.push([
+                actualizadosData.push([
                     d.codigo || 'N/A',
                     d.descripcion || '',
                     d.categoria || '',
@@ -3008,18 +3130,26 @@
                     d.existencia || 0
                 ]);
             });
-            excelData.push([]);
+            
+            const wsActualizados = XLSX.utils.aoa_to_sheet(actualizadosData);
+            wsActualizados['!cols'] = [
+                { wch: 15 }, { wch: 40 }, { wch: 25 }, 
+                { wch: 15 }, { wch: 15 }, { wch: 10 }, 
+                { wch: 12 }, { wch: 10 }
+            ];
+            XLSX.utils.book_append_sheet(wb, wsActualizados, 'Productos Actualizados');
         }
         
         // ============================================
-        // PRODUCTOS MANTENIDOS
+        // HOJA 3: PRODUCTOS MANTENIDOS
         // ============================================
         if (data.detalles_mantenidos && data.detalles_mantenidos.length > 0) {
-            excelData.push(['PRODUCTOS MANTENIDOS (' + data.detalles_mantenidos.length + ') - Sin cambios por pérdida']);
-            excelData.push(['Código', 'Descripción', 'Precio Actual', 'Costo', 'Ganancia', 'Razón']);
+            const mantenidosData = [
+                ['Código', 'Descripción', 'Precio Actual', 'Costo', 'Ganancia', 'Razón']
+            ];
             
             data.detalles_mantenidos.forEach(d => {
-                excelData.push([
+                mantenidosData.push([
                     d.codigo || 'N/A',
                     d.descripcion || '',
                     d.pvp_actual || d.precio_actual || 0,
@@ -3028,38 +3158,37 @@
                     d.razon || 'Producto en pérdida o sin ganancia'
                 ]);
             });
-            excelData.push([]);
+            
+            const wsMantenidos = XLSX.utils.aoa_to_sheet(mantenidosData);
+            wsMantenidos['!cols'] = [
+                { wch: 15 }, { wch: 40 }, { wch: 15 }, 
+                { wch: 12 }, { wch: 12 }, { wch: 35 }
+            ];
+            XLSX.utils.book_append_sheet(wb, wsMantenidos, 'Productos Mantenidos');
         }
         
         // ============================================
-        // PRODUCTOS SALTADOS POR REPROCESO
+        // HOJA 4: PRODUCTOS SALTADOS (opcional)
         // ============================================
         if (data.detalles_saltados && data.detalles_saltados.length > 0) {
-            excelData.push(['PRODUCTOS SALTADOS POR REPROCESO (' + data.detalles_saltados.length + ')']);
-            excelData.push(['Código', 'Descripción', 'Fecha Último Cambio']);
+            const saltadosData = [
+                ['Código', 'Descripción', 'Fecha Último Cambio']
+            ];
             
             data.detalles_saltados.forEach(d => {
-                excelData.push([
+                saltadosData.push([
                     d.codigo || 'N/A',
                     d.descripcion || '',
                     d.fecha_ultimo_cambio || 'N/A'
                 ]);
             });
-            excelData.push([]);
+            
+            const wsSaltados = XLSX.utils.aoa_to_sheet(saltadosData);
+            wsSaltados['!cols'] = [{ wch: 15 }, { wch: 40 }, { wch: 20 }];
+            XLSX.utils.book_append_sheet(wb, wsSaltados, 'Productos Saltados');
         }
         
-        // Crear y descargar Excel
-        const wb = XLSX.utils.book_new();
-        const ws = XLSX.utils.aoa_to_sheet(excelData);
-        
-        // Ajustar anchos de columna
-        ws['!cols'] = [
-            { wch: 25 }, { wch: 50 }, { wch: 25 }, { wch: 18 }, 
-            { wch: 18 }, { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 30 }
-        ];
-        
-        XLSX.utils.book_append_sheet(wb, ws, 'Automatizacion');
-        
+        // Descargar Excel
         const nombreArchivo = `Automatizacion_${sucursalNombre}_${fecha}_${hora}.xlsx`;
         XLSX.writeFile(wb, nombreArchivo);
         
@@ -3148,11 +3277,11 @@
         startY += 10;
         
         const categoriaData = [
-            ['Rotación Lenta (20%)', categorias.rotacionLenta || 0],
-            ['Riesgo Estancamiento (35%)', categorias.riesgoEstancamiento || 0],
-            ['Mercancía Crítica (50%)', categorias.mercanciaCritica || 0],
-            ['Remate Total (100%)', categorias.remateTotal || 0],
-            ['Super Remate Total (140%)', categorias.superRemateTotal || 0],
+            ['Rotación Lenta', categorias.rotacionLenta || 0],
+            ['Riesgo Estancamiento', categorias.riesgoEstancamiento || 0],
+            ['Mercancía Crítica', categorias.mercanciaCritica || 0],
+            ['Remate Total', categorias.remateTotal || 0],
+            ['Super Remate Total', categorias.superRemateTotal || 0],
             ['Nueva Colección', categorias.nuevaColeccion || 0]
         ];
         
@@ -3297,49 +3426,164 @@
     // EXPORTAR RESULTADOS DE AUTOMATIZACIÓN (usando datos guardados)
     // ============================================
 
+    // // Función para exportar resultados a Excel desde datos guardados
+    // function exportarResultadosAutomatizacionExcel(data) {
+    //     const sucursalNombre = data.sucursal_nombre || 'Todas';
+    //     const fecha = new Date().toISOString().split('T')[0];
+    //     const hora = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
+        
+    //     // Preparar datos para el Excel
+    //     const excelData = [];
+        
+    //     // Encabezados principales
+    //     excelData.push(['REPORTE DE AUTOMATIZACIÓN DE PRECIOS']);
+    //     excelData.push(['Sucursal:', sucursalNombre]);
+    //     excelData.push(['Fecha:', new Date().toLocaleString()]);
+    //     excelData.push(['Días de gracia:', data.dias_gracia || 30]);
+    //     excelData.push([]);
+        
+    //     // Resumen
+    //     excelData.push(['RESUMEN GENERAL']);
+    //     excelData.push(['Total productos analizados', data.total_analizados || 0]);
+    //     excelData.push(['Productos afectados (actualizados)', data.productos_afectados || 0]);
+    //     excelData.push(['Precios mantenidos (sin cambios)', data.productos_mantenidos || 0]);
+    //     excelData.push(['Saltados por reproceso', data.productos_saltados_reproceso || 0]);
+    //     excelData.push([]);
+        
+    //     // Desglose por categoría
+    //     const categorias = data.categorias || {};
+    //     excelData.push(['DESGLOSE POR CATEGORÍA']);
+    //     excelData.push(['Rotación Lenta (20%)', categorias.rotacionLenta || 0]);
+    //     excelData.push(['Riesgo Estancamiento (35%)', categorias.riesgoEstancamiento || 0]);
+    //     excelData.push(['Mercancía Crítica (50%)', categorias.mercanciaCritica || 0]);
+    //     excelData.push(['Remate Total (100%)', categorias.remateTotal || 0]);
+    //     excelData.push(['Super Remate Total (140%)', categorias.superRemateTotal || 0]);
+    //     excelData.push(['Nueva Colección', categorias.nuevaColeccion || 0]);
+    //     excelData.push(['Precios mantenidos', categorias.preciosMantenidos || 0]);
+    //     excelData.push([]);
+        
+    //     // Productos actualizados
+    //     if (data.detalles && data.detalles.length > 0) {
+    //         excelData.push(['PRODUCTOS ACTUALIZADOS (' + data.detalles.length + ')']);
+    //         excelData.push(['Código', 'Descripción', 'Categoría', 'Precio Anterior', 'Nuevo Precio', 'Descuento', 'Costo', 'Existencia']);
+            
+    //         data.detalles.forEach(d => {
+    //             excelData.push([
+    //                 d.codigo || 'N/A',
+    //                 d.descripcion || '',
+    //                 d.categoria || '',
+    //                 d.precio_anterior || 0,
+    //                 d.nuevo_precio || 0,
+    //                 d.porcentaje_descuento || 0,
+    //                 d.costo || 0,
+    //                 d.existencia || 0
+    //             ]);
+    //         });
+    //         excelData.push([]);
+    //     }
+        
+    //     // Productos mantenidos
+    //     if (data.detalles_mantenidos && data.detalles_mantenidos.length > 0) {
+    //         excelData.push(['PRODUCTOS MANTENIDOS (' + data.detalles_mantenidos.length + ') - Sin cambios por pérdida']);
+    //         excelData.push(['Código', 'Descripción', 'Precio Actual', 'Costo', 'Ganancia', 'Razón']);
+            
+    //         data.detalles_mantenidos.forEach(d => {
+    //             excelData.push([
+    //                 d.codigo || 'N/A',
+    //                 d.descripcion || '',
+    //                 d.pvp_actual || d.precio_actual || 0,
+    //                 d.costo || 0,
+    //                 d.ganancia || 0,
+    //                 d.razon || 'Producto en pérdida o sin ganancia'
+    //             ]);
+    //         });
+    //         excelData.push([]);
+    //     }
+        
+    //     // Productos saltados
+    //     if (data.detalles_saltados && data.detalles_saltados.length > 0) {
+    //         excelData.push(['PRODUCTOS SALTADOS POR REPROCESO (' + data.detalles_saltados.length + ')']);
+    //         excelData.push(['Código', 'Descripción', 'Fecha Último Cambio']);
+            
+    //         data.detalles_saltados.forEach(d => {
+    //             excelData.push([
+    //                 d.codigo || 'N/A',
+    //                 d.descripcion || '',
+    //                 d.fecha_ultimo_cambio || 'N/A'
+    //             ]);
+    //         });
+    //         excelData.push([]);
+    //     }
+        
+    //     // Crear y descargar Excel
+    //     const wb = XLSX.utils.book_new();
+    //     const ws = XLSX.utils.aoa_to_sheet(excelData);
+    //     ws['!cols'] = [{ wch: 25 }, { wch: 50 }, { wch: 25 }, { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 15 }, { wch: 12 }];
+    //     XLSX.utils.book_append_sheet(wb, ws, 'Automatizacion');
+        
+    //     const nombreArchivo = `Automatizacion_${sucursalNombre}_${fecha}_${hora}.xlsx`;
+    //     XLSX.writeFile(wb, nombreArchivo);
+        
+    //     Swal.fire({
+    //         title: 'Exportación completada',
+    //         text: `Archivo Excel generado: ${nombreArchivo}`,
+    //         icon: 'success',
+    //         timer: 2000,
+    //         showConfirmButton: false
+    //     });
+    // }
+
     // Función para exportar resultados a Excel desde datos guardados
     function exportarResultadosAutomatizacionExcel(data) {
         const sucursalNombre = data.sucursal_nombre || 'Todas';
         const fecha = new Date().toISOString().split('T')[0];
         const hora = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
         
-        // Preparar datos para el Excel
-        const excelData = [];
+        // Crear libro de Excel
+        const wb = XLSX.utils.book_new();
         
-        // Encabezados principales
-        excelData.push(['REPORTE DE AUTOMATIZACIÓN DE PRECIOS']);
-        excelData.push(['Sucursal:', sucursalNombre]);
-        excelData.push(['Fecha:', new Date().toLocaleString()]);
-        excelData.push(['Días de gracia:', data.dias_gracia || 30]);
-        excelData.push([]);
+        // ============================================
+        // HOJA 1: RESUMEN GENERAL
+        // ============================================
+        const resumenData = [];
         
-        // Resumen
-        excelData.push(['RESUMEN GENERAL']);
-        excelData.push(['Total productos analizados', data.total_analizados || 0]);
-        excelData.push(['Productos afectados (actualizados)', data.productos_afectados || 0]);
-        excelData.push(['Precios mantenidos (sin cambios)', data.productos_mantenidos || 0]);
-        excelData.push(['Saltados por reproceso', data.productos_saltados_reproceso || 0]);
-        excelData.push([]);
+        resumenData.push(['REPORTE DE AUTOMATIZACIÓN DE PRECIOS']);
+        resumenData.push(['Sucursal:', sucursalNombre]);
+        resumenData.push(['Fecha:', new Date().toLocaleString()]);
+        resumenData.push(['Días de gracia:', data.dias_gracia || 30]);
+        resumenData.push([]);
         
-        // Desglose por categoría
+        resumenData.push(['RESUMEN GENERAL']);
+        resumenData.push(['Total productos analizados', data.total_analizados || 0]);
+        resumenData.push(['Productos afectados (actualizados)', data.productos_afectados || 0]);
+        resumenData.push(['Precios mantenidos (sin cambios)', data.productos_mantenidos || 0]);
+        resumenData.push(['Saltados por reproceso', data.productos_saltados_reproceso || 0]);
+        resumenData.push([]);
+        
         const categorias = data.categorias || {};
-        excelData.push(['DESGLOSE POR CATEGORÍA']);
-        excelData.push(['Rotación Lenta (20%)', categorias.rotacionLenta || 0]);
-        excelData.push(['Riesgo Estancamiento (35%)', categorias.riesgoEstancamiento || 0]);
-        excelData.push(['Mercancía Crítica (50%)', categorias.mercanciaCritica || 0]);
-        excelData.push(['Remate Total (100%)', categorias.remateTotal || 0]);
-        excelData.push(['Super Remate Total (140%)', categorias.superRemateTotal || 0]);
-        excelData.push(['Nueva Colección', categorias.nuevaColeccion || 0]);
-        excelData.push(['Precios mantenidos', categorias.preciosMantenidos || 0]);
-        excelData.push([]);
+        resumenData.push(['DESGLOSE POR CATEGORÍA']);
+        resumenData.push(['Rotación Lenta', categorias.rotacionLenta || 0]);
+        resumenData.push(['Riesgo Estancamiento', categorias.riesgoEstancamiento || 0]);
+        resumenData.push(['Mercancía Crítica', categorias.mercanciaCritica || 0]);
+        resumenData.push(['Remate Total ', categorias.remateTotal || 0]);
+        resumenData.push(['Super Remate Total ', categorias.superRemateTotal || 0]);
+        resumenData.push(['Nueva Colección', categorias.nuevaColeccion || 0]);
+        resumenData.push(['Precios mantenidos', categorias.preciosMantenidos || 0]);
         
-        // Productos actualizados
+        const wsResumen = XLSX.utils.aoa_to_sheet(resumenData);
+        wsResumen['!cols'] = [{ wch: 30 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
+        
+        // ============================================
+        // HOJA 2: PRODUCTOS ACTUALIZADOS
+        // ============================================
         if (data.detalles && data.detalles.length > 0) {
-            excelData.push(['PRODUCTOS ACTUALIZADOS (' + data.detalles.length + ')']);
-            excelData.push(['Código', 'Descripción', 'Categoría', 'Precio Anterior', 'Nuevo Precio', 'Descuento', 'Costo', 'Existencia']);
+            const actualizadosData = [
+                ['Código', 'Descripción', 'Categoría', 'Precio Anterior', 'Nuevo Precio', 'Descuento', 'Costo', 'Existencia']
+            ];
             
             data.detalles.forEach(d => {
-                excelData.push([
+                actualizadosData.push([
                     d.codigo || 'N/A',
                     d.descripcion || '',
                     d.categoria || '',
@@ -3350,16 +3594,26 @@
                     d.existencia || 0
                 ]);
             });
-            excelData.push([]);
+            
+            const wsActualizados = XLSX.utils.aoa_to_sheet(actualizadosData);
+            wsActualizados['!cols'] = [
+                { wch: 15 }, { wch: 40 }, { wch: 25 }, 
+                { wch: 15 }, { wch: 15 }, { wch: 10 }, 
+                { wch: 12 }, { wch: 10 }
+            ];
+            XLSX.utils.book_append_sheet(wb, wsActualizados, 'Productos Actualizados');
         }
         
-        // Productos mantenidos
+        // ============================================
+        // HOJA 3: PRODUCTOS MANTENIDOS
+        // ============================================
         if (data.detalles_mantenidos && data.detalles_mantenidos.length > 0) {
-            excelData.push(['PRODUCTOS MANTENIDOS (' + data.detalles_mantenidos.length + ') - Sin cambios por pérdida']);
-            excelData.push(['Código', 'Descripción', 'Precio Actual', 'Costo', 'Ganancia', 'Razón']);
+            const mantenidosData = [
+                ['Código', 'Descripción', 'Precio Actual', 'Costo', 'Ganancia', 'Razón']
+            ];
             
             data.detalles_mantenidos.forEach(d => {
-                excelData.push([
+                mantenidosData.push([
                     d.codigo || 'N/A',
                     d.descripcion || '',
                     d.pvp_actual || d.precio_actual || 0,
@@ -3368,30 +3622,37 @@
                     d.razon || 'Producto en pérdida o sin ganancia'
                 ]);
             });
-            excelData.push([]);
+            
+            const wsMantenidos = XLSX.utils.aoa_to_sheet(mantenidosData);
+            wsMantenidos['!cols'] = [
+                { wch: 15 }, { wch: 40 }, { wch: 15 }, 
+                { wch: 12 }, { wch: 12 }, { wch: 35 }
+            ];
+            XLSX.utils.book_append_sheet(wb, wsMantenidos, 'Productos Mantenidos');
         }
         
-        // Productos saltados
+        // ============================================
+        // HOJA 4: PRODUCTOS SALTADOS (opcional)
+        // ============================================
         if (data.detalles_saltados && data.detalles_saltados.length > 0) {
-            excelData.push(['PRODUCTOS SALTADOS POR REPROCESO (' + data.detalles_saltados.length + ')']);
-            excelData.push(['Código', 'Descripción', 'Fecha Último Cambio']);
+            const saltadosData = [
+                ['Código', 'Descripción', 'Fecha Último Cambio']
+            ];
             
             data.detalles_saltados.forEach(d => {
-                excelData.push([
+                saltadosData.push([
                     d.codigo || 'N/A',
                     d.descripcion || '',
                     d.fecha_ultimo_cambio || 'N/A'
                 ]);
             });
-            excelData.push([]);
+            
+            const wsSaltados = XLSX.utils.aoa_to_sheet(saltadosData);
+            wsSaltados['!cols'] = [{ wch: 15 }, { wch: 40 }, { wch: 20 }];
+            XLSX.utils.book_append_sheet(wb, wsSaltados, 'Productos Saltados');
         }
         
-        // Crear y descargar Excel
-        const wb = XLSX.utils.book_new();
-        const ws = XLSX.utils.aoa_to_sheet(excelData);
-        ws['!cols'] = [{ wch: 25 }, { wch: 50 }, { wch: 25 }, { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 15 }, { wch: 12 }];
-        XLSX.utils.book_append_sheet(wb, ws, 'Automatizacion');
-        
+        // Descargar Excel
         const nombreArchivo = `Automatizacion_${sucursalNombre}_${fecha}_${hora}.xlsx`;
         XLSX.writeFile(wb, nombreArchivo);
         
@@ -3478,11 +3739,11 @@
         startY += 10;
         
         const categoriaData = [
-            ['Rotación Lenta (20%)', categorias.rotacionLenta || 0],
-            ['Riesgo Estancamiento (35%)', categorias.riesgoEstancamiento || 0],
-            ['Mercancía Crítica (50%)', categorias.mercanciaCritica || 0],
-            ['Remate Total (100%)', categorias.remateTotal || 0],
-            ['Super Remate Total (140%)', categorias.superRemateTotal || 0],
+            ['Rotación Lenta', categorias.rotacionLenta || 0],
+            ['Riesgo Estancamiento', categorias.riesgoEstancamiento || 0],
+            ['Mercancía Crítica', categorias.mercanciaCritica || 0],
+            ['Remate Total', categorias.remateTotal || 0],
+            ['Super Remate Total', categorias.superRemateTotal || 0],
             ['Nueva Colección', categorias.nuevaColeccion || 0]
         ];
         

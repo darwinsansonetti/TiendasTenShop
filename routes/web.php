@@ -317,14 +317,21 @@ Route::middleware('auth')->group(function() {
     Route::get('/proveedor/{id}/facturas/pendientes', [ProveedoresController::class, 'getFacturasPendientes'])
         ->name('cpanel.proveedor.facturas.pendientes');
 
-    // Registrar pago a proveedor
-    Route::get('/proveedor/listar-proveedores', [ProveedoresController::class, 'registrarPagosIndex'])
-        ->defaults('modo', 'pagos')
-        ->name('cpanel.proveedor.mercancia.registrar_pagos');
+    // // Registrar pago a proveedor
+    // Route::get('/proveedor/listar-proveedores', [ProveedoresController::class, 'registrarPagosIndex'])
+    //     ->defaults('modo', 'pagos')
+    //     ->name('cpanel.proveedor.mercancia.registrar_pagos');
 
     // Proveedores - Registrar Pago
     Route::get('/cpanel/proveedores/registrar/pago/{id}', [ProveedoresController::class, 'pagarProveedor'])
         ->name('cpanel.proveedores.pagar');
+
+    // Proveedores - Registrar Factura
+    Route::get('/cpanel/proveedores/registrar/factura/{id}', [ProveedoresController::class, 'facturaRegistroProveedor'])
+        ->name('cpanel.proveedores.nueva.factura');
+
+    // Guardar Factura
+    Route::post('/cpanel/facturas/guardar', [ProveedoresController::class, 'generarFactura'])->name('cpanel.facturas.guardar');
 
     // Registrar Facturas
     Route::get('/proveedor/registrar-facturas', [ProveedoresController::class, 'registrarPagosIndex'])
@@ -334,7 +341,56 @@ Route::middleware('auth')->group(function() {
     // Ruta para la automatización
     Route::post('/cpanel/automatizacion/ejecutar', [CpanelController::class, 'ejecutarAutomatizacion'])
         ->name('cpanel.automatizacion.ejecutar')
-        ->middleware('auth');
+        ->middleware('auth');    
+
+    // Alta Demanda
+    Route::get('/cpanel/alta/demanda', [CpanelController::class, 'alta_demanda'])->name('cpanel.alta.ventas');
+
+    Route::post('/cpanel/automatizacion/subir', [CpanelController::class, 'ejecutarSubidaPrecios'])->name('cpanel.automatizacion.subir');
+
+    Route::get('/cpanel/alta-demanda', [CpanelController::class, 'alta_demanda'])->name('cpanel.alta.demanda');
+
+    Route::post('/cpanel/automatizacion/subir', [CpanelController::class, 'ejecutarSubidaPrecios'])->name('cpanel.automatizacion.subir');
+
+    // Facturas en Proveedor de Mercancia
+    Route::get('/cpanel/facturas/{id}/detalle', [ProveedoresController::class, 'detalle'])->name('cpanel.facturas.detalle');
+    Route::get('/cpanel/facturas/{id}/editar', [ProveedoresController::class, 'editar'])->name('cpanel.facturas.editar');
+    Route::delete('/cpanel/facturas/{id}', [ProveedoresController::class, 'eliminar'])->name('cpanel.facturas.eliminar');
+    Route::put('/cpanel/facturas/{id}', [ProveedoresController::class, 'actualizar'])->name('cpanel.facturas.actualizar');
+
+    Route::get('/cpanel/buscar-producto', [ProveedoresController::class, 'buscarProductoProveedor'])->name('cpanel.productos.buscar.proveedor');
+    Route::post('/facturas/{id}/guardar-productos', [ProveedoresController::class, 'guardarProductosFactura'])->name('cpanel.facturas.guardar.productos');
+    Route::post('/facturas/{id}/agregar-producto', [ProveedoresController::class, 'agregarProductoFactura'])->name('cpanel.facturas.agregar.producto');
+    Route::post('/facturas/{id}/upload-excel', [ProveedoresController::class, 'uploadProductosFactura'])->name('cpanel.facturas.upload.excel');
+
+    // Ruta para guardar productos desde Excel (guardar todos los productos de la tabla)
+    Route::post('/facturas/{id}/guardar-excel', [ProveedoresController::class, 'guardarExcelFactura'])->name('cpanel.facturas.guardar.excel');
+
+    // Pagar Factura a Proveedor
+    Route::post('/pagos', [ProveedoresController::class, 'store'])->name('cpanel.pagos.store');
+
+    // Acciones en los pagos
+    Route::get('/pagos/{id}/detalle', [ProveedoresController::class, 'detallePago'])->name('cpanel.pagos.detalle');
+    Route::get('/pagos/{id}/editar', [ProveedoresController::class, 'editarPago'])->name('cpanel.pagos.editar');
+    Route::put('/pagos/{id}', [ProveedoresController::class, 'actualizarPago'])->name('cpanel.pagos.actualizar');
+    Route::delete('/pagos/{id}', [ProveedoresController::class, 'eliminarPago'])->name('cpanel.pagos.eliminar');
+    Route::get('/pagos/{id}/imprimir', [ProveedoresController::class, 'imprimirRecibo'])->name('cpanel.pagos.imprimir');
+    Route::get('/pagos/{id}/ver-comprobante', [ProveedoresController::class, 'verComprobante'])->name('cpanel.pagos.ver-comprobante');
+
+    // Recibos
+    Route::get('/facturas/{id}/recibo-pagos', [ProveedoresController::class, 'reciboPagosJson'])->name('cpanel.facturas.recibo-pagos');
+    Route::get('/facturas/{id}/recibo-productos', [ProveedoresController::class, 'reciboProductos'])->name('cpanel.facturas.recibo-productos');
+    Route::get('/proveedores/{id}/recibo-facturas', [ProveedoresController::class, 'reciboListaFacturas'])->name('cpanel.proveedores.recibo-facturas');
+
+    // Contenedores
+    Route::get('/proveedor/contenedores', [ProveedoresController::class, 'listaContenedores'])->name('cpanel.proveedor.mercancia.contenedores');
+
+    Route::get('/contenedores/crear', [ProveedoresController::class, 'crearContenedor'])->name('cpanel.contenedores.crear');
+    Route::post('/contenedores', [ProveedoresController::class, 'guardarContenedor'])->name('cpanel.contenedores.guardar');
+    Route::get('/contenedores/{id}/detalle', [ProveedoresController::class, 'detalleContenedor'])->name('cpanel.contenedores.detalle');
+    Route::get('/contenedores/{id}/editar', [ProveedoresController::class, 'editarContenedor'])->name('cpanel.contenedores.editar');
+    Route::put('/contenedores/{id}', [ProveedoresController::class, 'actualizarContenedor'])->name('cpanel.contenedores.actualizar');
+    Route::delete('/contenedores/{id}', [ProveedoresController::class, 'eliminarContenedor'])->name('cpanel.contenedores.eliminar');
 });
 
 
