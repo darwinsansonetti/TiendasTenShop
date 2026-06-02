@@ -2091,7 +2091,7 @@ class ProveedoresController extends Controller
                     'Descripcion' => $producto['descripcion'],
                     'Referencia' => $producto['referencia'] ?? '',
                     'CostoDivisa' => $producto['costo'],
-                    'CostoBs' => $producto['costo'] * 40,
+                    // 'CostoBs' => $producto['costo'] * 40,
                     'Estatus' => 1,
                     'EsProveedorAsignado' => 1,
                     'FechaCreacion' => now(),
@@ -2106,7 +2106,7 @@ class ProveedoresController extends Controller
                         'Descripcion' => $producto['descripcion'],
                         'Referencia' => $producto['referencia'] ?? '',
                         'CostoDivisa' => $producto['costo'],
-                        'CostoBs' => $producto['costo'] * 40,
+                        'CostoBs' => 0,
                         'EsProveedorAsignado' => 1,
                         'FechaActualizacion' => now()
                     ]);
@@ -2174,11 +2174,80 @@ class ProveedoresController extends Controller
         return $sucursal;
     }
 
+    // private function guardarOActualizarDetalleFactura($producto, $facturaId)
+    // {
+    //     $uxe = ($producto['empaque'] == 'Docena' || $producto['empaque'] == 12) ? 12 : 1;
+        
+    //     // Verificar si el producto ya existe en la factura
+    //     $detalleExistente = DB::connection('sqlsrv')
+    //         ->table('FacturaDetalles')
+    //         ->where('FacturaId', $facturaId)
+    //         ->where('ProductoId', $producto['producto_id'])
+    //         ->first();
+        
+    //     if ($detalleExistente) {
+    //         // ACTUALIZAR producto existente
+    //         DB::connection('sqlsrv')
+    //             ->table('FacturaDetalles')
+    //             ->where('FacturaId', $facturaId)
+    //             ->where('ProductoId', $producto['producto_id'])
+    //             ->update([
+    //                 'CantidadEmitida' => $producto['cantidad'],
+    //                 'CostoDivisa' => $producto['costo'],
+    //                 'UxE' => $uxe
+    //             ]);
+    //     } else {
+    //         // INSERTAR nuevo producto
+    //         DB::connection('sqlsrv')
+    //             ->table('FacturaDetalles')
+    //             ->insert([
+    //                 'FacturaId' => $facturaId,
+    //                 'ProductoId' => $producto['producto_id'],
+    //                 'CantidadEmitida' => $producto['cantidad'],
+    //                 'CantidadRecibida' => 0,
+    //                 'CantidadDisponible' => 0,
+    //                 'CostoDivisa' => $producto['costo'],
+    //                 'CostoBs' => 0,
+    //                 'UxE' => $uxe
+    //             ]);
+    //     }
+    // }
+
     private function guardarOActualizarDetalleFactura($producto, $facturaId)
     {
-        $uxe = ($producto['empaque'] == 'Docena' || $producto['empaque'] == 12) ? 12 : 1;
+        \Log::info('=== guardarOActualizarDetalleFactura INICIO ===');
+        \Log::info('Producto recibido:', $producto);
         
-        // Verificar si el producto ya existe en la factura
+        // ✅ Obtener valores
+        $cantidadUnidades = floatval($producto['cantidad'] ?? 0);
+        $costoTotal = floatval($producto['costo'] ?? 0);  // ← Este es el costo TOTAL del Excel
+        $empaque = $producto['empaque'] ?? 1;
+        
+        // Calcular UxE
+        $uxe = 1;
+        if (is_numeric($empaque)) {
+            $uxe = intval($empaque);
+        } elseif (is_string($empaque)) {
+            if (strtolower($empaque) == 'docena') {
+                $uxe = 12;
+            } elseif (strtolower($empaque) == 'unidad') {
+                $uxe = 1;
+            } else {
+                preg_match('/\d+/', $empaque, $matches);
+                $uxe = !empty($matches) ? intval($matches[0]) : 1;
+            }
+        }
+        
+        // ✅ Calcular cantidad de empaques (para guardar en CantidadEmitida)
+        $cantidadEmpaques = $cantidadUnidades / $uxe;
+        
+        \Log::info('Valores calculados:', [
+            'cantidad_unidades' => $cantidadUnidades,
+            'costo_total_recibido' => $costoTotal,
+            'uxe' => $uxe,
+            'cantidad_empaques' => $cantidadEmpaques
+        ]);
+        
         $detalleExistente = DB::connection('sqlsrv')
             ->table('FacturaDetalles')
             ->where('FacturaId', $facturaId)
@@ -2186,31 +2255,31 @@ class ProveedoresController extends Controller
             ->first();
         
         if ($detalleExistente) {
-            // ACTUALIZAR producto existente
             DB::connection('sqlsrv')
                 ->table('FacturaDetalles')
                 ->where('FacturaId', $facturaId)
                 ->where('ProductoId', $producto['producto_id'])
                 ->update([
-                    'CantidadEmitida' => $producto['cantidad'],
-                    'CostoDivisa' => $producto['costo'],
-                    'UxE' => $uxe
+                    'CantidadEmitida' => $cantidadEmpaques,
+                    'CostoDivisa' => $costoTotal,  // ← Usar directamente el costo recibido
+                    'UxE' => $uxe,
+                    'CantidadRecibida' => $cantidadUnidades
                 ]);
         } else {
-            // INSERTAR nuevo producto
             DB::connection('sqlsrv')
                 ->table('FacturaDetalles')
                 ->insert([
                     'FacturaId' => $facturaId,
                     'ProductoId' => $producto['producto_id'],
-                    'CantidadEmitida' => $producto['cantidad'],
-                    'CantidadRecibida' => 0,
-                    'CantidadDisponible' => 0,
-                    'CostoDivisa' => $producto['costo'],
-                    'CostoBs' => $producto['costo'] * 40,
+                    'CantidadEmitida' => $cantidadEmpaques,
+                    'CantidadRecibida' => $cantidadUnidades,
+                    'CostoDivisa' => $costoTotal,  // ← Usar directamente el costo recibido
+                    'CostoBs' => 0,
                     'UxE' => $uxe
                 ]);
         }
+        
+        \Log::info('=== guardarOActualizarDetalleFactura FIN ===');
     }
 
 

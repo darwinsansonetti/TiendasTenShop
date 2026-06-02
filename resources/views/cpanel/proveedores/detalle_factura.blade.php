@@ -133,7 +133,6 @@
                 </div>
             </div>
         </div>
-        </br>
 
         <!-- ========================================== -->
         <!-- RESUMEN FINANCIERO (2 columnas) -->
@@ -212,9 +211,7 @@
             <div class="card-body">
                 <div class="tab-content">
                     
-                    <!-- ========================================== -->
-                    <!-- TAB: PRODUCTOS -->
-                    <!-- ========================================== -->
+                    <!-- TAB: PRODUCTOS (CORREGIDO) -->
                     <div class="tab-pane fade show active" id="productos">
                         <div class="d-flex justify-content-end mb-3 gap-2">
                             <div class="btn-group btn-group-sm">
@@ -235,9 +232,9 @@
                                         <th>Código</th>
                                         <th>Referencia</th>
                                         <th>Producto</th>
-                                        <th class="text-end">Cantidad</th>
-                                        <th class="text-end">Costo USD</th>
-                                        <th class="text-end">Subtotal USD</th>
+                                        <th class="text-end">Cantidad (Unidades)</th>
+                                        <th class="text-end">Costo Unitario USD</th>
+                                        <th class="text-end">Total USD</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -248,6 +245,11 @@
                                             $detalle->UrlFoto ?? '',
                                             'assets/img/adminlte/img/produc_default.jfif'
                                         );
+                                        
+                                        // ✅ Calcular correctamente
+                                        $totalUnidades = $detalle->CantidadRecibida ?? 0;
+                                        $costoUnitario = $totalUnidades > 0 ? ($detalle->CostoDivisa / $totalUnidades) : 0;
+                                        $totalUSD = $detalle->CostoDivisa ?? 0;
                                     @endphp
                                     <tr>
                                         <td class="text-center">
@@ -262,11 +264,9 @@
                                         <td class="align-middle"><code>{{ $detalle->Codigo ?? 'N/A' }}</code></td>
                                         <td class="align-middle">{{ $detalle->Referencia ?? 'N/A' }}</td>
                                         <td class="align-middle">{{ $detalle->producto_nombre ?? 'N/A' }}</td>
-                                        <td class="text-end align-middle">{{ number_format($detalle->CantidadEmitida ?? 0, 2) }}</td>
-                                        <td class="text-end align-middle">$ {{ number_format($detalle->CostoDivisa ?? 0, 2) }}</td>
-                                        <td class="text-end align-middle fw-bold">
-                                            $ {{ number_format(($detalle->CantidadEmitida ?? 0) * ($detalle->CostoDivisa ?? 0), 2) }}
-                                        </td>
+                                        <td class="text-end align-middle">{{ number_format($totalUnidades, 2) }}</td>
+                                        <td class="text-end align-middle">$ {{ number_format($costoUnitario, 2) }}</td>
+                                        <td class="text-end align-middle fw-bold">$ {{ number_format($totalUSD, 2) }}</td>
                                     </tr>
                                     @empty
                                     <tr>
@@ -277,24 +277,13 @@
                                     </tr>
                                     @endforelse
                                 </tbody>
-                                <tfoot class="table-secondary fw-bold">
-                                    <tr>
-                                        <td colspan="6" class="text-end">TOTAL PRODUCTOS:</td>
-                                        <td class="text-end">{{ $facturaDTO->Detalles->count() }} productos
-                                    </tr>
-                                    <tr>
-                                        <td colspan="6" class="text-end">SUBTOTAL:</td>
-                                        <td class="text-end">$ {{ number_format($facturaDTO->Subtotal ?? 0, 2) }}</td>
-                                    </tr>
-                                </tfoot>
                             </table>
                         </div>
                     </div>
                     
-                    <!-- ========================================== -->
-                    <!-- TAB: PAGOS -->
-                    <!-- ========================================== -->
+                    <!-- TAB: PAGOS (sin cambios) -->
                     <div class="tab-pane fade" id="pagos">
+                        <!-- El contenido del tab de pagos se mantiene igual -->
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <div class="fw-bold text-success">
                                 <i class="bi bi-cash-stack me-1"></i>

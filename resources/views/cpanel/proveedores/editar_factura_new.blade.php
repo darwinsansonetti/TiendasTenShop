@@ -336,9 +336,9 @@
                                         <th>Código</th>
                                         <th>Referencia</th>
                                         <th>Producto</th>
-                                        <th class="text-end">Cantidad</th>
-                                        <th class="text-end">Costo USD</th>
-                                        <th class="text-end">Subtotal USD</th>
+                                        <th class="text-end">Cantidad (Unidades)</th>
+                                        <th class="text-end">Costo Unitario USD</th>
+                                        <th class="text-end">Total USD</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -349,6 +349,11 @@
                                             $detalle->UrlFoto ?? '',
                                             'assets/img/adminlte/img/produc_default.jfif'
                                         );
+                                        
+                                        // ✅ Calcular correctamente
+                                        $totalUnidades = $detalle->CantidadRecibida ?? 0;
+                                        $costoUnitario = $detalle->CostoDivisa / ($totalUnidades > 0 ? $totalUnidades : 1);
+                                        $totalUSD = $detalle->CostoDivisa;
                                     @endphp
                                     <tr>
                                         <td class="text-center">
@@ -363,11 +368,9 @@
                                         <td class="align-middle"><code>{{ $detalle->Codigo ?? 'N/A' }}</code></td>
                                         <td class="align-middle">{{ $detalle->Referencia ?? 'N/A' }}</td>
                                         <td class="align-middle">{{ $detalle->producto_nombre ?? 'N/A' }}</td>
-                                        <td class="text-end align-middle">{{ number_format($detalle->CantidadEmitida ?? 0, 2) }}</td>
-                                        <td class="text-end align-middle">$ {{ number_format($detalle->CostoDivisa ?? 0, 2) }}</td>
-                                        <td class="text-end align-middle fw-bold">
-                                            $ {{ number_format(($detalle->CantidadEmitida ?? 0) * ($detalle->CostoDivisa ?? 0), 2) }}
-                                        </td>
+                                        <td class="text-end align-middle">{{ number_format($totalUnidades, 2) }}</td>
+                                        <td class="text-end align-middle">$ {{ number_format($costoUnitario, 2) }}</td>
+                                        <td class="text-end align-middle fw-bold">$ {{ number_format($totalUSD, 2) }}</td>
                                     </tr>
                                     @empty
                                     <tr>
@@ -378,16 +381,6 @@
                                     </tr>
                                     @endforelse
                                 </tbody>
-                                <tfoot class="table-secondary fw-bold">
-                                    <tr>
-                                        <td colspan="6" class="text-end">TOTAL PRODUCTOS:</td>
-                                        <td class="text-end">{{ $facturaDTO->Detalles->count() }} productos</td>
-                                    </tr>
-                                    <tr>
-                                        <td colspan="6" class="text-end">SUBTOTAL:</td>
-                                        <td class="text-end">$ {{ number_format($facturaDTO->Subtotal ?? 0, 2) }}</td>
-                                    </tr>
-                                </tfoot>
                             </table>
                         </div>
                     </div>
@@ -617,30 +610,35 @@
                                         <th>Código</th>
                                         <th>Descripción</th>
                                         <th>Empaque</th>
-                                        <th class="text-end">Costo USD</th>
-                                        <th class="text-end">Cantidad</th>
+                                        <th class="text-end">Costo Unitario USD</th>  <!-- Cambiado -->
+                                        <th class="text-end">Cantidad (Unidades)</th>  <!-- Cambiado -->
                                         <th class="text-end">Total USD</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tablaProductosBody">
                                     @foreach($facturaDTO->Detalles as $detalle)
+                                    @php
+                                        // Calcular valores como en .NET
+                                        $costoUnitario = $detalle->CostoDivisa / ($detalle->UxE > 0 ? $detalle->UxE : 1);
+                                        $totalUnidades = $detalle->CantidadEmitida * $detalle->UxE;
+                                        $subtotal = $detalle->CantidadEmitida * $detalle->CostoDivisa;
+                                        
+                                        $empaqueTexto = '';
+                                        if ($detalle->UxE == 1) $empaqueTexto = 'Unidad';
+                                        elseif ($detalle->UxE == 12) $empaqueTexto = 'Docena';
+                                        else $empaqueTexto = "Empaque x{$detalle->UxE}";
+                                    @endphp
                                     <tr>
                                         <td class="text-center"><input type="checkbox" class="select-producto" value="{{ $detalle->ID }}"></td>
                                         <td><code>{{ $detalle->Codigo ?? 'N/A' }}</code></td>
                                         <td>{{ $detalle->producto_nombre ?? 'N/A' }}</td>
-                                        <td>{{ $detalle->Empaque ?? 'Unidad' }}</td>
-                                        <td class="text-end">$ {{ number_format($detalle->CostoDivisa ?? 0, 2) }}</td>
-                                        <td class="text-end">{{ number_format($detalle->CantidadEmitida ?? 0, 2) }}</td>
-                                        <td class="text-end">$ {{ number_format(($detalle->CantidadEmitida ?? 0) * ($detalle->CostoDivisa ?? 0), 2) }}</td>
+                                        <td>{{ $empaqueTexto }}</td>
+                                        <td class="text-end">$ {{ number_format($costoUnitario, 2) }}</td>
+                                        <td class="text-end">{{ number_format($totalUnidades, 2) }}</td>
+                                        <td class="text-end">$ {{ number_format($subtotal, 2) }}</td>
                                     </tr>
                                     @endforeach
                                 </tbody>
-                                <tfoot class="table-secondary">
-                                    <tr>
-                                        <td colspan="6" class="text-end fw-bold">TOTAL FACTURA:</td>
-                                        <td class="text-end fw-bold text-success">$ {{ number_format($facturaDTO->TotalFactura ?? 0, 2) }}</td>
-                                    </tr>
-                                </tfoot>
                             </table>
                         </div>
                     </div>
@@ -1033,22 +1031,34 @@
     function llenarTablaModalConProductos(productos) {
         let tbody = document.getElementById('tablaProductosBody');
         if (!tbody) return;
+        
         tbody.innerHTML = '';
         productos.forEach(producto => {
-            let total = (producto.Cantidad || producto.cantidad) * (producto.Costo || producto.costo);
             let uxe = producto.UxE || producto.uxe || 1;
-            let empaqueTexto = uxe == 12 ? 'Docena' : 'Unidad';
+            let cantidadEmpaques = producto.Cantidad || producto.cantidad || 0;
+            let costoTotal = producto.Costo || producto.costo || 0;  // ← Este es el costo TOTAL del Excel
+            
+            // ✅ Calcular costo unitario solo para mostrar
+            let totalUnidades = cantidadEmpaques * uxe;
+            let costoUnitario = costoTotal / totalUnidades;
+            
+            let empaqueTexto = uxe == 1 ? 'Unidad' : (uxe == 12 ? 'Docena' : `Empaque x${uxe}`);
+            
             let row = tbody.insertRow();
             row.innerHTML = `
                 <td class="text-center"><input type="checkbox" class="select-producto"></td>
                 <td><code>${producto.Codigo || producto.codigo}</code></td>
                 <td>${producto.Descripcion || producto.descripcion}</td>
                 <td>${empaqueTexto}</td>
-                <td class="text-end">$${parseFloat(producto.Costo || producto.costo).toFixed(2)}</td>
-                <td class="text-end">${parseFloat(producto.Cantidad || producto.cantidad).toFixed(2)}</td>
-                <td class="text-end">$${total.toFixed(2)}</td>
+                <td class="text-end">$${costoUnitario.toFixed(2)}</td>      <!-- Costo unitario para mostrar -->
+                <td class="text-end">${totalUnidades.toFixed(2)}</td>       <!-- Total unidades -->
+                <td class="text-end">$${costoTotal.toFixed(2)}</td>         <!-- Costo TOTAL a guardar -->
             `;
+            
+            // ✅ Guardar también el costo total en un data attribute o campo oculto
+            row.setAttribute('data-costo-total', costoTotal);
         });
+        
         actualizarTotalProductos();
     }
     
@@ -1133,19 +1143,26 @@
     function actualizarTablaProductosFactura(detalles, totalFactura) {
         let tbody = document.querySelector('#tablaProductos tbody');
         if (!tbody) return;
+        
         tbody.innerHTML = '';
         detalles.forEach(detalle => {
+            // ✅ Calcular correctamente
+            let totalUnidades = (detalle.CantidadEmitida || 0) * (detalle.UxE || 1);
+            let costoUnitario = (detalle.CostoDivisa || 0) / (totalUnidades > 0 ? totalUnidades : 1);
+            let totalUSD = detalle.CostoDivisa || 0;
+            
             let row = tbody.insertRow();
             row.innerHTML = `
                 <td><img src="${detalle.UrlFoto ? '/storage/images/items/thumbs/' + detalle.UrlFoto : '/assets/img/adminlte/img/produc_default.jfif'}" style="width: 50px; height: 50px; object-fit: cover;"></td>
                 <td>${detalle.Codigo || 'N/A'}</td>
                 <td>${detalle.Referencia || 'N/A'}</td>
                 <td>${detalle.producto_nombre || 'N/A'}</td>
-                <td class="text-end">${parseFloat(detalle.CantidadEmitida || 0).toFixed(2)}</td>
-                <td class="text-end">$${parseFloat(detalle.CostoDivisa || 0).toFixed(2)}</td>
-                <td class="text-end">$${((detalle.CantidadEmitida || 0) * (detalle.CostoDivisa || 0)).toFixed(2)}</td>
+                <td class="text-end">${totalUnidades.toFixed(2)}</td>
+                <td class="text-end">$${costoUnitario.toFixed(2)}</td>
+                <td class="text-end">$${totalUSD.toFixed(2)}</td>
             `;
         });
+        
         let totalSpan = document.querySelector('#tablaProductos tfoot .text-end:last-child');
         if (totalSpan) totalSpan.innerText = `$${parseFloat(totalFactura).toFixed(2)}`;
     }
@@ -1153,19 +1170,31 @@
     function cargarProductosEnModal(detalles) {
         let tbody = document.getElementById('tablaProductosBody');
         if (!tbody) return;
+        
         tbody.innerHTML = '';
         detalles.forEach(detalle => {
+            // ✅ Calcular correctamente para el modal
+            let totalUnidades = (detalle.CantidadEmitida || 0) * (detalle.UxE || 1);
+            let costoUnitario = (detalle.CostoDivisa || 0) / (totalUnidades > 0 ? totalUnidades : 1);
+            let totalUSD = detalle.CostoDivisa || 0;
+            
+            let empaqueTexto = '';
+            if (detalle.UxE == 1) empaqueTexto = 'Unidad';
+            else if (detalle.UxE == 12) empaqueTexto = 'Docena';
+            else empaqueTexto = `Empaque x${detalle.UxE}`;
+            
             let row = tbody.insertRow();
             row.innerHTML = `
                 <td class="text-center"><input type="checkbox" class="select-producto" value="${detalle.ID}"></td>
                 <td><code>${detalle.Codigo || 'N/A'}</code></td>
                 <td>${detalle.producto_nombre || 'N/A'}</td>
-                <td>${detalle.UxE == 12 ? 'Docena' : 'Unidad'}</td>
-                <td class="text-end">$${parseFloat(detalle.CostoDivisa || 0).toFixed(2)}</td>
-                <td class="text-end">${parseFloat(detalle.CantidadEmitida || 0).toFixed(2)}</td>
-                <td class="text-end">$${((detalle.CantidadEmitida || 0) * (detalle.CostoDivisa || 0)).toFixed(2)}</td>
+                <td>${empaqueTexto}</td>
+                <td class="text-end">$${costoUnitario.toFixed(2)}</td>
+                <td class="text-end">${totalUnidades.toFixed(2)}</td>
+                <td class="text-end">$${totalUSD.toFixed(2)}</td>
             `;
         });
+        
         actualizarTotalProductos();
     }
     
@@ -1217,13 +1246,15 @@
         rows.forEach(row => {
             let cells = row.cells;
             if (cells.length >= 7) {
-                productos.push({
+                let producto = {
                     codigo: cells[1].innerText,
                     descripcion: cells[2].innerText,
-                    empaque: cells[3].innerText,
-                    costo: parseFloat(cells[4].innerText.replace('$', '')),
-                    cantidad: parseFloat(cells[5].innerText)
-                });
+                    empaque: cells[3].innerText,  // ← Ver qué valor tiene
+                    costo: parseFloat(cells[6].innerText.replace('$', '')),  // Total USD
+                    cantidad: parseFloat(cells[5].innerText)  // Cantidad (Unidades)
+                };
+                productos.push(producto);
+                console.log('Producto enviado:', producto);  // ← Ver en consola
             }
         });
         if (productos.length === 0) {
