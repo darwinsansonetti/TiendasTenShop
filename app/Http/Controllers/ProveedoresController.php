@@ -2090,7 +2090,7 @@ class ProveedoresController extends Controller
                     'Codigo' => $producto['codigo'],
                     'Descripcion' => $producto['descripcion'],
                     'Referencia' => $producto['referencia'] ?? '',
-                    'CostoDivisa' => $producto['costo'],
+                    'CostoDivisa' => $producto['costo_unitario'],
                     // 'CostoBs' => $producto['costo'] * 40,
                     'Estatus' => 1,
                     'EsProveedorAsignado' => 1,
@@ -2105,7 +2105,7 @@ class ProveedoresController extends Controller
                     ->update([
                         'Descripcion' => $producto['descripcion'],
                         'Referencia' => $producto['referencia'] ?? '',
-                        'CostoDivisa' => $producto['costo'],
+                        'CostoDivisa' => $producto['costo_unitario'],
                         'CostoBs' => 0,
                         'EsProveedorAsignado' => 1,
                         'FechaActualizacion' => now()

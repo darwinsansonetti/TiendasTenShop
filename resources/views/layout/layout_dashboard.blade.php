@@ -759,19 +759,19 @@
                   </li>
                 </ul>
               </li>
-              <li class="nav-item">
+              <li class="nav-item {{ session('menu_active') == 'Recepciones' ? 'menu-open' : '' }}">
                 <a href="#" class="nav-link">
-                  <i class="nav-icon bi bi-pencil-square"></i>
+                  <i class="nav-icon bi bi-truck"></i>
                   <p>
-                    Forms
+                    Recepciones
                     <i class="nav-arrow bi bi-chevron-right"></i>
                   </p>
                 </a>
                 <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="./forms/general.html" class="nav-link">
+                    <a href="{{ route('cpanel.recepciones.proveedor') }}" class="nav-link {{ session('submenu_active') == 'Recibir de proveedor' ? 'active' : '' }}">
                       <i class="nav-icon bi bi-circle"></i>
-                      <p>General Elements</p>
+                      <p>Recibir de proveedor</p>
                     </a>
                   </li>
                 </ul>

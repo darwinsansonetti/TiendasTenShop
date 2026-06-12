@@ -283,6 +283,23 @@ class VentasController extends Controller
                 }
                 
                 return $item;
+            });            
+
+            // Agregar log para debug
+            \Log::info('Debug detalleVenta - sucursal: ' . $sucursalId, [
+                'total_items' => $respuesta->count(),
+                'items_sin_producto' => $respuesta->filter(function($item) {
+                    return is_null($item['producto']);
+                })->count()
+            ]);
+
+            // Verificar items que podrían causar problema
+            $respuesta->each(function($item, $index) {
+                if (is_null($item['producto'])) {
+                    \Log::warning("Item {$index} no tiene producto", [
+                        'producto_id' => $item['producto_id'] ?? 'null'
+                    ]);
+                }
             });
 
             // return response()->json([

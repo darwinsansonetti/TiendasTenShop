@@ -1251,6 +1251,7 @@
                     descripcion: cells[2].innerText,
                     empaque: cells[3].innerText,  // ← Ver qué valor tiene
                     costo: parseFloat(cells[6].innerText.replace('$', '')),  // Total USD
+                    costo_unitario: parseFloat(cells[4].innerText.replace('$', '').trim()),  // Costo Unitario
                     cantidad: parseFloat(cells[5].innerText)  // Cantidad (Unidades)
                 };
                 productos.push(producto);

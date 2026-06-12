@@ -15,6 +15,7 @@ use App\Http\Controllers\VentasController;
 use App\Http\Controllers\ContabilidadController;
 use App\Http\Controllers\EmpleadosController;
 use App\Http\Controllers\ProveedoresController;
+use App\Http\Controllers\RecepcionesController;
 
 /*
 |--------------------------------------------------------------------------
@@ -391,6 +392,30 @@ Route::middleware('auth')->group(function() {
     Route::get('/contenedores/{id}/editar', [ProveedoresController::class, 'editarContenedor'])->name('cpanel.contenedores.editar');
     Route::put('/contenedores/{id}', [ProveedoresController::class, 'actualizarContenedor'])->name('cpanel.contenedores.actualizar');
     Route::delete('/contenedores/{id}', [ProveedoresController::class, 'eliminarContenedor'])->name('cpanel.contenedores.eliminar');
+
+    // Listado de Recepciones Proveedor
+    Route::get('/cpanel/recepciones/proveedor/listado', [RecepcionesController::class, 'listado_recepciones_proveedores'])->name('cpanel.recepciones.proveedor');
+    
+    // Recepciones Proveedor
+    Route::get('/recepciones/nuevo', [RecepcionesController::class, 'nuevaRecepcion'])->name('cpanel.recepciones.nuevo');
+    Route::get('/recepciones/crear/{proveedorId}', [RecepcionesController::class, 'crearRecepcion'])->name('cpanel.recepciones.crear');
+    Route::post('/recepciones/guardar', [RecepcionesController::class, 'guardarRecepcion'])->name('cpanel.recepciones.guardar');
+
+    Route::get('/recepciones/{id}/detalle', [RecepcionesController::class, 'detalleRecepcion'])->name('cpanel.recepciones.detalle');
+    Route::get('/recepciones/{id}/editar', [RecepcionesController::class, 'editarRecepcion'])->name('cpanel.recepciones.editar');
+    Route::put('/recepciones/{id}', [RecepcionesController::class, 'actualizarRecepcion'])->name('cpanel.recepciones.actualizar');
+    Route::delete('/recepciones/{id}', [RecepcionesController::class, 'eliminarRecepcion'])->name('cpanel.recepciones.eliminar');
+
+    Route::post('/recepciones/{id}/recuperar-factura', [RecepcionesController::class, 'recuperarFactura'])->name('cpanel.recepciones.recuperar.factura');
+
+    // ✅ NUEVA RUTA: Devuelve datos en JSON para armar el Excel
+    Route::get('/{recepcionId}/datos-exportacion', [RecepcionesController::class, 'getDatosExportacion'])->name('datos-exportacion');
+
+    // Subir productos en recepcion
+    Route::post('/{id}/upload-excel', [RecepcionesController::class, 'uploadExcel'])->name('cpanel.recepciones.upload-excel');
+
+    // Guardar el Recibir Recepcion del Proveedor
+    Route::get('/cpanel/recepciones/{id}/finalizar', [RecepcionesController::class, 'finalizarRecepcion'])->name('cpanel.recepciones.finalizar');
 });
 
 

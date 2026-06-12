@@ -8,17 +8,6 @@ use App\Helpers\GeneralHelper;
 
 class SucursalController extends Controller
 {
-    // Seleccionar una sucursal
-    // public function seleccionar($id)
-    // {
-    //     // Guardamos en sesión la sucursal seleccionada
-    //     session(['sucursal_id' => $id]);
-
-    //     // Redireccionamos al dashboard
-    //     return redirect()->route('cpanel.dashboard')
-    //         ->with('success', 'Sucursal seleccionada correctamente.');
-    // }
-
     public function seleccionar($id)
     {
         // Guardar id en sesión
