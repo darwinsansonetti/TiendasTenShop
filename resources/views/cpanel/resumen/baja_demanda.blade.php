@@ -14,11 +14,22 @@
   <div class="container-fluid">
     <!--begin::Row-->
     <div class="row">
-      <div class="col-sm-6"><h3 class="mb-0">Productos con Baja Demanda</h3></div>
+      <div class="col-sm-6">
+        <div class="d-flex align-items-center gap-2">
+          <div class="d-flex align-items-center justify-content-center rounded-2 me-1"
+               style="width:36px;height:36px;background:linear-gradient(135deg,#f59e0b,#d97706);">
+            <i class="bi bi-graph-down-arrow text-white" style="font-size:1.1rem;"></i>
+          </div>
+          <div>
+            <h4 class="mb-0 fw-bold text-dark" style="font-size:1.1rem;">Productos con Baja Demanda</h4>
+            <p class="mb-0 text-muted" style="font-size:0.78rem;">Productos con menor movimiento en el período seleccionado</p>
+          </div>
+        </div>
+      </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
           <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Productos con Baja Demanda</li>
+          <li class="breadcrumb-item active" aria-current="page">Baja Demanda</li>
         </ol>
       </div>
     </div>
@@ -33,11 +44,11 @@
     <div class="container-fluid">
         
         <!-- Card de filtros -->
-        <div class="card card-primary card-outline mb-4">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="fas fa-filter me-2"></i>Filtros de búsqueda
-                </h5>
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header border-0 py-3" style="background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);">
+                <h6 class="mb-0 fw-bold text-white">
+                    <i class="bi bi-funnel me-2"></i>Filtros de búsqueda
+                </h6>
             </div>
             <div class="card-body">
                 <form action="{{ route('cpanel.baja.ventas') }}" method="GET" id="filtroForm">
@@ -81,8 +92,8 @@
         
         @if($indices)
         <!-- Card de tabla -->
-        <div class="card">
-            <div class="card-header">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-bottom">
                 <div class="row align-items-center g-2">
 
                     <!-- Filtro de valoración -->

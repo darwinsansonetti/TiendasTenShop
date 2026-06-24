@@ -310,7 +310,18 @@
   <div class="container-fluid">
     <!--begin::Row-->
     <div class="row">
-      <div class="col-sm-6"><h3 class="mb-0">Comparativa entre Sucursales</h3></div>
+      <div class="col-sm-6">
+        <div class="d-flex align-items-center gap-2">
+          <div class="d-flex align-items-center justify-content-center rounded-2 me-1"
+               style="width:36px;height:36px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);">
+            <i class="bi bi-bar-chart-line text-white" style="font-size:1.1rem;"></i>
+          </div>
+          <div>
+            <h4 class="mb-0 fw-bold text-dark" style="font-size:1.1rem;">Comparativa entre Sucursales</h4>
+            <p class="mb-0 text-muted" style="font-size:0.78rem;">Análisis inteligente de stock y ventas por sucursal</p>
+          </div>
+        </div>
+      </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
           <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
@@ -331,11 +342,11 @@
         
         <!-- Panel de Filtros Simplificado -->
         <!-- Card de filtros -->
-        <div class="card card-primary card-outline mb-4">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="fas fa-filter me-2"></i>Filtros de búsqueda
-                </h5>
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header border-0 py-3" style="background:linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%);">
+                <h6 class="mb-0 fw-bold text-white">
+                    <i class="bi bi-funnel me-2"></i>Filtros de búsqueda
+                </h6>
             </div>
             <div class="card-body">
                 @php

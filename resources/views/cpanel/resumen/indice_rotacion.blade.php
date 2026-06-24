@@ -12,7 +12,18 @@
 <div class="app-content-header">
   <div class="container-fluid">
     <div class="row">
-      <div class="col-sm-6"><h3 class="mb-0">Índice de Rotación</h3></div>
+      <div class="col-sm-6">
+        <div class="d-flex align-items-center gap-2">
+          <div class="d-flex align-items-center justify-content-center rounded-2 me-1"
+               style="width:36px;height:36px;background:linear-gradient(135deg,#8b5cf6,#7c3aed);">
+            <i class="bi bi-arrow-repeat text-white" style="font-size:1.1rem;"></i>
+          </div>
+          <div>
+            <h4 class="mb-0 fw-bold text-dark" style="font-size:1.1rem;">Índice de Rotación</h4>
+            <p class="mb-0 text-muted" style="font-size:0.78rem;">Análisis de rotación de inventario por producto</p>
+          </div>
+        </div>
+      </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
           <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
@@ -29,11 +40,11 @@
     <div class="container-fluid">
         
         <!-- Card de filtros -->
-        <div class="card card-primary card-outline mb-4">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="fas fa-filter me-2"></i>Filtros de búsqueda
-                </h5>
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header border-0 py-3" style="background:linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%);">
+                <h6 class="mb-0 fw-bold text-white">
+                    <i class="bi bi-funnel me-2"></i>Filtros de búsqueda
+                </h6>
             </div>
             <div class="card-body">
                 <form action="{{ route('cpanel.indice.rotacion') }}" method="GET" id="filtroForm">
@@ -78,58 +89,74 @@
         </div>
         
         @if($indices)
-        <!-- Card de resumen -->
+        <!-- KPI Cards -->
         <div class="row mb-4">
-            <div class="col-lg-3 col-md-6">
-                <div class="card card-info">
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card border-0 shadow-sm h-100">
                     <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="rounded-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                                 style="width:42px;height:42px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);">
+                                <i class="bi bi-calendar-range text-white" style="font-size:1.1rem;"></i>
+                            </div>
                             <div>
-                              <h6 class="card-subtitle mb-2 text-muted">Período Analizado</h6>
-                              <h4 class="card-title mb-0 d-flex flex-wrap align-items-center gap-1">
-                                  <span>{{ $indices->fecha_inicio ? $indices->fecha_inicio->format('d/m/Y') : '-' }}</span>
-                                  <span class="text-muted">-</span>
-                                  <span>{{ $indices->fecha_fin ? $indices->fecha_fin->format('d/m/Y') : '-' }}</span>
-                              </h4>
-                          </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-lg-3 col-md-6">
-                <div class="card card-success">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="card-subtitle mb-2 text-muted">Total Productos</h6>
-                                <h4 class="card-title mb-0">{{ $indices->detalles->count() }}</h4>
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.72rem;letter-spacing:.05em;font-weight:600;">Período Analizado</p>
+                                <p class="mb-0 fw-bold text-dark" style="font-size:0.88rem;">
+                                    {{ $indices->fecha_inicio ? $indices->fecha_inicio->format('d/m/Y') : '-' }}
+                                    <span class="text-muted fw-normal mx-1">—</span>
+                                    {{ $indices->fecha_fin ? $indices->fecha_fin->format('d/m/Y') : '-' }}
+                                </p>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            
-            <div class="col-lg-3 col-md-6">
-                <div class="card card-warning">
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card border-0 shadow-sm h-100">
                     <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="rounded-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                                 style="width:42px;height:42px;background:linear-gradient(135deg,#10b981,#059669);">
+                                <i class="bi bi-box-seam text-white" style="font-size:1.1rem;"></i>
+                            </div>
                             <div>
-                                <h6 class="card-subtitle mb-2 text-muted">Mayor Índice</h6>
-                                <h4 class="card-title mb-0">{{ number_format($indices->mayor_indice, 2) }}</h4>
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.72rem;letter-spacing:.05em;font-weight:600;">Total Productos</p>
+                                <h4 class="mb-0 fw-bold text-dark">{{ $indices->detalles->count() }}</h4>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            
-            <div class="col-lg-3 col-md-6">
-                <div class="card card-primary">
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card border-0 shadow-sm h-100">
                     <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="rounded-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                                 style="width:42px;height:42px;background:linear-gradient(135deg,#f59e0b,#d97706);">
+                                <i class="bi bi-graph-up-arrow text-white" style="font-size:1.1rem;"></i>
+                            </div>
                             <div>
-                                <h6 class="card-subtitle mb-2 text-muted">Índice Promedio</h6>
-                                <h4 class="card-title mb-0">{{ number_format($indices->indice_promedio, 2) }}</h4>
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.72rem;letter-spacing:.05em;font-weight:600;">Mayor Índice</p>
+                                <h4 class="mb-0 fw-bold text-dark">{{ number_format($indices->mayor_indice, 2) }}</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="rounded-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                                 style="width:42px;height:42px;background:linear-gradient(135deg,#8b5cf6,#7c3aed);">
+                                <i class="bi bi-speedometer2 text-white" style="font-size:1.1rem;"></i>
+                            </div>
+                            <div>
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.72rem;letter-spacing:.05em;font-weight:600;">Índice Promedio</p>
+                                <h4 class="mb-0 fw-bold text-dark">{{ number_format($indices->indice_promedio, 2) }}</h4>
                             </div>
                         </div>
                     </div>
@@ -138,15 +165,15 @@
         </div>
         
         <!-- Card de tabla -->
-        <div class="card">
-            <div class="card-header">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-bottom">
                 <div class="row align-items-center g-2">
 
                     <!-- Título -->
                     <div class="col-md-2">
-                        <h5 class="card-title mb-0">
-                            <i class="fas fa-list me-2"></i>Índice de Rotación
-                        </h5>
+                        <h6 class="card-title mb-0 fw-bold">
+                            <i class="bi bi-arrow-repeat me-2 text-primary"></i>Índice de Rotación
+                        </h6>
                     </div>
 
                     <!-- Filtro de valoración -->

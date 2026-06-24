@@ -14,7 +14,18 @@
   <div class="container-fluid">
     <!--begin::Row-->
     <div class="row">
-      <div class="col-sm-6"><h3 class="mb-0">Ventas por vendedores</h3></div>
+      <div class="col-sm-6">
+        <div class="d-flex align-items-center gap-2">
+          <div class="d-flex align-items-center justify-content-center rounded-2 me-1"
+               style="width:36px;height:36px;background:linear-gradient(135deg,#8b5cf6,#7c3aed);">
+            <i class="bi bi-bar-chart text-white" style="font-size:1.1rem;"></i>
+          </div>
+          <div>
+            <h4 class="mb-0 fw-bold text-dark" style="font-size:1.1rem;">Ventas por Vendedores</h4>
+            <p class="mb-0 text-muted" style="font-size:0.78rem;">Historial de ventas por empleado</p>
+          </div>
+        </div>
+      </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
           <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>

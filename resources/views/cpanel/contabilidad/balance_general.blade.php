@@ -9,7 +9,16 @@
     <div class="container-fluid">
         <div class="row">
             <div class="col-sm-6">
-                <h3 class="mb-0">Balance General</h3>
+              <div class="d-flex align-items-center gap-2">
+                <div class="d-flex align-items-center justify-content-center rounded-2 me-1"
+                     style="width:36px;height:36px;background:linear-gradient(135deg,#10b981,#059669);">
+                  <i class="bi bi-balance-scale text-white" style="font-size:1.1rem;"></i>
+                </div>
+                <div>
+                  <h4 class="mb-0 fw-bold text-dark" style="font-size:1.1rem;">Balance General</h4>
+                  <p class="mb-0 text-muted" style="font-size:0.78rem;">Estado financiero consolidado</p>
+                </div>
+              </div>
             </div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-end">
@@ -26,8 +35,8 @@
     <div class="container-fluid">
         <div class="row">
             <div class="col-12">
-                <div class="card card-primary card-outline">
-                    <div class="card-header">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white border-bottom">
                         <div class="row g-2 justify-content-end align-items-center">
                             <div class="col-auto">
                                 <span class="badge badge-primary mt-2">

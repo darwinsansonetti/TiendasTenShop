@@ -16,6 +16,7 @@ use App\Http\Controllers\ContabilidadController;
 use App\Http\Controllers\EmpleadosController;
 use App\Http\Controllers\ProveedoresController;
 use App\Http\Controllers\RecepcionesController;
+use App\Http\Controllers\DistribucionController;
 
 /*
 |--------------------------------------------------------------------------
@@ -395,6 +396,9 @@ Route::middleware('auth')->group(function() {
 
     // Listado de Recepciones Proveedor
     Route::get('/cpanel/recepciones/proveedor/listado', [RecepcionesController::class, 'listado_recepciones_proveedores'])->name('cpanel.recepciones.proveedor');
+    // Listado de Recepciones de Sucursal
+    Route::get('/cpanel/recepciones/sucursal/listado', [RecepcionesController::class, 'listado_recepciones_sucursal'])->name('cpanel.recepciones.sucursal');
+    Route::get('/{id}/recibir', [RecepcionesController::class, 'recibirTransferencia'])->name('recibir');
     
     // Recepciones Proveedor
     Route::get('/recepciones/nuevo', [RecepcionesController::class, 'nuevaRecepcion'])->name('cpanel.recepciones.nuevo');
@@ -415,7 +419,108 @@ Route::middleware('auth')->group(function() {
     Route::post('/{id}/upload-excel', [RecepcionesController::class, 'uploadExcel'])->name('cpanel.recepciones.upload-excel');
 
     // Guardar el Recibir Recepcion del Proveedor
-    Route::get('/cpanel/recepciones/{id}/finalizar', [RecepcionesController::class, 'finalizarRecepcion'])->name('cpanel.recepciones.finalizar');
+    Route::post('/cpanel/recepciones/{id}/finalizar', [RecepcionesController::class, 'finalizarRecepcion'])
+    ->name('cpanel.recepciones.finalizar');
+
+    Route::post('/cpanel/recepciones/{id}/actualizar-detalles', [RecepcionesController::class, 'actualizarDetallesRecepcion'])
+    ->name('cpanel.recepciones.actualizar-detalles');
+
+    Route::post('/cpanel/recepciones/{id}/asociar-factura', [RecepcionesController::class, 'asociarFactura'])->name('cpanel.recepciones.asociar-factura');
+
+    // routes/web.php
+    Route::post('/cpanel/recepciones/guardar-productos', [RecepcionesController::class, 'guardarProductos'])->name('cpanel.recepciones.guardar-productos');
+
+    // Listado de Auditorias de Recepciones de Proveedor
+    Route::get('/cpanel/recepciones/auditorias/listado', [RecepcionesController::class, 'listado_recepciones_auditoria'])->name('cpanel.recepciones.auditorias');
+
+    // Obtener la Auditoria
+    Route::get('/cpanel/auditorias/{id}/procesar', [RecepcionesController::class, 'procesarAuditoria'])->name('cpanel.auditorias.procesar');
+
+    // Rutas generales
+    Route::post('/cpanel/auditorias/{id}/aprobar', [RecepcionesController::class, 'aprobarAuditoria'])->name('aprobar');
+    Route::post('/cpanel/auditorias/{id}/rechazar', [RecepcionesController::class, 'rechazarAuditoria'])->name('rechazar');
+    
+    // Rutas por producto
+    Route::post('/cpanel/auditorias/producto/{id}/aprobar', [RecepcionesController::class, 'aprobarProducto'])->name('aprobar.producto');
+    Route::post('/cpanel/auditorias/producto/{id}/rechazar', [RecepcionesController::class, 'rechazarProducto'])->name('rechazar.producto');
+
+    // Listado de Recepciones Finalizadas
+    Route::get('/cpanel/recepciones/finalizadas/listado', [RecepcionesController::class, 'listado_recepciones_finalizadas'])->name('cpanel.recepciones.finalizadas');
+
+    // Exportar excel de la recepcion
+    Route::get('/cpanel/recepciones/{id}/exportar-excel', [RecepcionesController::class, 'exportarRecepcionExcel'])->name('cpanel.recepciones.exportar.excel');
+
+    // Detalles de la recepcion
+    Route::get('/cpanel/recepciones/{id}/detalle', [RecepcionesController::class, 'detalleRecepcion'])->name('cpanel.recepciones.detalle');
+
+    // Crear Recepciones de sucursal
+    Route::get('/transferencias/create', [RecepcionesController::class, 'createTransferencia'])->name('cpanel.transferencias.create');
+
+    // Nueva Distribucion
+    Route::get('/cpanel/distribucion/listado', [DistribucionController::class, 'distribuciones_listado'])
+        ->name('cpanel.distribucion.distribuciones');
+
+    Route::post('/cpanel/distribuciones/{id}/finalizar', [DistribucionController::class, 'finalizarDistribucion'])
+        ->name('cpanel.distribuciones.finalizar');
+
+    // Cancelar distribucion en la vista Nueva Distribucion (Listado Distribuciones)
+    Route::post('/cpanel/distribuciones/{id}/cancelar', [DistribucionController::class, 'cancelarDistribucion'])
+        ->name('cpanel.distribuciones.cancelar');
+
+    Route::get('/cpanel/distribuciones/create', [DistribucionController::class, 'createDistribucion'])
+        ->name('cpanel.distribuciones.create');
+
+    Route::post('/cpanel/distribuciones', [DistribucionController::class, 'storeDistribucion'])
+        ->name('cpanel.distribuciones.store');
+
+    Route::get('/cpanel/distribuciones/{id}/edit', [DistribucionController::class, 'editDistribucion'])
+        ->name('cpanel.distribuciones.edit');
+
+    // ✅ Agregar rutas faltantes
+    Route::get('/cpanel/distribuciones', [DistribucionController::class, 'indexDistribuciones'])
+        ->name('cpanel.distribuciones.index');
+
+    Route::put('/cpanel/distribuciones/{id}', [DistribucionController::class, 'updateDistribucion'])
+        ->name('cpanel.distribuciones.update');
+
+    Route::post('/cpanel/distribuciones/asociar-sucursal', [DistribucionController::class, 'asociarSucursal'])
+        ->name('cpanel.distribuciones.asociar-sucursal');
+
+    Route::post('/cpanel/distribuciones/remover-sucursal', [DistribucionController::class, 'removerSucursal'])
+        ->name('cpanel.distribuciones.remover-sucursal');
+
+    Route::post('/cpanel/distribuciones/upload-excel', [DistribucionController::class, 'uploadExcelDistribucion'])
+        ->name('cpanel.distribuciones.upload-excel');
+
+    Route::get('/cpanel/distribuciones/download-details', [DistribucionController::class, 'downloadDetailsTransferencia'])
+    ->name('cpanel.distribuciones.download-details');
+
+    Route::post('/cpanel/distribuciones/upload-excel', [DistribucionController::class, 'uploadExcelDistribucion'])
+    ->name('cpanel.distribuciones.upload-excel');    
+
+    // Listado Distribuciones / Transferencias
+    Route::get('/cpanel/distribuciones/listado-transferencias', [DistribucionController::class, 'distribuciones_listado_aceptar'])
+        ->name('cpanel.distribucion.listado');
+
+    // Recibir Recepcion en la Sucursal
+    Route::post('/cpanel/transferencias/{id}/finalizar-recibir', [DistribucionController::class, 'finalizarRecibirTransferencia'])
+    ->name('cpanel.transferencias.finalizar-recibir');
+
+    // Recibir transferencia (muestra la vista para recibir productos)
+    Route::get('/cpanel/transferencias/{id}/recibir', [DistribucionController::class, 'recibirTransferenciaProducto'])
+        ->name('cpanel.transferencias.recibir-productos');
+
+    // Ver detalle de transferencia
+    Route::get('/cpanel/transferencias/{id}/detalle', [DistribucionController::class, 'detalleTransferencia'])
+        ->name('cpanel.transferencias.detalle');
+
+    // Distribucion - Inventario de almacen
+    Route::get('/cpanel/distribucion/inventario', [DistribucionController::class, 'distribuciones_inventario'])
+        ->name('cpanel.distribucion.inventario');
+
+    // // Devolver productos de transferencia 
+    // Route::post('/cpanel/transferencias/{id}/devolver', [DistribucionController::class, 'devolverTransferenciaProducto'])
+    //     ->name('cpanel.transferencias.devolver-productos');
 });
 
 

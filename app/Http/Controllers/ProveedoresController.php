@@ -889,10 +889,12 @@ class ProveedoresController extends Controller
             $contenedores = null;
             if ($proveedor->Tipo == 0) {
                 $contenedores = DB::connection('sqlsrv')
-                    ->table('Contenedor')
-                    ->whereIn('Estatus', [0, 1, 2]) // 0=Nuevo, 1=EnTransito, 2=EnAduana
-                    ->select('Id', 'Nombre')
-                    ->get();
+                            ->table('Contenedor')
+                            ->whereIn('Estatus', [0, 1, 2]) // 0=Nuevo, 1=EnTransito, 2=EnAduana
+                            ->where('FechaRecepcion', '>=', now()->subMonths(6))
+                            ->select('Id', 'Nombre')
+                            ->orderBy('FechaRecepcion', 'desc')
+                            ->get();
                 
                 if ($contenedores->isEmpty()) {
                     \Log::warning('No se encontraron contenedores activos');
@@ -1963,30 +1965,36 @@ class ProveedoresController extends Controller
             $listaDetalles = [];
             
             foreach ($rows as $row) {
-                $col0 = trim($row[0] ?? '');
-                $col1 = trim($row[1] ?? '');
-                $col2 = trim($row[2] ?? '');
-                $col3 = trim($row[3] ?? '');
-                $col4 = trim($row[4] ?? '');
-                $col5 = trim($row[5] ?? '');
+                $col0 = trim($row[0] ?? '');  // Código
+                $col1 = trim($row[1] ?? '');  // Referencia
+                $col2 = trim($row[2] ?? '');  // Descripción
+                $col3 = trim($row[3] ?? '');  // Cantidad (empaques)
+                $col4 = trim($row[4] ?? '');  // UxE
+                $col5 = trim($row[5] ?? '');  // Costo por empaque (columna F)
                 
                 if ($estatusArchivo == 0) {
                     if (strtolower($col0) == 'entrada de factura') {
-                        $estatusArchivo = 1; // ESTATUS_CABECERA
+                        $estatusArchivo = 1;
                     }
                 } elseif ($estatusArchivo == 1) {
                     if (strtolower($col0) == 'codigo' || strtolower($col0) == 'código') {
-                        $estatusArchivo = 2; // ESTATUS_DETALLES
+                        $estatusArchivo = 2;
                     }
                 } elseif ($estatusArchivo == 2) {
                     if (!empty($col0) && !empty($col2) && !empty($col3) && !empty($col5)) {
+                        $cantidad = floatval($col3);
+                        $uxe = intval($col4) ?: 1;
+                        $costoPorEmpaque = floatval($col5);  // ✅ 6 o 20
+                        $costoTotal = $cantidad * $costoPorEmpaque;  // 30 o 240
+                        
                         $listaDetalles[] = [
                             'Codigo' => $col0,
                             'Referencia' => $col1,
                             'Descripcion' => $col2,
-                            'Cantidad' => floatval($col3),
-                            'UxE' => intval($col4) ?: 1,
-                            'Costo' => floatval($col5)
+                            'Cantidad' => $cantidad,
+                            'UxE' => $uxe,
+                            'Costo' => $costoTotal,              // 30 o 240 (para mostrar)
+                            'CostoPorEmpaque' => $costoPorEmpaque  // ✅ 6 o 20 (para guardar)
                         ];
                     }
                 }
@@ -2021,17 +2029,6 @@ class ProveedoresController extends Controller
             foreach ($productosProcesados as $producto) {
                 $this->guardarOActualizarDetalleFactura($producto, $facturaId);
             }
-            
-            // // 3. Actualizar el MontoDivisa de la factura
-            // $totalFactura = DB::connection('sqlsrv')
-            //     ->table('FacturaDetalles')
-            //     ->where('FacturaId', $facturaId)
-            //     ->sum(DB::raw('CantidadEmitida * CostoDivisa'));
-            
-            // DB::connection('sqlsrv')
-            //     ->table('Facturas')
-            //     ->where('ID', $facturaId)
-            //     ->update(['MontoDivisa' => $totalFactura]);
             
             DB::connection('sqlsrv')->commit();
             
@@ -2155,7 +2152,10 @@ class ProveedoresController extends Controller
                 'producto_id' => $productoId,
                 'codigo' => $producto['codigo'],
                 'descripcion' => $producto['descripcion'],
+                'referencia' => $producto['referencia'] ?? '',  // ✅ Agregar referencia
                 'costo' => $producto['costo'],
+                'costo_unitario' => $producto['costo_unitario'] ?? 0,  // ✅ AGREGAR
+                'costo_excel' => $producto['costo_excel'] ?? 0,
                 'cantidad' => $producto['cantidad'],
                 'empaque' => $producto['empaque']
             ];
@@ -2174,54 +2174,23 @@ class ProveedoresController extends Controller
         return $sucursal;
     }
 
-    // private function guardarOActualizarDetalleFactura($producto, $facturaId)
-    // {
-    //     $uxe = ($producto['empaque'] == 'Docena' || $producto['empaque'] == 12) ? 12 : 1;
-        
-    //     // Verificar si el producto ya existe en la factura
-    //     $detalleExistente = DB::connection('sqlsrv')
-    //         ->table('FacturaDetalles')
-    //         ->where('FacturaId', $facturaId)
-    //         ->where('ProductoId', $producto['producto_id'])
-    //         ->first();
-        
-    //     if ($detalleExistente) {
-    //         // ACTUALIZAR producto existente
-    //         DB::connection('sqlsrv')
-    //             ->table('FacturaDetalles')
-    //             ->where('FacturaId', $facturaId)
-    //             ->where('ProductoId', $producto['producto_id'])
-    //             ->update([
-    //                 'CantidadEmitida' => $producto['cantidad'],
-    //                 'CostoDivisa' => $producto['costo'],
-    //                 'UxE' => $uxe
-    //             ]);
-    //     } else {
-    //         // INSERTAR nuevo producto
-    //         DB::connection('sqlsrv')
-    //             ->table('FacturaDetalles')
-    //             ->insert([
-    //                 'FacturaId' => $facturaId,
-    //                 'ProductoId' => $producto['producto_id'],
-    //                 'CantidadEmitida' => $producto['cantidad'],
-    //                 'CantidadRecibida' => 0,
-    //                 'CantidadDisponible' => 0,
-    //                 'CostoDivisa' => $producto['costo'],
-    //                 'CostoBs' => 0,
-    //                 'UxE' => $uxe
-    //             ]);
-    //     }
-    // }
-
     private function guardarOActualizarDetalleFactura($producto, $facturaId)
     {
         \Log::info('=== guardarOActualizarDetalleFactura INICIO ===');
         \Log::info('Producto recibido:', $producto);
         
-        // ✅ Obtener valores
+        // Obtener valores
         $cantidadUnidades = floatval($producto['cantidad'] ?? 0);
-        $costoTotal = floatval($producto['costo'] ?? 0);  // ← Este es el costo TOTAL del Excel
+        $costoUnitario = floatval($producto['costo_unitario'] ?? 0);
+        $costoExcel = floatval($producto['costo_excel'] ?? 0);  // ✅ Valor del Excel
         $empaque = $producto['empaque'] ?? 1;
+        
+        \Log::info('Valores extraídos:', [
+            'cantidadUnidades' => $cantidadUnidades,
+            'costoUnitario' => $costoUnitario,
+            'costoExcel' => $costoExcel,
+            'empaque' => $empaque
+        ]);
         
         // Calcular UxE
         $uxe = 1;
@@ -2238,14 +2207,20 @@ class ProveedoresController extends Controller
             }
         }
         
-        // ✅ Calcular cantidad de empaques (para guardar en CantidadEmitida)
+        // Calcular cantidad de empaques
         $cantidadEmpaques = $cantidadUnidades / $uxe;
         
-        \Log::info('Valores calculados:', [
-            'cantidad_unidades' => $cantidadUnidades,
-            'costo_total_recibido' => $costoTotal,
+        // ✅ CostoDivisa = costo_excel (valor directo del Excel)
+        $costoDivisa = $costoExcel;
+        
+        // CantidadDisponible = cantidad de unidades totales
+        $cantidadDisponible = $cantidadUnidades;
+        
+        \Log::info('Valores calculados para guardar:', [
+            'cantidadEmpaques' => $cantidadEmpaques,
+            'costoDivisa' => $costoDivisa,
             'uxe' => $uxe,
-            'cantidad_empaques' => $cantidadEmpaques
+            'cantidadDisponible' => $cantidadDisponible
         ]);
         
         $detalleExistente = DB::connection('sqlsrv')
@@ -2254,26 +2229,48 @@ class ProveedoresController extends Controller
             ->where('ProductoId', $producto['producto_id'])
             ->first();
         
+        \Log::info('detalleExistente:', ['existe' => $detalleExistente ? 'Sí' : 'No']);
+        
         if ($detalleExistente) {
+            \Log::info('ACTUALIZANDO detalle existente:', [
+                'FacturaId' => $facturaId,
+                'ProductoId' => $producto['producto_id'],
+                'CantidadEmitida' => $cantidadEmpaques,
+                'CostoDivisa' => $costoDivisa,
+                'UxE' => $uxe,
+                'CantidadRecibida' => 0
+            ]);
+            
             DB::connection('sqlsrv')
                 ->table('FacturaDetalles')
                 ->where('FacturaId', $facturaId)
                 ->where('ProductoId', $producto['producto_id'])
                 ->update([
                     'CantidadEmitida' => $cantidadEmpaques,
-                    'CostoDivisa' => $costoTotal,  // ← Usar directamente el costo recibido
+                    'CostoDivisa' => $costoDivisa,
                     'UxE' => $uxe,
-                    'CantidadRecibida' => $cantidadUnidades
+                    'CantidadRecibida' => 0
                 ]);
         } else {
+            \Log::info('INSERTANDO nuevo detalle:', [
+                'FacturaId' => $facturaId,
+                'ProductoId' => $producto['producto_id'],
+                'CantidadEmitida' => $cantidadEmpaques,
+                'CantidadRecibida' => 0,
+                'CantidadDisponible' => 0,
+                'CostoDivisa' => $costoDivisa,
+                'UxE' => $uxe
+            ]);
+            
             DB::connection('sqlsrv')
                 ->table('FacturaDetalles')
                 ->insert([
                     'FacturaId' => $facturaId,
                     'ProductoId' => $producto['producto_id'],
                     'CantidadEmitida' => $cantidadEmpaques,
-                    'CantidadRecibida' => $cantidadUnidades,
-                    'CostoDivisa' => $costoTotal,  // ← Usar directamente el costo recibido
+                    'CantidadRecibida' => 0,
+                    'CantidadDisponible' => 0,
+                    'CostoDivisa' => $costoDivisa,
                     'CostoBs' => 0,
                     'UxE' => $uxe
                 ]);

@@ -2,15 +2,26 @@
 
 @section('title', 'Editar Recepción')
 
+@php
+    use App\Helpers\FileHelper;
+@endphp
+
 @section('content')
 
 <div class="app-content-header">
     <div class="container-fluid">
         <div class="row">
             <div class="col-sm-6">
-                <h3 class="mb-0">
-                    <i class="bi bi-truck me-2"></i>Editar Recepción
-                </h3>
+              <div class="d-flex align-items-center gap-2">
+                <div class="d-flex align-items-center justify-content-center rounded-2 me-1"
+                     style="width:36px;height:36px;background:linear-gradient(135deg,#f59e0b,#d97706);">
+                  <i class="bi bi-pencil-square text-white" style="font-size:1.1rem;"></i>
+                </div>
+                <div>
+                  <h4 class="mb-0 fw-bold text-dark" style="font-size:1.1rem;">Editar Recepción</h4>
+                  <p class="mb-0 text-muted" style="font-size:0.78rem;">Recepción #{{ $recepcion->Numero }}</p>
+                </div>
+              </div>
             </div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-end">
@@ -18,7 +29,7 @@
                     <li class="breadcrumb-item">
                         <a href="{{ route('cpanel.recepciones.proveedor') }}">Recepciones</a>
                     </li>
-                    <li class="breadcrumb-item active">Editar Recepción #{{ $recepcion->Numero }}</li>
+                    <li class="breadcrumb-item active">Editar #{{ $recepcion->Numero }}</li>
                 </ol>
             </div>
         </div>
@@ -30,11 +41,11 @@
         
         <div class="row">
             <div class="col-12">
-                <div class="card card-primary card-outline">
-                    <div class="card-header">
-                        <h3 class="card-title">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header border-0 py-3" style="background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);">
+                        <h6 class="card-title mb-0 fw-bold text-white">
                             <i class="bi bi-info-circle me-2"></i>Recepción de Mercancía
-                        </h3>
+                        </h6>
                         <div class="card-tools">
                             <a href="{{ route('cpanel.recepciones.proveedor') }}" class="btn btn-sm btn-secondary">
                                 <i class="bi bi-arrow-left me-1"></i>Volver
@@ -265,12 +276,19 @@
                                                                 </thead>
                                                                 <tbody>
                                                                     @foreach($facturaDTO->Detalles as $detalle)
+                                                                    @php
+                                                                        // ✅ Calcular unidades totales
+                                                                        $totalUnidades = ($detalle->CantidadEmitida ?? 0) * ($detalle->UxE ?? 1);
+                                                                        
+                                                                        // ✅ Costo total = unidades totales × costo por unidad
+                                                                        $costoTotal = $totalUnidades * ($detalle->productoCostoDivisa ?? 0);
+                                                                    @endphp
                                                                     <tr>
                                                                         <td><code>{{ $detalle->Codigo ?? 'N/A' }}</code></td>
                                                                         <td>{{ $detalle->producto_nombre ?? 'N/A' }}</td>
-                                                                        <td class="text-end">{{ number_format($detalle->CantidadEmitida ?? 0, 2) }}</td>
+                                                                        <td class="text-end">{{ number_format(($detalle->CantidadEmitida ?? 0) * ($detalle->UxE ?? 0), 2) }}</td>
                                                                         <td class="text-end">${{ number_format($detalle->CostoDivisa ?? 0, 2) }}</td>
-                                                                        <td class="text-end">${{ number_format(($detalle->CantidadEmitida ?? 0) * ($detalle->CostoDivisa ?? 0), 2) }}</td>
+                                                                        <td class="text-end">${{ number_format($costoTotal, 2) }}</td>
                                                                     </tr>
                                                                     @endforeach
                                                                 </tbody>
@@ -347,42 +365,112 @@
                                                     <table class="table table-bordered table-striped" id="tablaProductos">
                                                         <thead class="table-dark">
                                                             <tr>
+                                                                <th style="width: 60px;">Foto</th>
                                                                 <th>Código</th>
                                                                 <th>Producto</th>
-                                                                <th class="text-end">Cantidad Pedida</th>
                                                                 <th class="text-end">Costo Unitario</th>
+                                                                <th class="text-end">Disponible</th>
+                                                                <th class="text-end">Recibido</th>
+                                                                <th class="text-end">Pie Solo</th>
+                                                                <th class="text-end">Pie Inv.</th>
+                                                                <th class="text-end">Dañado</th>
+                                                                <th class="text-end">Vacío</th>
                                                                 <th class="text-end">Total</th>
-                                                                <th class="text-center">Acciones</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
                                                             @forelse($detalles as $detalle)
+                                                            @php
+                                                                // Obtener la URL de la foto del producto
+                                                                $imgSrc = FileHelper::getOrDownloadFile(
+                                                                    'images/items/thumbs/',
+                                                                    $detalle->UrlFoto ?? '',
+                                                                    'assets/img/adminlte/img/produc_default.jfif'
+                                                                );
+                                                                
+                                                                $codigo = $detalle->Codigo ?? 'N/A';
+                                                                $productoNombre = $detalle->producto_nombre ?? 'N/A';
+                                                                $cantidadPedida = $detalle->CantidadPedida ?? 0;
+                                                                $cantidadRecibida = $detalle->CantidadRecibida ?? 0;
+                                                                $costoUnitario = $detalle->CostoDivisa ?? 0;
+                                                                
+                                                                // Valores de los tipos de piezas
+                                                                $pieSolo = $detalle->CantidadPieSolo ?? 0;
+                                                                $pieInvertido = $detalle->CantidadPieInvertido ?? 0;
+                                                                $danado = $detalle->CantidadPiezaDanada ?? 0;
+                                                                $vacio = $detalle->CantidadCajaVacia ?? 0;
+                                                                
+                                                                // Total = (Recibido - (PieSolo+PieInvertido+Danado+Vacio)) * CostoUnitario
+                                                                // O según tu lógica de negocio
+                                                                $total = $detalle->factura_costo_divisa * $detalle->factura_uxe;
+
+                                                                // ✅ Calcular unidades totales
+                                                                $totalUnidades = ($cantidadPedida ?? 0) * ($detalle->factura_uxe ?? 1);
+                                                                
+                                                                // ✅ Costo total = unidades totales × costo por unidad
+                                                                $costoTotal = $totalUnidades * ($detalle->factura_costo_divisa ?? 0);
+                                                            @endphp
+
                                                             <tr>
-                                                                <td><code>{{ $detalle->Codigo ?? 'N/A' }}</code></td>
-                                                                <td>{{ $detalle->producto_nombre ?? 'N/A' }}</td>
-                                                                <td class="text-end">{{ number_format($detalle->CantidadPedida ?? 0, 2) }}</td>
-                                                                <td class="text-end">${{ number_format($detalle->CostoDivisa ?? 0, 2) }}</td>
-                                                                <td class="text-end">${{ number_format(($detalle->CantidadPedida ?? 0) * ($detalle->CostoDivisa ?? 0), 2) }}</td>
                                                                 <td class="text-center">
-                                                                    <button type="button" class="btn btn-sm btn-danger" 
-                                                                            onclick="eliminarProducto({{ $detalle->RecepcionesDetallesId }})">
-                                                                        <i class="bi bi-trash"></i>
-                                                                    </button>
+                                                                    <img src="{{ $imgSrc }}" 
+                                                                        alt="{{ $codigo }}"
+                                                                        class="img-thumbnail"
+                                                                        style="width: 40px; height: 40px; object-fit: cover;"
+                                                                        onerror="this.src='{{ asset('assets/img/adminlte/img/produc_default.jfif') }}'">
                                                                 </td>
+                                                                <td><code>{{ $codigo }}</code></td>
+                                                                <td>{{ $productoNombre }}</td>
+                                                                <td class="text-end">${{ number_format($costoUnitario, 2) }}</td>
+                                                                <td class="text-end">{{ number_format($cantidadPedida, 2) }}</td>
+                                                                <td class="text-end">
+                                                                    <input type="number" step="0.01" class="form-control form-control-sm text-end cantidad-recibida"
+                                                                        style="width: 100px; display: inline-block;"
+                                                                        data-id="{{ $detalle->RecepcionesDetallesId }}"
+                                                                        data-costo="{{ $costoUnitario }}"
+                                                                        value="{{ number_format($cantidadRecibida, 2) }}">
+                                                                </td>
+                                                                <td class="text-end">
+                                                                    <input type="number" step="0.01" class="form-control form-control-sm text-end pie-solo"
+                                                                        style="width: 80px; display: inline-block;"
+                                                                        data-id="{{ $detalle->RecepcionesDetallesId }}"
+                                                                        value="{{ number_format($pieSolo, 2) }}">
+                                                                </td>
+                                                                <td class="text-end">
+                                                                    <input type="number" step="0.01" class="form-control form-control-sm text-end pie-invertido"
+                                                                        style="width: 80px; display: inline-block;"
+                                                                        data-id="{{ $detalle->RecepcionesDetallesId }}"
+                                                                        value="{{ number_format($pieInvertido, 2) }}">
+                                                                </td>
+                                                                <td class="text-end">
+                                                                    <input type="number" step="0.01" class="form-control form-control-sm text-end danado"
+                                                                        style="width: 80px; display: inline-block;"
+                                                                        data-id="{{ $detalle->RecepcionesDetallesId }}"
+                                                                        value="{{ number_format($danado, 2) }}">
+                                                                </td>
+                                                                <td class="text-end">
+                                                                    <input type="number" step="0.01" class="form-control form-control-sm text-end vacio"
+                                                                        style="width: 80px; display: inline-block;"
+                                                                        data-id="{{ $detalle->RecepcionesDetallesId }}"
+                                                                        value="{{ number_format($vacio, 2) }}">
+                                                                </td>
+                                                                <td class="text-end subtotal-cell">${{ number_format($total, 2) }}</td>
                                                             </tr>
                                                             @empty
                                                             <tr>
-                                                                <td colspan="6" class="text-center">No hay productos agregados</td>
+                                                                <td colspan="11" class="text-center py-4">
+                                                                    <i class="bi bi-inbox fs-1 text-muted"></i><br>
+                                                                    No hay productos agregados
+                                                                </td>
                                                             </tr>
                                                             @endforelse
                                                         </tbody>
                                                         <tfoot class="table-secondary">
                                                             <tr>
-                                                                <td colspan="4" class="text-end fw-bold">TOTAL RECEPCIÓN:</td>
+                                                                <td colspan="10" class="text-end fw-bold">TOTAL RECEPCIÓN:</td>
                                                                 <td class="text-end fw-bold text-success" id="totalRecepcion">
                                                                     ${{ number_format($totalRecepcion ?? 0, 2) }}
                                                                 </td>
-                                                                <td></td>
                                                             </tr>
                                                         </tfoot>
                                                     </table>
@@ -512,6 +600,9 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
+    // Definir la URL para asociar factura
+    const recuperarFacturaBaseUrl = '{{ route("cpanel.recepciones.asociar-factura", ["id" => $recepcion->RecepcionId]) }}';
+    console.log('URL asociar factura:', recuperarFacturaBaseUrl);
     
     // ============================================
     // HABILITAR BOTÓN DE UPLOAD (sin jQuery)
@@ -803,20 +894,19 @@
         // Fila 9: Productos
         filas.push(['Productos', '', '', '', '', '', '', '', '']);
         
-        // Fila 10: Encabezados de columnas (TODAS las columnas)
+        // ✅ Fila 10: Encabezados de columnas (SIN Costo Unitario)
         filas.push([
-            'Codigo', 'Referencia', 'Descripcion', 'Costo(Unitario)', 
+            'Codigo', 'Referencia', 'Descripcion', 
             'Cantidad', 'Pie Solo', 'Pie Invertdo', 'Dañado', 'Vacío'
         ]);
         
-        // Filas 11+: Datos de productos (Costo y Cantidad = 0)
+        // ✅ Filas 11+: Datos de productos (SIN Costo Unitario)
         datos.productos.forEach(producto => {
             filas.push([
                 producto.codigo,
                 producto.referencia,
                 producto.descripcion,
-                0,  // Costo(Unitario) = 0
-                0,  // Cantidad = 0
+                producto.cantidad,
                 producto.pie_solo || 0,
                 producto.pie_invertido || 0,
                 producto.danado || 0,
@@ -827,12 +917,11 @@
         // Crear hoja de cálculo
         const worksheet = XLSX.utils.aoa_to_sheet(filas);
         
-        // Ajustar anchos de columna
+        // ✅ Ajustar anchos de columna (8 columnas ahora)
         worksheet['!cols'] = [
             {wch: 15}, // Codigo
             {wch: 15}, // Referencia
             {wch: 40}, // Descripcion
-            {wch: 18}, // Costo(Unitario)
             {wch: 12}, // Cantidad
             {wch: 10}, // Pie Solo
             {wch: 12}, // Pie Invertido
@@ -868,11 +957,12 @@
             return;
         }
         
-        // ✅ FILTRAR: Solo productos con cantidad PENDIENTE > 0
+        // ✅ FILTRAR: Solo productos con cantidad PENDIENTE > 0 (en unidades reales)
         const productosPendientes = facturaData.Detalles.filter(detalle => {
-            const cantidadEmitida = detalle.CantidadEmitida ?? 0;
+            const uxe = detalle.UxE ?? 1;
+            const cantidadEmitidaReal = (detalle.CantidadEmitida ?? 0) * uxe;
             const cantidadRecibida = detalle.CantidadRecibida ?? 0;
-            const pendiente = cantidadEmitida - cantidadRecibida;
+            const pendiente = cantidadEmitidaReal - cantidadRecibida;
             
             return pendiente > 0;  // Solo si falta por recibir
         });
@@ -919,18 +1009,18 @@
             productos: []
         };
         
-        // ✅ Convertir SOLO los productos pendientes
+        // ✅ Convertir SOLO los productos pendientes (en unidades reales)
         productosPendientes.forEach(detalle => {
-            const cantidadEmitida = detalle.CantidadEmitida ?? 0;
+            const uxe = detalle.UxE ?? 1;
+            const cantidadEmitidaReal = (detalle.CantidadEmitida ?? 0) * uxe;
             const cantidadRecibida = detalle.CantidadRecibida ?? 0;
-            const pendiente = cantidadEmitida - cantidadRecibida;
+            const pendiente = cantidadEmitidaReal - cantidadRecibida;
             
             datosExcel.productos.push({
                 codigo: detalle.Codigo || '',
                 referencia: detalle.Referencia || '',
                 descripcion: detalle.producto_nombre || detalle.Descripcion || '',
-                costo_unitario: parseFloat(detalle.CostoDivisa) || 0,
-                cantidad: pendiente,  // ✅ Cantidad PENDIENTE (no la emitida)
+                cantidad: pendiente,  // ✅ Cantidad PENDIENTE en unidades
                 pie_solo: 0,
                 pie_invertido: 0,
                 danado: 0,
@@ -986,10 +1076,85 @@
         console.log('No hay factura asociada');
     @endif
 
-    // Confirmacion para el Guardar Recepcion
+    // Función para guardar los cambios de los inputs en la base de datos
+    function guardarCambiosProductos() {
+        var productosActualizados = [];
+        
+        document.querySelectorAll('#tablaProductos tbody tr').forEach(row => {
+            var detalleId = row.querySelector('.cantidad-recibida')?.dataset.id;
+            if (detalleId) {
+                var cantidadRecibida = parseFloat(row.querySelector('.cantidad-recibida')?.value) || 0;
+                var pieSolo = parseFloat(row.querySelector('.pie-solo')?.value) || 0;
+                var pieInvertido = parseFloat(row.querySelector('.pie-invertido')?.value) || 0;
+                var danado = parseFloat(row.querySelector('.danado')?.value) || 0;
+                var vacio = parseFloat(row.querySelector('.vacio')?.value) || 0;
+                
+                productosActualizados.push({
+                    id: detalleId,
+                    cantidad_recibida: cantidadRecibida,
+                    pie_solo: pieSolo,
+                    pie_invertido: pieInvertido,
+                    danado: danado,
+                    vacio: vacio
+                });
+            }
+        });
+        
+        if (productosActualizados.length === 0) {
+            return Promise.resolve();
+        }
+        
+        // Enviar los cambios al servidor
+        return fetch('/cpanel/recepciones/guardar-productos', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ productos: productosActualizados })
+        }).then(response => response.json());
+    }
+
     function confirmarRecepcion() {
+        var recepcionId = document.getElementById('recepcion_id')?.value || '{{ $recepcion->RecepcionId ?? '' }}';
+        
+        // Recoger todos los valores de los inputs de la tabla
+        var detalles = [];
+        var hayProductos = false;
+        
+        document.querySelectorAll('#tablaProductos tbody tr').forEach(row => {
+            var cantidadRecibida = parseFloat(row.querySelector('.cantidad-recibida')?.value) || 0;
+            
+            if (cantidadRecibida > 0) {
+                hayProductos = true;
+            }
+            
+            var danadoValue = parseFloat(row.querySelector('.danado')?.value) || 0;
+            
+            detalles.push({
+                id: row.querySelector('.cantidad-recibida')?.dataset.id || null,
+                cantidad_recibida: cantidadRecibida,
+                pie_solo: parseFloat(row.querySelector('.pie-solo')?.value) || 0,
+                pie_invertido: parseFloat(row.querySelector('.pie-invertido')?.value) || 0,
+                danado: danadoValue,
+                vacio: parseFloat(row.querySelector('.vacio')?.value) || 0
+            });
+        });
+        
+        // Validar que haya al menos un producto con cantidad > 0
+        if (!hayProductos) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Sin productos',
+                text: 'Debe recibir al menos un producto',
+                confirmButtonText: 'Entendido'
+            });
+            return;
+        }
+        
         const finalizarUrl = '{{ route("cpanel.recepciones.finalizar", ["id" => $recepcion->RecepcionId]) }}';
-        console.log('URL finalizar:', finalizarUrl);
+        const actualizarUrl = '{{ route("cpanel.recepciones.actualizar-detalles", ["id" => $recepcion->RecepcionId]) }}';
         
         Swal.fire({
             title: '¿Confirmar recepción?',
@@ -1009,11 +1174,29 @@
                     didOpen: () => { Swal.showLoading(); }
                 });
                 
-                fetch(finalizarUrl, {
-                    method: 'GET',
+                fetch(actualizarUrl, {
+                    method: 'POST',
                     headers: {
                         'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Content-Type': 'application/json',
                         'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ detalles: detalles })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        return fetch(finalizarUrl, {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json'
+                            },
+                            body: JSON.stringify({})
+                        });
+                    } else {
+                        throw new Error(data.message);
                     }
                 })
                 .then(response => response.json())
@@ -1032,6 +1215,54 @@
                 });
             }
         });
+    }
+
+    // Actualizar total cuando cambie Cantidad Recibida
+    document.querySelectorAll('.cantidad-recibida').forEach(input => {
+        input.addEventListener('change', function() {
+            var cantidad = parseFloat(this.value) || 0;
+            var costo = parseFloat(this.dataset.costo) || 0;
+            var subtotal = cantidad * costo;
+            
+            // Actualizar el subtotal de la fila
+            var row = this.closest('tr');
+            row.querySelector('.subtotal-cell').innerText = '$' + subtotal.toFixed(2);
+            
+            // Recalcular el total general
+            recalcularTotalGeneral();
+        });
+    });
+
+    // ✅ Nuevo: Actualizar cuando cambien Pie Solo, Pie Inv., Dañado, Vacío
+    document.querySelectorAll('.pie-solo, .pie-invertido, .danado, .vacio').forEach(input => {
+        input.addEventListener('change', function() {
+            var row = this.closest('tr');
+            var cantidadRecibida = parseFloat(row.querySelector('.cantidad-recibida')?.value) || 0;
+            var costo = parseFloat(row.querySelector('.cantidad-recibida')?.dataset.costo) || 0;
+            
+            // Obtener los valores de los diferentes tipos
+            var pieSolo = parseFloat(row.querySelector('.pie-solo')?.value) || 0;
+            var pieInvertido = parseFloat(row.querySelector('.pie-invertido')?.value) || 0;
+            var danado = parseFloat(row.querySelector('.danado')?.value) || 0;
+            var vacio = parseFloat(row.querySelector('.vacio')?.value) || 0;
+            
+            // Calcular cantidad neta (Recibido - dañados - vacíos - etc.)
+            // O según tu lógica de negocio
+            var cantidadNeta = cantidadRecibida - (pieSolo + pieInvertido + danado + vacio);
+            var subtotal = cantidadNeta * costo;
+            
+            row.querySelector('.subtotal-cell').innerText = '$' + subtotal.toFixed(2);
+            recalcularTotalGeneral();
+        });
+    });
+
+    function recalcularTotalGeneral() {
+        var total = 0;
+        document.querySelectorAll('.subtotal-cell').forEach(cell => {
+            var valor = parseFloat(cell.innerText.replace('$', '').replace(',', '')) || 0;
+            total += valor;
+        });
+        document.getElementById('totalRecepcion').innerText = '$' + total.toFixed(2);
     }
 </script>
 @endsection

@@ -12,9 +12,16 @@
     <div class="container-fluid">
         <div class="row">
             <div class="col-sm-6">
-                <h3 class="mb-0">
-                    <i class="fas fa-truck me-2"></i>Detalle del Proveedor
-                </h3>
+              <div class="d-flex align-items-center gap-2">
+                <div class="d-flex align-items-center justify-content-center rounded-2 me-1"
+                     style="width:36px;height:36px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);">
+                  <i class="bi bi-building text-white" style="font-size:1.1rem;"></i>
+                </div>
+                <div>
+                  <h4 class="mb-0 fw-bold text-dark" style="font-size:1.1rem;">Detalle del Proveedor</h4>
+                  <p class="mb-0 text-muted" style="font-size:0.78rem;">Información y facturas del proveedor</p>
+                </div>
+              </div>
             </div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-end">
@@ -31,534 +38,560 @@
 
 <div class="app-content">
     <div class="container-fluid">
-        
-        <!-- Tarjeta de Información del Proveedor -->
-        <div class="card card-primary card-outline">
-            <div class="card-header">
-                <h3 class="card-title">
-                    <i class="fas fa-info-circle me-2"></i>Información del Proveedor
-                </h3>
-                <div class="card-tools">
-                    <a href="{{ route('cpanel.proveedores.editar', $proveedor->ProveedorId) }}" 
-                       class="btn btn-sm btn-warning">
-                        <i class="fas fa-edit me-1"></i>Editar
-                    </a>
-                    <a href="{{ route('cpanel.proveedor.mercancia.listado') }}" 
-                       class="btn btn-sm btn-secondary">
-                        <i class="fas fa-arrow-left me-1"></i>Volver
-                    </a>
+
+        {{-- ================================================ --}}
+        {{-- CARD 1: INFORMACIÓN DEL PROVEEDOR --}}
+        {{-- ================================================ --}}
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header border-0 py-3" style="background:linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%);">
+                <div class="d-flex align-items-center justify-content-between">
+                    <h6 class="mb-0 fw-bold text-white">
+                        <i class="bi bi-building me-2"></i>Información del Proveedor
+                    </h6>
+                    <div class="d-flex gap-2">
+                        <a href="{{ route('cpanel.proveedores.editar', $proveedor->ProveedorId) }}"
+                           class="btn btn-sm fw-semibold"
+                           style="background:rgba(245,158,11,0.25);color:#fef3c7;border:1px solid rgba(255,255,255,0.3);font-size:0.8rem;">
+                            <i class="bi bi-pencil me-1"></i>Editar
+                        </a>
+                        <a href="{{ route('cpanel.proveedor.mercancia.listado') }}"
+                           class="btn btn-light btn-sm fw-semibold" style="font-size:0.8rem;">
+                            <i class="bi bi-arrow-left me-1"></i>Volver
+                        </a>
+                    </div>
                 </div>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-3 text-center">
-                        <img src="{{ $imgSrc }}" 
+            <div class="card-body py-4">
+                <div class="row g-4 align-items-start">
+                    {{-- Imagen + badges --}}
+                    <div class="col-md-2 text-center">
+                        <img src="{{ $imgSrc }}"
                              alt="{{ $proveedor->Nombre }}"
-                             class="img-fluid rounded-circle border border-primary"
-                             style="width: 150px; height: 150px; object-fit: cover;">
-                        <div class="mt-2">
+                             class="rounded-circle img-zoomable"
+                             style="width:120px;height:120px;object-fit:cover;border:3px solid #e2e8f0;cursor:zoom-in;"
+                             onclick="zoomImagen(this)"
+                             data-full-image="{{ $imgSrc }}"
+                             data-description="{{ $proveedor->Nombre }}">
+                        <div class="d-flex justify-content-center gap-1 mt-2 flex-wrap">
                             @if($proveedor->Estatus == 0)
-                                <span class="badge bg-success">Activo</span>
+                                <span class="badge rounded-pill"
+                                      style="background:rgba(16,185,129,0.1);color:#059669;border:1px solid rgba(16,185,129,0.25);font-size:0.72rem;">Activo</span>
                             @else
-                                <span class="badge bg-danger">Inactivo</span>
+                                <span class="badge rounded-pill"
+                                      style="background:rgba(239,68,68,0.1);color:#dc2626;border:1px solid rgba(239,68,68,0.25);font-size:0.72rem;">Inactivo</span>
                             @endif
                             @if($proveedor->Tipo == 0)
-                                <span class="badge bg-primary">Mercancía</span>
+                                <span class="badge rounded-pill"
+                                      style="background:rgba(59,130,246,0.1);color:#1d4ed8;border:1px solid rgba(59,130,246,0.25);font-size:0.72rem;">Mercancía</span>
                             @else
-                                <span class="badge bg-info">Servicio</span>
+                                <span class="badge rounded-pill"
+                                      style="background:rgba(6,182,212,0.1);color:#0891b2;border:1px solid rgba(6,182,212,0.25);font-size:0.72rem;">Servicio</span>
                             @endif
                         </div>
                     </div>
-                    <div class="col-md-9">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <table class="table table-sm table-borderless">
-                                    <tr>
-                                        <th width="120">Nombre:</th>
-                                        <td><strong>{{ $proveedor->Nombre }}</strong></td>
-                                    </tr>
-                                    <tr>
-                                        <th>Rif/Cédula:</th>
-                                        <td>{{ $proveedor->Rif_Cedula ?: 'N/A' }}</td>
-                                    </tr>
-                                    <tr>
-                                        <th>Teléfono Móvil:</th>
-                                        <td>{{ $proveedor->TelefonoMovil ?: 'N/A' }}</td>
-                                    </tr>
-                                    <tr>
-                                        <th>Teléfono Fijo:</th>
-                                        <td>{{ $proveedor->TelefonoFijo ?: 'N/A' }}</td>
-                                    </tr>
-                                </table>
+                    {{-- Datos --}}
+                    <div class="col-md-10">
+                        <div class="row g-3">
+                            <div class="col-md-4 col-6">
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Nombre</p>
+                                <p class="mb-0 fw-bold text-dark">{{ $proveedor->Nombre }}</p>
                             </div>
-                            <div class="col-md-6">
-                                <table class="table table-sm table-borderless">
-                                    <tr>
-                                        <th width="120">Email:</th>
-                                        <td>{{ $proveedor->CorreoElectronico ?: 'N/A' }}</td>
-                                    </tr>
-                                    </tr>
-                                        <th>Fecha Registro:</th>
-                                        <td>{{ \Carbon\Carbon::parse($proveedor->FechaCreacion)->format('d/m/Y') }}</td>
-                                    </tr>
-                                    <tr>
-                                        <th>Dirección:</th>
-                                        <td>{{ \Illuminate\Support\Str::limit($proveedor->Direccion ?? 'N/A', 50) }}</td>
-                                    </tr>
-                                    <tr>
-                                        <th>Número Cuenta:</th>
-                                        <td>{{ $proveedor->NumeroDeCuenta ?: 'N/A' }}</td>
-                                    </tr>
-                                </table>
+                            <div class="col-md-4 col-6">
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">RIF / Cédula</p>
+                                <p class="mb-0 fw-semibold text-dark">{{ $proveedor->Rif_Cedula ?: 'N/A' }}</p>
                             </div>
+                            <div class="col-md-4 col-6">
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Fecha Registro</p>
+                                <p class="mb-0 fw-semibold text-dark">{{ \Carbon\Carbon::parse($proveedor->FechaCreacion)->format('d/m/Y') }}</p>
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Teléfono Móvil</p>
+                                <p class="mb-0 fw-semibold text-dark">{{ $proveedor->TelefonoMovil ?: 'N/A' }}</p>
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Teléfono Fijo</p>
+                                <p class="mb-0 fw-semibold text-dark">{{ $proveedor->TelefonoFijo ?: 'N/A' }}</p>
+                            </div>
+                            <div class="col-md-6 col-12">
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Correo</p>
+                                <p class="mb-0 fw-semibold text-dark">{{ $proveedor->CorreoElectronico ?: 'N/A' }}</p>
+                            </div>
+                            <div class="col-md-8 col-12">
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Dirección</p>
+                                <p class="mb-0 fw-semibold text-dark">{{ \Illuminate\Support\Str::limit($proveedor->Direccion ?? 'N/A', 80) }}</p>
+                            </div>
+                            <div class="col-md-4 col-6">
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Número de Cuenta</p>
+                                <p class="mb-0 fw-semibold text-dark">{{ $proveedor->NumeroDeCuenta ?: 'N/A' }}</p>
+                            </div>
+                            @if($banco)
+                            <div class="col-12">
+                                <div class="d-inline-flex align-items-center gap-2 rounded-2 px-3 py-2"
+                                     style="background:#eff6ff;border:1px solid #bfdbfe;">
+                                    <i class="bi bi-bank text-primary" style="font-size:0.9rem;"></i>
+                                    <span class="fw-semibold text-dark" style="font-size:0.88rem;">{{ $banco->Nombre }}</span>
+                                </div>
+                            </div>
+                            @endif
                         </div>
-                        @if($banco)
-                        <div class="row mt-2">
-                            <div class="col-md-12">
-                                <small class="text-muted">
-                                    <i class="fas fa-university me-1"></i>
-                                    Banco: {{ $banco->Nombre }}
-                                </small>
-                            </div>
-                        </div>
-                        @endif
                     </div>
                 </div>
             </div>
-
-            <!-- NUEVO CARD-BODY PARA BOTONES -->
-            <div class="card-footer bg-transparent">
+            <div class="card-footer bg-white py-3" style="border-top:1px solid #f1f5f9;">
                 <div class="d-flex justify-content-end gap-2">
-                    <a href="{{ route('cpanel.proveedores.pagar', $proveedor->ProveedorId) }}" 
-                        class="btn btn-outline-success btn-sm" 
-                        title="Registrar Pago"
-                        data-bs-toggle="tooltip">
-                            <i class="bi bi-cash-stack me-1"></i> Registrar Pago
+                    <a href="{{ route('cpanel.proveedores.pagar', $proveedor->ProveedorId) }}"
+                       class="btn btn-success px-3 fw-semibold"
+                       title="Registrar Pago" data-bs-toggle="tooltip">
+                        <i class="bi bi-cash-stack me-1"></i>Registrar Pago
                     </a>
-                    <button type="button" 
-                            class="btn btn-primary btn-sm" 
-                            data-bs-toggle="modal" 
+                    <button type="button"
+                            class="btn btn-primary px-3 fw-semibold"
+                            data-bs-toggle="modal"
                             data-bs-target="#modalCrearFactura">
-                        <i class="fas fa-file-invoice me-1"></i>Crear Factura
+                        <i class="bi bi-file-earmark-plus me-1"></i>Crear Factura
                     </button>
                 </div>
             </div>
         </div>
-        </br>
 
-        <!-- Tarjetas de Resumen -->
-        <div class="row mb-4">
+        {{-- ================================================ --}}
+        {{-- KPI CARDS --}}
+        {{-- ================================================ --}}
+        <div class="row g-3 mb-4">
             <div class="col-md-4">
-                <div class="card shadow-sm border-0 h-100">
-                    <div class="card-body text-center p-4">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div class="text-start">
-                                <h6 class="text-muted text-uppercase fw-bold small mb-2">Total Facturas</h6>
-                                <h3 class="fw-bold text-info mb-0">$ {{ number_format($balanceFacturas->totalFacturas, 2) }}</h3>
-                            </div>
-                            <div class="bg-info bg-opacity-10 rounded-circle p-3">
-                                <i class="fas fa-file-invoice-dollar text-info fs-3"></i>
-                            </div>
+                <div class="rounded-3 p-3 h-100" style="background:#f8fafc;border:1px solid #e2e8f0;">
+                    <div class="d-flex align-items-center gap-3 mb-2">
+                        <div class="rounded-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                             style="width:44px;height:44px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);">
+                            <i class="bi bi-file-earmark-text text-white" style="font-size:1.1rem;"></i>
                         </div>
-                        <div class="mt-3">
-                            <div class="progress" style="height: 4px;">
-                                <div class="progress-bar bg-info" style="width: 100%"></div>
-                            </div>
-                            <small class="text-muted mt-2 d-block">Total acumulado de todas las facturas</small>
+                        <div>
+                            <p class="text-uppercase text-muted mb-0" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Total Facturas</p>
+                            <h4 class="mb-0 fw-bold text-dark">$ {{ number_format($balanceFacturas->totalFacturas, 2) }}</h4>
                         </div>
                     </div>
+                    <div class="progress mt-1" style="height:4px;background:#dbeafe;">
+                        <div class="progress-bar" style="width:100%;background:linear-gradient(90deg,#3b82f6,#1d4ed8);"></div>
+                    </div>
+                    <small class="text-muted d-block mt-1" style="font-size:0.75rem;">Total acumulado de todas las facturas</small>
                 </div>
             </div>
             <div class="col-md-4">
-                <div class="card shadow-sm border-0 h-100">
-                    <div class="card-body text-center p-4">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div class="text-start">
-                                <h6 class="text-muted text-uppercase fw-bold small mb-2">Total Pagado</h6>
-                                <h3 class="fw-bold text-success mb-0">$ {{ number_format($balanceFacturas->totalPagado, 2) }}</h3>
-                            </div>
-                            <div class="bg-success bg-opacity-10 rounded-circle p-3">
-                                <i class="fas fa-money-bill-wave text-success fs-3"></i>
-                            </div>
+                <div class="rounded-3 p-3 h-100" style="background:#f8fafc;border:1px solid #e2e8f0;">
+                    <div class="d-flex align-items-center gap-3 mb-2">
+                        <div class="rounded-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                             style="width:44px;height:44px;background:linear-gradient(135deg,#10b981,#059669);">
+                            <i class="bi bi-check-circle text-white" style="font-size:1.1rem;"></i>
                         </div>
-                        <div class="mt-3">
-                            <div class="progress" style="height: 4px;">
-                                <div class="progress-bar bg-success" style="width: {{ $balanceFacturas->totalFacturas > 0 ? ($balanceFacturas->totalPagado / $balanceFacturas->totalFacturas) * 100 : 0 }}%"></div>
-                            </div>
-                            <small class="text-muted mt-2 d-block">
-                                {{ number_format($balanceFacturas->porcentajePagado ?? 0, 1) }}% del total facturado
-                            </small>
+                        <div>
+                            <p class="text-uppercase text-muted mb-0" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Total Pagado</p>
+                            <h4 class="mb-0 fw-bold text-dark">$ {{ number_format($balanceFacturas->totalPagado, 2) }}</h4>
                         </div>
                     </div>
+                    <div class="progress mt-1" style="height:4px;background:#d1fae5;">
+                        <div class="progress-bar"
+                             style="width:{{ $balanceFacturas->totalFacturas > 0 ? ($balanceFacturas->totalPagado / $balanceFacturas->totalFacturas) * 100 : 0 }}%;background:linear-gradient(90deg,#10b981,#059669);"></div>
+                    </div>
+                    <small class="text-muted d-block mt-1" style="font-size:0.75rem;">
+                        {{ number_format($balanceFacturas->porcentajePagado ?? 0, 1) }}% del total facturado
+                    </small>
                 </div>
             </div>
             <div class="col-md-4">
-                <div class="card shadow-sm border-0 h-100">
-                    <div class="card-body text-center p-4">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div class="text-start">
-                                <h6 class="text-muted text-uppercase fw-bold small mb-2">Saldo Pendiente</h6>
-                                <h3 class="fw-bold text-warning mb-0">$ {{ number_format($balanceFacturas->saldoPendiente, 2) }}</h3>
-                            </div>
-                            <div class="bg-warning bg-opacity-10 rounded-circle p-3">
-                                <i class="fas fa-clock text-warning fs-3"></i>
-                            </div>
+                <div class="rounded-3 p-3 h-100" style="background:#f8fafc;border:1px solid #e2e8f0;">
+                    <div class="d-flex align-items-center gap-3 mb-2">
+                        <div class="rounded-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                             style="width:44px;height:44px;background:linear-gradient(135deg,#f59e0b,#d97706);">
+                            <i class="bi bi-clock text-white" style="font-size:1.1rem;"></i>
                         </div>
-                        <div class="mt-3">
-                            <div class="progress" style="height: 4px;">
-                                <div class="progress-bar bg-warning" style="width: {{ $balanceFacturas->totalFacturas > 0 ? ($balanceFacturas->saldoPendiente / $balanceFacturas->totalFacturas) * 100 : 0 }}%"></div>
-                            </div>
-                            <small class="text-muted mt-2 d-block">Monto pendiente por pagar</small>
+                        <div>
+                            <p class="text-uppercase text-muted mb-0" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Saldo Pendiente</p>
+                            <h4 class="mb-0 fw-bold text-dark">$ {{ number_format($balanceFacturas->saldoPendiente, 2) }}</h4>
                         </div>
                     </div>
+                    <div class="progress mt-1" style="height:4px;background:#fef3c7;">
+                        <div class="progress-bar"
+                             style="width:{{ $balanceFacturas->totalFacturas > 0 ? ($balanceFacturas->saldoPendiente / $balanceFacturas->totalFacturas) * 100 : 0 }}%;background:linear-gradient(90deg,#f59e0b,#d97706);"></div>
+                    </div>
+                    <small class="text-muted d-block mt-1" style="font-size:0.75rem;">Monto pendiente por pagar</small>
                 </div>
             </div>
         </div>
 
-        <!-- TABS -->
-        <div class="card">
-            <div class="card-header">
-                <ul class="nav nav-tabs" id="myTab" role="tablist">
+        {{-- ================================================ --}}
+        {{-- TABS CARD --}}
+        {{-- ================================================ --}}
+        <div class="card border-0 shadow-sm">
+            <div class="card-header border-0 bg-white pb-0 pt-3 px-4">
+                <ul class="nav nav-tabs border-0" id="myTab" role="tablist">
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="estado-cuenta-tab" data-bs-toggle="tab" 
+                        <button class="nav-link active" id="estado-cuenta-tab" data-bs-toggle="tab"
                                 data-bs-target="#estado-cuenta" type="button" role="tab">
-                            <i class="fas fa-chart-line me-1"></i>Estado de Cuenta
+                            <i class="bi bi-graph-up me-1"></i>Estado de Cuenta
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="facturas-tab" data-bs-toggle="tab" 
+                        <button class="nav-link" id="facturas-tab" data-bs-toggle="tab"
                                 data-bs-target="#facturas" type="button" role="tab">
-                            <i class="fas fa-file-invoice me-1"></i>Facturas
+                            <i class="bi bi-file-earmark-text me-1"></i>Facturas
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="pagos-tab" data-bs-toggle="tab" 
+                        <button class="nav-link" id="pagos-tab" data-bs-toggle="tab"
                                 data-bs-target="#pagos" type="button" role="tab">
-                            <i class="fas fa-hand-holding-usd me-1"></i>Pagos
+                            <i class="bi bi-cash-stack me-1"></i>Pagos
                         </button>
                     </li>
                     @if($proveedor->Tipo == 0)
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="productos-tab" data-bs-toggle="tab" 
+                        <button class="nav-link" id="productos-tab" data-bs-toggle="tab"
                                 data-bs-target="#productos" type="button" role="tab">
-                            <i class="fas fa-boxes me-1"></i>Productos
+                            <i class="bi bi-boxes me-1"></i>Productos
                         </button>
                     </li>
                     @endif
                 </ul>
             </div>
-            <div class="card-body">
+            <div class="card-body p-4">
                 <div class="tab-content" id="myTabContent">
-                    
-                    <!-- ============================================ -->
-                    <!-- TAB: Estado de Cuenta -->
-                    <!-- ============================================ -->
+
+                    {{-- ============================================ --}}
+                    {{-- TAB: ESTADO DE CUENTA --}}
+                    {{-- ============================================ --}}
                     <div class="tab-pane fade show active" id="estado-cuenta" role="tabpanel">
-                        <div class="d-flex justify-content-end mb-2">
-                            <div class="btn-group btn-group-sm">
-                                <button type="button" class="btn btn-outline-secondary" onclick="pdfTablaEstadoCuenta()">
-                                    <i class="fas fa-print me-1"></i>PDF
-                                </button>
-                                <button type="button" class="btn btn-outline-secondary" onclick="exportarExcelEstadoCuenta()">
-                                    <i class="fas fa-file-excel me-1"></i>Excel
-                                </button>
-                            </div>
+                        <div class="d-flex justify-content-end mb-3 gap-2">
+                            <button type="button" class="btn btn-sm"
+                                    style="background:rgba(107,114,128,0.08);color:#374151;border:1px solid #e2e8f0;font-size:0.8rem;"
+                                    onclick="pdfTablaEstadoCuenta()">
+                                <i class="bi bi-printer me-1"></i>PDF
+                            </button>
+                            <button type="button" class="btn btn-sm"
+                                    style="background:rgba(107,114,128,0.08);color:#374151;border:1px solid #e2e8f0;font-size:0.8rem;"
+                                    onclick="exportarExcelEstadoCuenta()">
+                                <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                            </button>
                         </div>
                         <div class="table-responsive">
-                            <table class="table table-bordered table-striped" id="tablaEstadoCuenta">
-                                <thead class="table-dark">
-                                    <tr>
-                                        <th>Fecha</th>
-                                        <th>Descripción</th>
-                                        <th>Referencia</th>
-                                        <th class="text-end">Monto USD</th>
-                                        <th class="text-end">Pago USD</th>
-                                        <th class="text-end">Saldo USD</th>
+                            <table class="table table-hover align-middle mb-0" id="tablaEstadoCuenta">
+                                <thead>
+                                    <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">
+                                        <th class="ps-3 py-3 text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">FECHA</th>
+                                        <th class="py-3 text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">DESCRIPCIÓN</th>
+                                        <th class="py-3 text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">REFERENCIA</th>
+                                        <th class="py-3 text-end text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">MONTO USD</th>
+                                        <th class="py-3 text-end text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">PAGO USD</th>
+                                        <th class="pe-3 py-3 text-end text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">SALDO USD</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @forelse($estadoCuenta['operaciones'] as $op)
-                                    <tr>
-                                        <td>{{ $op->fecha->format('d/m/Y') }}</td>
+                                    <tr style="border-bottom:1px solid #f1f5f9;">
+                                        <td class="ps-3">{{ $op->fecha->format('d/m/Y') }}</td>
                                         <td>
                                             @if($op->tipo == 'factura')
-                                                <i class="fas fa-file-invoice text-primary me-1"></i>
+                                                <i class="bi bi-file-earmark-text text-primary me-1"></i>
                                             @else
-                                                <i class="fas fa-money-bill-wave text-success me-1"></i>
+                                                <i class="bi bi-cash text-success me-1"></i>
                                             @endif
                                             {{ $op->descripcion }}
                                         </td>
                                         <td>{{ $op->referencia }}</td>
                                         <td class="text-end">
                                             @if($op->monto_divisa > 0)
-                                                $ {{ number_format($op->monto_divisa, 2) }}
+                                                <span class="fw-semibold text-dark">$ {{ number_format($op->monto_divisa, 2) }}</span>
                                             @else
-                                                —
+                                                <span class="text-muted">—</span>
                                             @endif
                                         </td>
                                         <td class="text-end">
                                             @if($op->pago_divisa > 0)
-                                                $ {{ number_format($op->pago_divisa, 2) }}
+                                                <span class="fw-semibold text-success">$ {{ number_format($op->pago_divisa, 2) }}</span>
                                             @else
-                                                —
+                                                <span class="text-muted">—</span>
                                             @endif
                                         </td>
-                                        <td class="text-end fw-bold">
+                                        <td class="pe-3 text-end fw-bold text-dark">
                                             $ {{ number_format($op->saldo_divisa, 2) }}
                                         </td>
                                     </tr>
                                     @empty
                                     <tr>
-                                        <td colspan="6" class="text-center">No hay operaciones registradas</td>
+                                        <td colspan="6" class="text-center text-muted py-4">
+                                            <i class="bi bi-inbox me-2"></i>No hay operaciones registradas
+                                        </td>
                                     </tr>
                                     @endforelse
                                 </tbody>
-                                <tfoot class="table-secondary">
-                                    <tr class="fw-bold">
-                                        <td colspan="3" class="text-end">TOTALES:</td>
-                                        <td class="text-end">$ {{ number_format($balanceFacturas->totalFacturas, 2) }}</td>
-                                        <td class="text-end">$ {{ number_format($balanceFacturas->totalPagado, 2) }}</td>
-                                        <td class="text-end">$ {{ number_format($balanceFacturas->saldoPendiente, 2) }}</td>
+                                <tfoot>
+                                    <tr style="background:#f0fdf4;border-top:2px solid #bbf7d0;">
+                                        <td colspan="3" class="ps-3 py-2 text-end fw-bold text-dark">TOTALES:</td>
+                                        <td class="py-2 text-end fw-bold text-dark">$ {{ number_format($balanceFacturas->totalFacturas, 2) }}</td>
+                                        <td class="py-2 text-end fw-bold text-success">$ {{ number_format($balanceFacturas->totalPagado, 2) }}</td>
+                                        <td class="pe-3 py-2 text-end fw-bold text-dark">$ {{ number_format($balanceFacturas->saldoPendiente, 2) }}</td>
                                     </tr>
                                 </tfoot>
                             </table>
                         </div>
                     </div>
-                    
-                    <!-- ============================================ -->
-                    <!-- TAB: Facturas -->
-                    <!-- ============================================ -->
+
+                    {{-- ============================================ --}}
+                    {{-- TAB: FACTURAS --}}
+                    {{-- ============================================ --}}
                     <div class="tab-pane fade" id="facturas" role="tabpanel">
-                        <div class="d-flex justify-content-end mb-2">
-                            <div class="btn-group btn-group-sm">
-                                <a href="{{ route('cpanel.proveedores.recibo-facturas', $proveedor->ProveedorId) }}" 
-                                class="btn btn-outline-secondary btn-sm"
-                                title="Generar recibo de facturas en PDF"
-                                target="_blank"
-                                data-bs-toggle="tooltip">
-                                    <i class="fas fa-print me-1"></i>PDF
-                                </a>
-                                <button type="button" class="btn btn-outline-secondary" onclick="exportarExcelFacturas()">
-                                    <i class="fas fa-file-excel me-1"></i>Excel
-                                </button>
-                            </div>
+                        <div class="d-flex justify-content-end mb-3 gap-2">
+                            <a href="{{ route('cpanel.proveedores.recibo-facturas', $proveedor->ProveedorId) }}"
+                               class="btn btn-sm" target="_blank"
+                               style="background:rgba(107,114,128,0.08);color:#374151;border:1px solid #e2e8f0;font-size:0.8rem;"
+                               title="Generar recibo de facturas en PDF" data-bs-toggle="tooltip">
+                                <i class="bi bi-printer me-1"></i>PDF
+                            </a>
+                            <button type="button" class="btn btn-sm"
+                                    style="background:rgba(107,114,128,0.08);color:#374151;border:1px solid #e2e8f0;font-size:0.8rem;"
+                                    onclick="exportarExcelFacturas()">
+                                <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                            </button>
                         </div>
                         <div class="table-responsive">
-                            <table class="table table-bordered table-striped" id="tablaFacturas">
-                                <thead class="table-dark">
-                                    <tr>
-                                        <th>Número</th>
-                                        <th>Fecha Emisión</th>
-                                        <th class="text-end">Total USD</th>
-                                        <th class="text-end">Pagado USD</th>
-                                        <th class="text-end">Saldo USD</th>
-                                        <th>Estatus</th>
-                                        <th class="text-center" style="width: 150px;">Acciones</th> <!-- NUEVA COLUMNA -->
+                            <table class="table table-hover align-middle mb-0" id="tablaFacturas">
+                                <thead>
+                                    <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">
+                                        <th class="ps-3 py-3 text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">NÚMERO</th>
+                                        <th class="py-3 text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">FECHA EMISIÓN</th>
+                                        <th class="py-3 text-end text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">TOTAL USD</th>
+                                        <th class="py-3 text-end text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">PAGADO USD</th>
+                                        <th class="py-3 text-end text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">SALDO USD</th>
+                                        <th class="py-3 text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">ESTATUS</th>
+                                        <th class="pe-3 py-3 text-center text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;width:120px;">ACCIONES</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @forelse($facturasVigentes as $factura)
-                                    <tr>
-                                        <td>{{ $factura->Numero }}</td>
+                                    @php
+                                        $estatusTexto = '';
+                                        $badgeStyle   = '';
+                                        switch($factura->Estatus) {
+                                            case 1:
+                                                $estatusTexto = 'En Proceso';
+                                                $badgeStyle   = 'background:rgba(245,158,11,0.1);color:#92400e;border:1px solid rgba(245,158,11,0.25)';
+                                                break;
+                                            case 2:
+                                                $estatusTexto = 'Recibiendo';
+                                                $badgeStyle   = 'background:rgba(6,182,212,0.1);color:#0c4a6e;border:1px solid rgba(6,182,212,0.25)';
+                                                break;
+                                            case 4:
+                                                $estatusTexto = 'Recibida';
+                                                $badgeStyle   = 'background:rgba(16,185,129,0.1);color:#059669;border:1px solid rgba(16,185,129,0.25)';
+                                                break;
+                                            default:
+                                                $estatusTexto = 'Desconocido';
+                                                $badgeStyle   = 'background:rgba(107,114,128,0.1);color:#374151;border:1px solid rgba(107,114,128,0.25)';
+                                        }
+                                    @endphp
+                                    <tr style="border-bottom:1px solid #f1f5f9;">
+                                        <td class="ps-3 fw-bold text-dark">{{ $factura->Numero }}</td>
                                         <td>{{ \Carbon\Carbon::parse($factura->FechaCreacion)->format('d/m/Y') }}</td>
-                                        <td class="text-end">$ {{ number_format($factura->MontoDivisa, 2) }}</td>
-                                        <td class="text-end">$ {{ number_format($factura->total_pagado, 2) }}</td>
-                                        <td class="text-end fw-bold">$ {{ number_format($factura->saldo_pendiente, 2) }}</td>
+                                        <td class="text-end fw-semibold text-dark">$ {{ number_format($factura->MontoDivisa, 2) }}</td>
+                                        <td class="text-end fw-semibold text-success">$ {{ number_format($factura->total_pagado, 2) }}</td>
+                                        <td class="text-end fw-bold text-dark">$ {{ number_format($factura->saldo_pendiente, 2) }}</td>
                                         <td>
-                                            @php
-                                                $estatusTexto = '';
-                                                $estatusColor = '';
-                                                switch($factura->Estatus) {
-                                                    case 1: $estatusTexto = 'En Proceso'; $estatusColor = 'warning'; break;
-                                                    case 2: $estatusTexto = 'Recibiendo'; $estatusColor = 'info'; break;
-                                                    case 4: $estatusTexto = 'Recibida'; $estatusColor = 'success'; break;
-                                                    default: $estatusTexto = 'Desconocido'; $estatusColor = 'secondary';
-                                                }
-                                            @endphp
-                                            <span class="badge bg-{{ $estatusColor }}">{{ $estatusTexto }}</span>
+                                            <span class="badge rounded-pill px-2 py-1 fw-semibold"
+                                                  style="{{ $badgeStyle }};font-size:0.75rem;">
+                                                {{ $estatusTexto }}
+                                            </span>
                                         </td>
-                                        <td class="text-center">
-                                            <!-- Botones de Acción (siguiendo el mismo estilo que proveedores) -->
-                                            <div class="btn-group btn-group-sm" role="group">
-                                                
-                                                <!-- Botón Detalle -->
+                                        <td class="pe-3 text-center">
+                                            <div class="d-flex align-items-center justify-content-center gap-1">
                                                 <a href="{{ route('cpanel.facturas.detalle', $factura->ID) }}"
-                                                class="btn btn-sm btn-outline-info"
-                                                title="Ver detalle de factura"
-                                                data-bs-toggle="tooltip">
-                                                    <i class="bi bi-eye"></i>
+                                                   class="btn btn-sm rounded-2 d-flex align-items-center justify-content-center"
+                                                   style="width:30px;height:30px;background:rgba(59,130,246,0.1);color:#1d4ed8;border:1px solid rgba(59,130,246,0.25);"
+                                                   title="Ver detalle" data-bs-toggle="tooltip">
+                                                    <i class="bi bi-eye" style="font-size:0.8rem;"></i>
                                                 </a>
-                                                
                                                 <a href="{{ route('cpanel.facturas.editar', $factura->ID) }}"
-                                                class="btn btn-sm btn-outline-warning"
-                                                title="Editar factura"
-                                                data-bs-toggle="tooltip">
-                                                    <i class="bi bi-pencil"></i>
+                                                   class="btn btn-sm rounded-2 d-flex align-items-center justify-content-center"
+                                                   style="width:30px;height:30px;background:rgba(245,158,11,0.1);color:#d97706;border:1px solid rgba(245,158,11,0.25);"
+                                                   title="Editar factura" data-bs-toggle="tooltip">
+                                                    <i class="bi bi-pencil" style="font-size:0.8rem;"></i>
                                                 </a>
-                                                
-                                                <!-- Botón Eliminar (solo si tiene saldo pendiente = 0 o está en proceso) -->
                                                 @if($factura->saldo_pendiente == 0 || $factura->Estatus == 1)
-                                                <button type="button" 
-                                                        class="btn btn-sm btn-outline-danger"
+                                                <button type="button"
+                                                        class="btn btn-sm rounded-2 d-flex align-items-center justify-content-center"
+                                                        style="width:30px;height:30px;background:rgba(239,68,68,0.1);color:#dc2626;border:1px solid rgba(239,68,68,0.25);"
                                                         onclick="eliminarFactura({{ $factura->ID }}, '{{ $factura->Numero }}')"
-                                                        title="Eliminar factura"
-                                                        data-bs-toggle="tooltip">
-                                                    <i class="bi bi-trash"></i>
+                                                        title="Eliminar factura" data-bs-toggle="tooltip">
+                                                    <i class="bi bi-trash" style="font-size:0.8rem;"></i>
                                                 </button>
                                                 @else
-                                                <button type="button" 
-                                                        class="btn btn-sm btn-outline-secondary" 
+                                                <button type="button"
+                                                        class="btn btn-sm rounded-2 d-flex align-items-center justify-content-center"
+                                                        style="width:30px;height:30px;background:rgba(107,114,128,0.06);color:#9ca3af;border:1px solid rgba(107,114,128,0.15);cursor:not-allowed;"
                                                         disabled
-                                                        title="No se puede eliminar (Tiene saldo pendiente)"
-                                                        data-bs-toggle="tooltip">
-                                                    <i class="bi bi-trash"></i>
+                                                        title="No se puede eliminar (tiene saldo pendiente)" data-bs-toggle="tooltip">
+                                                    <i class="bi bi-trash" style="font-size:0.8rem;opacity:0.5;"></i>
                                                 </button>
                                                 @endif
-                                                
                                             </div>
                                         </td>
                                     </tr>
                                     @empty
                                     <tr>
-                                        <td colspan="7" class="text-center">No hay facturas registradas</td>
+                                        <td colspan="7" class="text-center text-muted py-4">
+                                            <i class="bi bi-file-earmark-x me-2"></i>No hay facturas registradas
+                                        </td>
                                     </tr>
                                     @endforelse
                                 </tbody>
                             </table>
                         </div>
                     </div>
-                    
-                    <!-- ============================================ -->
-                    <!-- TAB: Pagos -->
-                    <!-- ============================================ -->
+
+                    {{-- ============================================ --}}
+                    {{-- TAB: PAGOS --}}
+                    {{-- ============================================ --}}
                     <div class="tab-pane fade" id="pagos" role="tabpanel">
-                        <div class="d-flex justify-content-end mb-2">
-                            <div class="btn-group btn-group-sm">
-                                <button type="button" class="btn btn-outline-secondary" onclick="pdfTablaPagos()">
-                                    <i class="fas fa-print me-1"></i>PDF
-                                </button>
-                                <button type="button" class="btn btn-outline-secondary" onclick="exportarExcelPagos()">
-                                    <i class="fas fa-file-excel me-1"></i>Excel
-                                </button>
-                            </div>
+                        <div class="d-flex justify-content-end mb-3 gap-2">
+                            <button type="button" class="btn btn-sm"
+                                    style="background:rgba(107,114,128,0.08);color:#374151;border:1px solid #e2e8f0;font-size:0.8rem;"
+                                    onclick="pdfTablaPagos()">
+                                <i class="bi bi-printer me-1"></i>PDF
+                            </button>
+                            <button type="button" class="btn btn-sm"
+                                    style="background:rgba(107,114,128,0.08);color:#374151;border:1px solid #e2e8f0;font-size:0.8rem;"
+                                    onclick="exportarExcelPagos()">
+                                <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                            </button>
                         </div>
                         <div class="table-responsive">
-                            <table class="table table-bordered table-striped" id="tablaPagos">
-                                <thead class="table-dark">
-                                    <tr>
-                                        <th>Fecha</th>
-                                        <th>Descripción</th>
-                                        <th>Número Operación</th>
-                                        <th class="text-end">Monto USD</th>
-                                        <th class="text-end">Monto Bs</th>
-                                        <th class="text-end">Tasa</th>
-                                        <th class="text-center">Estatus</th>
-                                        <th class="text-center" style="width: 180px;">Acciones</th>
+                            <table class="table table-hover align-middle mb-0" id="tablaPagos">
+                                <thead>
+                                    <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">
+                                        <th class="ps-3 py-3 text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">FECHA</th>
+                                        <th class="py-3 text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">DESCRIPCIÓN</th>
+                                        <th class="py-3 text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">N° OPERACIÓN</th>
+                                        <th class="py-3 text-end text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">MONTO USD</th>
+                                        <th class="py-3 text-end text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">MONTO BS</th>
+                                        <th class="py-3 text-end text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">TASA</th>
+                                        <th class="py-3 text-center text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">ESTATUS</th>
+                                        <th class="pe-3 py-3 text-center text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;width:140px;">ACCIONES</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @forelse($transaccionesVigentes as $transaccion)
-                                    <tr>
-                                        <td>{{ \Carbon\Carbon::parse($transaccion->Fecha)->format('d/m/Y') }}</td>
+                                    @php
+                                        $estatusTexto  = '';
+                                        $pagosBadge    = '';
+                                        $estatusNumero = (int)($transaccion->Estatus ?? 0);
+                                        switch($estatusNumero) {
+                                            case 2:
+                                                $estatusTexto = 'Pagada';
+                                                $pagosBadge   = 'background:rgba(16,185,129,0.1);color:#059669;border:1px solid rgba(16,185,129,0.25)';
+                                                break;
+                                            case 4:
+                                                $estatusTexto = 'Cerrada';
+                                                $pagosBadge   = 'background:rgba(107,114,128,0.1);color:#374151;border:1px solid rgba(107,114,128,0.25)';
+                                                break;
+                                            default:
+                                                $estatusTexto = 'Pendiente';
+                                                $pagosBadge   = 'background:rgba(245,158,11,0.1);color:#92400e;border:1px solid rgba(245,158,11,0.25)';
+                                        }
+                                    @endphp
+                                    <tr style="border-bottom:1px solid #f1f5f9;">
+                                        <td class="ps-3">{{ \Carbon\Carbon::parse($transaccion->Fecha)->format('d/m/Y') }}</td>
                                         <td>{{ $transaccion->Descripcion ?? 'Pago registrado' }}</td>
-                                        <td>{{ $transaccion->NumeroOperacion ?? 'N/A' }}</td>
-                                        <td class="text-end">$ {{ number_format($transaccion->MontoDivisa, 2) }}</td>
-                                        <td class="text-end">Bs {{ number_format($transaccion->MontoBs, 2) }}</td>
-                                        <td class="text-end">{{ number_format($transaccion->Tasa, 2) }}</td>
-                                        <td class="text-center">
-                                            @php
-                                                $estatusTexto = '';
-                                                $estatusColor = '';
-                                                $estatusNumero = (int)($transaccion->Estatus ?? 0);
-                                                switch($estatusNumero) {
-                                                    case 2: $estatusTexto = 'Pagada'; $estatusColor = 'success'; break;
-                                                    case 4: $estatusTexto = 'Cerrada'; $estatusColor = 'secondary'; break;
-                                                    default: $estatusTexto = 'Pendiente'; $estatusColor = 'warning';
-                                                }
-                                            @endphp
-                                            <span class="badge bg-{{ $estatusColor }}">{{ $estatusTexto }}</span>
+                                        <td>
+                                            @if($transaccion->NumeroOperacion)
+                                                <code class="px-2 py-1 rounded-2"
+                                                      style="background:#f1f5f9;color:#3b82f6;font-size:0.8rem;">{{ $transaccion->NumeroOperacion }}</code>
+                                            @else
+                                                <span class="text-muted">N/A</span>
+                                            @endif
                                         </td>
-                                        <td class="text-center align-middle">
-                                            <div class="btn-group btn-group-sm" role="group">
-                                                <!-- Ver Detalle -->
-                                                <a href="{{ route('cpanel.pagos.detalle', $transaccion->TransaccionId) }}" 
-                                                class="btn btn-sm btn-outline-info"
-                                                title="Ver detalle del pago"
-                                                data-bs-toggle="tooltip">
-                                                    <i class="bi bi-eye"></i>
+                                        <td class="text-end fw-semibold text-dark">$ {{ number_format($transaccion->MontoDivisa, 2) }}</td>
+                                        <td class="text-end text-muted">Bs {{ number_format($transaccion->MontoBs, 2) }}</td>
+                                        <td class="text-end text-muted">{{ number_format($transaccion->Tasa, 2) }}</td>
+                                        <td class="text-center">
+                                            <span class="badge rounded-pill px-2 py-1 fw-semibold"
+                                                  style="{{ $pagosBadge }};font-size:0.75rem;">
+                                                {{ $estatusTexto }}
+                                            </span>
+                                        </td>
+                                        <td class="pe-3 text-center">
+                                            <div class="d-flex align-items-center justify-content-center gap-1">
+                                                <a href="{{ route('cpanel.pagos.detalle', $transaccion->TransaccionId) }}"
+                                                   class="btn btn-sm rounded-2 d-flex align-items-center justify-content-center"
+                                                   style="width:30px;height:30px;background:rgba(59,130,246,0.1);color:#1d4ed8;border:1px solid rgba(59,130,246,0.25);"
+                                                   title="Ver detalle" data-bs-toggle="tooltip">
+                                                    <i class="bi bi-eye" style="font-size:0.8rem;"></i>
                                                 </a>
-                                                
-                                                <!-- Editar (solo si Estatus es 1 o 2) -->
                                                 @if(in_array($estatusNumero, [1, 2]))
-                                                <a href="{{ route('cpanel.pagos.editar', $transaccion->TransaccionId) }}" 
-                                                class="btn btn-sm btn-outline-warning"
-                                                title="Editar pago"
-                                                data-bs-toggle="tooltip">
-                                                    <i class="bi bi-pencil"></i>
+                                                <a href="{{ route('cpanel.pagos.editar', $transaccion->TransaccionId) }}"
+                                                   class="btn btn-sm rounded-2 d-flex align-items-center justify-content-center"
+                                                   style="width:30px;height:30px;background:rgba(245,158,11,0.1);color:#d97706;border:1px solid rgba(245,158,11,0.25);"
+                                                   title="Editar pago" data-bs-toggle="tooltip">
+                                                    <i class="bi bi-pencil" style="font-size:0.8rem;"></i>
                                                 </a>
                                                 @else
-                                                <button type="button" 
-                                                        class="btn btn-sm btn-outline-secondary" 
+                                                <button type="button"
+                                                        class="btn btn-sm rounded-2 d-flex align-items-center justify-content-center"
+                                                        style="width:30px;height:30px;background:rgba(107,114,128,0.06);color:#9ca3af;border:1px solid rgba(107,114,128,0.15);cursor:not-allowed;"
                                                         disabled
-                                                        title="No se puede editar (Pago {{ $estatusTexto }})"
-                                                        data-bs-toggle="tooltip">
-                                                    <i class="bi bi-pencil"></i>
+                                                        title="No se puede editar (Pago {{ $estatusTexto }})" data-bs-toggle="tooltip">
+                                                    <i class="bi bi-pencil" style="font-size:0.8rem;opacity:0.5;"></i>
                                                 </button>
                                                 @endif
-                                                
-                                                <!-- Imprimir Recibo -->
-                                                <a href="{{ route('cpanel.pagos.imprimir', $transaccion->TransaccionId) }}" 
-                                                class="btn btn-sm btn-outline-success"
-                                                title="Imprimir recibo de pago"
-                                                target="_blank"
-                                                data-bs-toggle="tooltip">
-                                                    <i class="bi bi-printer"></i>
+                                                <a href="{{ route('cpanel.pagos.imprimir', $transaccion->TransaccionId) }}"
+                                                   class="btn btn-sm rounded-2 d-flex align-items-center justify-content-center"
+                                                   style="width:30px;height:30px;background:rgba(16,185,129,0.1);color:#059669;border:1px solid rgba(16,185,129,0.25);"
+                                                   title="Imprimir recibo" target="_blank" data-bs-toggle="tooltip">
+                                                    <i class="bi bi-printer" style="font-size:0.8rem;"></i>
                                                 </a>
-                                                
-                                                <!-- Eliminar -->
-                                                <button type="button" 
-                                                        class="btn btn-sm btn-outline-danger"
+                                                <button type="button"
+                                                        class="btn btn-sm rounded-2 d-flex align-items-center justify-content-center"
+                                                        style="width:30px;height:30px;background:rgba(239,68,68,0.1);color:#dc2626;border:1px solid rgba(239,68,68,0.25);"
                                                         onclick="eliminarPago({{ $transaccion->TransaccionId }}, '{{ $transaccion->NumeroOperacion }}')"
-                                                        title="Eliminar pago"
-                                                        data-bs-toggle="tooltip">
-                                                    <i class="bi bi-trash"></i>
+                                                        title="Eliminar pago" data-bs-toggle="tooltip">
+                                                    <i class="bi bi-trash" style="font-size:0.8rem;"></i>
                                                 </button>
                                             </div>
                                         </td>
                                     </tr>
                                     @empty
                                     <tr>
-                                        <td colspan="8" class="text-center">No hay pagos registrados</td>
+                                        <td colspan="8" class="text-center text-muted py-4">
+                                            <i class="bi bi-cash-stack me-2"></i>No hay pagos registrados
+                                        </td>
                                     </tr>
                                     @endforelse
                                 </tbody>
                             </table>
                         </div>
                     </div>
-                    
-                    <!-- ============================================ -->
-                    <!-- TAB: Productos -->
-                    <!-- ============================================ -->
+
+                    {{-- ============================================ --}}
+                    {{-- TAB: PRODUCTOS --}}
+                    {{-- ============================================ --}}
                     @if($proveedor->Tipo == 0)
                     <div class="tab-pane fade" id="productos" role="tabpanel">
-                        <div class="d-flex justify-content-end mb-2">
-                            <div class="btn-group btn-group-sm">
-                                <button type="button" class="btn btn-outline-secondary" onclick="pdfTablaProductos()">
-                                    <i class="fas fa-print me-1"></i>PDF
-                                </button>
-                                <button type="button" class="btn btn-outline-secondary" onclick="exportarExcelProductos()">
-                                    <i class="fas fa-file-excel me-1"></i>Excel
-                                </button>
-                            </div>
+                        <div class="d-flex justify-content-end mb-3 gap-2">
+                            <button type="button" class="btn btn-sm"
+                                    style="background:rgba(107,114,128,0.08);color:#374151;border:1px solid #e2e8f0;font-size:0.8rem;"
+                                    onclick="pdfTablaProductos()">
+                                <i class="bi bi-printer me-1"></i>PDF
+                            </button>
+                            <button type="button" class="btn btn-sm"
+                                    style="background:rgba(107,114,128,0.08);color:#374151;border:1px solid #e2e8f0;font-size:0.8rem;"
+                                    onclick="exportarExcelProductos()">
+                                <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                            </button>
                         </div>
-                        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
-                            <table class="table table-bordered table-striped table-sm" id="tablaProductos">
-                                <thead class="table-dark sticky-top">
-                                    <tr>
-                                        <th style="width: 80px;">Foto</th>
-                                        <th style="width: 120px;">Código</th>
-                                        <th style="width: 120px;">Referencia</th>
-                                        <th style="min-width: 300px;">Nombre</th>
+                        <div class="table-responsive" style="max-height:500px;overflow-y:auto;">
+                            <table class="table table-hover align-middle mb-0" id="tablaProductos">
+                                <thead>
+                                    <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;position:sticky;top:0;z-index:10;">
+                                        <th class="ps-3 py-3 text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;width:80px;">FOTO</th>
+                                        <th class="py-3 text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;width:130px;">CÓDIGO</th>
+                                        <th class="py-3 text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;width:150px;">REFERENCIA</th>
+                                        <th class="pe-3 py-3 text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">NOMBRE</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -570,48 +603,51 @@
                                             'assets/img/adminlte/img/produc_default.jfif'
                                         );
                                     @endphp
-                                    <tr>
-                                        <td class="text-center">
-                                            <img src="{{ $imgSrc }}" 
-                                                alt="{{ $producto->Codigo }}"
-                                                class="rounded border img-zoomable"
-                                                style="width: 50px; height: 50px; object-fit: cover; cursor: zoom-in;"
-                                                onclick="zoomImagen(this)"
-                                                data-full-image="{{ $imgSrc }}"
-                                                data-description="{{ $producto->Nombre }}">
+                                    <tr style="border-bottom:1px solid #f1f5f9;">
+                                        <td class="ps-3">
+                                            <img src="{{ $imgSrc }}"
+                                                 alt="{{ $producto->Codigo }}"
+                                                 class="rounded img-zoomable"
+                                                 style="width:46px;height:46px;object-fit:cover;border:1px solid #e2e8f0;cursor:zoom-in;"
+                                                 onclick="zoomImagen(this)"
+                                                 data-full-image="{{ $imgSrc }}"
+                                                 data-description="{{ $producto->Nombre }}">
                                         </td>
-                                        <td><code>{{ $producto->Codigo ?? 'N/A' }}</code></td>
-                                        <td>{{ $producto->Referencia ?? 'N/A' }}</td>
-                                        <td class="text-wrap" style="word-wrap: break-word; white-space: normal;">
-                                            {{ $producto->Nombre }}
+                                        <td>
+                                            <code class="px-2 py-1 rounded-2"
+                                                  style="background:#f1f5f9;color:#3b82f6;font-size:0.8rem;">{{ $producto->Codigo ?? 'N/A' }}</code>
                                         </td>
+                                        <td class="text-muted" style="font-size:0.88rem;">{{ $producto->Referencia ?? 'N/A' }}</td>
+                                        <td class="pe-3" style="word-wrap:break-word;white-space:normal;">{{ $producto->Nombre }}</td>
                                     </tr>
                                     @empty
                                     <tr>
-                                        <td colspan="4" class="text-center">No hay productos registrados</td>
+                                        <td colspan="4" class="text-center text-muted py-4">
+                                            <i class="bi bi-boxes me-2"></i>No hay productos registrados
+                                        </td>
                                     </tr>
                                     @endforelse
                                 </tbody>
                             </table>
                         </div>
-                        <div class="mt-2">
+                        <div class="mt-2 pt-2" style="border-top:1px solid #f1f5f9;">
                             <small class="text-muted">
-                                <i class="fas fa-boxes me-1"></i>
-                                Total productos: {{ $productos->count() }}
+                                <i class="bi bi-boxes me-1"></i>
+                                Total productos: <strong>{{ $productos->count() }}</strong>
                             </small>
                         </div>
                     </div>
                     @endif
-                    
+
                 </div>
             </div>
         </div>
-        
+
     </div>
 </div>
 
-<!-- Overlay para zoom de imágenes -->
-<div id="imageZoomOverlay" class="image-zoom-overlay" style="display: none;" onclick="closeZoom()">
+{{-- Overlay zoom (usado por zoomImagen / closeZoom en JS) --}}
+<div id="imageZoomOverlay" class="image-zoom-overlay" style="display:none;" onclick="closeZoom()">
     <div class="image-zoom-container" onclick="event.stopPropagation()">
         <span class="image-zoom-close" onclick="closeZoom()">&times;</span>
         <img id="zoomedImage" src="" alt="Zoom">
@@ -637,7 +673,7 @@
         var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
             return new bootstrap.Tooltip(tooltipTriggerEl)
         });
-        
+
         // ============================================
         // ZOOM DE IMÁGENES
         // ============================================
@@ -645,17 +681,17 @@
             img.addEventListener('click', function() {
                 const fullImage = this.getAttribute('data-full-image');
                 const description = this.getAttribute('data-description');
-                
+
                 document.getElementById('zoomedImage').src = fullImage;
                 document.getElementById('imageDescription').textContent = description;
                 document.getElementById('imageZoomOverlay').style.display = 'flex';
-                
+
                 // Prevenir scroll del body
                 document.body.style.overflow = 'hidden';
             });
         });
     });
-    
+
     // ============================================
     // FUNCIONES DE ZOOM
     // ============================================
@@ -663,25 +699,25 @@
         document.getElementById('imageZoomOverlay').style.display = 'none';
         document.body.style.overflow = 'auto';
     }
-    
+
     // Cerrar con Escape
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
             closeZoom();
         }
     });
-    
+
     // Cerrar al hacer clic fuera de la imagen
     document.getElementById('imageZoomOverlay').addEventListener('click', function(e) {
         if (e.target === this) {
             closeZoom();
         }
     });
-    
+
     function zoomImagen(img) {
         const fullImage = img.getAttribute('data-full-image');
         const description = img.getAttribute('data-description');
-        
+
         document.getElementById('zoomedImage').src = fullImage;
         document.getElementById('imageDescription').textContent = description;
         document.getElementById('imageZoomOverlay').style.display = 'flex';
@@ -879,7 +915,7 @@
                         Swal.showLoading();
                     }
                 });
-                
+
                 // Llamada AJAX para eliminar
                 fetch(`/cpanel/facturas/${facturaId}`, {
                     method: 'DELETE',
@@ -928,7 +964,7 @@
                 <p><strong>Estatus:</strong> ${getEstatusTexto(factura.Estatus)}</p>
             </div>
         `;
-        
+
         Swal.fire({
             title: 'Detalle de Factura',
             html: htmlContent,
@@ -970,7 +1006,7 @@
                         Swal.showLoading();
                     }
                 });
-                
+
                 fetch(`/cpanel/pagos/${pagoId}`, {
                     method: 'DELETE',
                     headers: {
@@ -1007,190 +1043,61 @@
 
 @push('styles')
 <style>
-    .small-box {
-        border-radius: 8px;
-        position: relative;
-        display: block;
-        margin-bottom: 20px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
-        transition: all 0.3s cubic-bezier(.25,.8,.25,1);
+    /* Nav tabs */
+    #myTab .nav-link {
+        color: #6b7280;
+        border: none;
+        border-bottom: 3px solid transparent;
+        padding: 0.6rem 1rem;
+        font-size: 0.88rem;
+        background: transparent;
     }
-    .small-box:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 14px 28px rgba(0,0,0,0.25), 0 10px 10px rgba(0,0,0,0.22);
-    }
-    .small-box .inner {
-        padding: 10px 15px;
-    }
-    .small-box h3 {
-        font-size: 2rem;
-        font-weight: bold;
-        margin: 0 0 5px 0;
-        white-space: nowrap;
-        padding: 0;
-    }
-    .small-box p {
-        font-size: 1rem;
-        margin-bottom: 0;
-    }
-    .small-box .icon {
-        position: absolute;
-        top: 5px;
-        right: 10px;
-        z-index: 0;
-        font-size: 70px;
-        color: rgba(255,255,255,0.3);
-        transition: transform 0.3s ease;
-    }
-    .small-box:hover .icon {
-        transform: scale(1.05);
-    }
-    .table-dark {
-        background-color: #343a40 !important;
-    }
-    .table-bordered {
-        border: 1px solid #dee2e6;
-    }
-    .table-bordered td, .table-bordered th {
-        border: 1px solid #dee2e6;
-    }
-    .table-striped tbody tr:nth-of-type(odd) {
-        background-color: rgba(0,0,0,0.02);
-    }
+    #myTab .nav-link:hover { color: #1d4ed8; border-bottom-color: #bfdbfe; }
+    #myTab .nav-link.active { color: #1d4ed8; font-weight: 600; border-bottom: 3px solid #3b82f6; }
 
-    .table-sm td, .table-sm th {
-        padding: 0.4rem 0.5rem;
-        vertical-align: middle;
-    }
+    /* Tablas */
+    #tablaEstadoCuenta tbody tr:hover,
+    #tablaFacturas tbody tr:hover,
+    #tablaPagos tbody tr:hover,
+    #tablaProductos tbody tr:hover { background: #f8fafc; }
 
-    .text-wrap {
-        word-wrap: break-word;
-        white-space: normal !important;
-    }
+    .img-zoomable { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .img-zoomable:hover { transform: scale(1.08); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
 
-    .sticky-top {
-        position: sticky;
-        top: 0;
-        z-index: 10;
-    }
-
-    .table-responsive {
-        scrollbar-width: thin;
-    }
-
-    /* Overlay para zoom */
+    /* Overlay zoom */
     .image-zoom-overlay {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.9);
-        z-index: 9999;
-        justify-content: center;
-        align-items: center;
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.9); z-index: 9999;
+        justify-content: center; align-items: center;
         animation: fadeInOverlay 0.3s ease-out;
     }
-
     .image-zoom-container {
-        position: relative;
-        max-width: 90%;
-        max-height: 90%;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
+        position: relative; max-width: 90%; max-height: 90%;
+        display: flex; flex-direction: column; align-items: center;
     }
-
     .image-zoom-container img {
-        max-width: 100%;
-        max-height: 80vh;
-        object-fit: contain;
-        border-radius: 8px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        max-width: 100%; max-height: 80vh; object-fit: contain;
+        border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         animation: zoomInImage 0.3s ease-out;
     }
-
     .image-zoom-close {
-        position: absolute;
-        top: -40px;
-        right: -10px;
-        color: white;
-        font-size: 40px;
-        font-weight: bold;
-        cursor: pointer;
-        transition: color 0.3s ease;
-        z-index: 10000;
-        text-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
-        background: rgba(0, 0, 0, 0.5);
-        width: 50px;
-        height: 50px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        line-height: 1;
+        position: absolute; top: -40px; right: -10px;
+        color: #fff; font-size: 40px; font-weight: bold;
+        cursor: pointer; z-index: 10000;
+        background: rgba(0,0,0,0.5); width: 50px; height: 50px;
+        border-radius: 50%; display: flex; align-items: center; justify-content: center;
+        transition: color 0.2s, background 0.2s;
     }
-
-    .image-zoom-close:hover {
-        color: #ff6b6b;
-        background: rgba(0, 0, 0, 0.7);
-    }
-
+    .image-zoom-close:hover { color: #ff6b6b; background: rgba(0,0,0,0.7); }
     .image-description {
-        color: white;
-        text-align: center;
-        margin-top: 20px;
-        font-size: 1.1rem;
-        background: rgba(0, 0, 0, 0.7);
-        padding: 10px 20px;
-        border-radius: 8px;
-        max-width: 80%;
+        color: #fff; text-align: center; margin-top: 16px;
+        font-size: 1rem; background: rgba(0,0,0,0.7);
+        padding: 8px 20px; border-radius: 8px; max-width: 80%;
     }
-
-    @keyframes fadeInOverlay {
-        from { opacity: 0; }
-        to { opacity: 1; }
-    }
-
+    @keyframes fadeInOverlay { from { opacity: 0; } to { opacity: 1; } }
     @keyframes zoomInImage {
-        from {
-            transform: scale(0.8);
-            opacity: 0;
-        }
-        to {
-            transform: scale(1);
-            opacity: 1;
-        }
-    }
-    
-    /* Animaciones para la tabla de productos */
-    .img-zoomable {
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-        cursor: zoom-in;
-    }
-
-    .img-zoomable:hover {
-        transform: scale(1.05);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-    }
-
-    /* Tus estilos existentes ya incluyen estas clases */
-    .btn-outline-info {
-        color: #0dcaf0;
-        border-color: #0dcaf0;
-    }
-
-    .btn-outline-info:hover {
-        color: #000;
-        background-color: #0dcaf0;
-        border-color: #0dcaf0;
-    }
-
-    /* Para botones deshabilitados */
-    .btn-outline-secondary:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
+        from { transform: scale(0.8); opacity: 0; }
+        to   { transform: scale(1);   opacity: 1; }
     }
 </style>
 @endpush

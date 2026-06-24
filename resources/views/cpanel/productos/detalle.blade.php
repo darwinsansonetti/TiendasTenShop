@@ -15,12 +15,21 @@
     <!--begin::Row-->
     <div class="row">
       <div class="col-sm-6">
-        <h3 class="mb-0">Detalles del producto</h3>
+        <div class="d-flex align-items-center gap-2">
+          <div class="d-flex align-items-center justify-content-center rounded-2 me-1"
+               style="width:36px;height:36px;background:linear-gradient(135deg,#8b5cf6,#7c3aed);">
+            <i class="bi bi-box-seam text-white" style="font-size:1.1rem;"></i>
+          </div>
+          <div>
+            <h4 class="mb-0 fw-bold text-dark" style="font-size:1.1rem;">Detalles del Producto</h4>
+            <p class="mb-0 text-muted" style="font-size:0.78rem;">Información completa del artículo</p>
+          </div>
+        </div>
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
           <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Detalles del producto</li>
+          <li class="breadcrumb-item active" aria-current="page">Detalle Producto</li>
         </ol>
       </div>
     </div>

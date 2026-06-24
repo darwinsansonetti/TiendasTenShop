@@ -82,6 +82,113 @@
     <!-- LANDINGPAGE CSS -->
     <link href="{{ asset('assets/css/dashboard.css') }}" rel="stylesheet">
 
+    <!-- Sidebar custom theme -->
+    <style>
+      /* Background */
+      .app-sidebar {
+        background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%) !important;
+        border-right: 1px solid rgba(255,255,255,.05) !important;
+      }
+      /* Brand */
+      .sidebar-brand {
+        background: rgba(0,0,0,.25) !important;
+        border-bottom: 1px solid rgba(255,255,255,.08) !important;
+      }
+      .sidebar-brand .brand-text {
+        color: #f1f5f9 !important;
+        font-weight: 600 !important;
+        font-size: .94rem !important;
+        letter-spacing: .01em !important;
+      }
+      .sidebar-brand .brand-image { opacity: .92 !important; }
+
+      /* Top-level nav links */
+      .sidebar-wrapper .nav-sidebar > .nav-item > .nav-link {
+        margin: 2px 8px !important;
+        border-radius: 7px !important;
+        color: rgba(255,255,255,.6) !important;
+        transition: background .18s, color .18s, border-color .18s !important;
+        border-left: 3px solid transparent !important;
+      }
+      .sidebar-wrapper .nav-sidebar > .nav-item > .nav-link:hover {
+        background: rgba(255,255,255,.07) !important;
+        color: #fff !important;
+      }
+      .sidebar-wrapper .nav-sidebar > .nav-item > .nav-link.active {
+        background: rgba(59,130,246,.18) !important;
+        color: #fff !important;
+        border-left-color: #3b82f6 !important;
+      }
+      .sidebar-wrapper .nav-sidebar > .nav-item.menu-open > .nav-link {
+        background: rgba(255,255,255,.06) !important;
+        color: #e2e8f0 !important;
+        border-left-color: rgba(59,130,246,.4) !important;
+      }
+
+      /* Submenu links */
+      .sidebar-wrapper .nav-treeview .nav-link {
+        color: rgba(255,255,255,.48) !important;
+        border-radius: 5px !important;
+        margin: 1px 4px !important;
+        transition: background .15s, color .15s !important;
+        border-left: 3px solid transparent !important;
+      }
+      .sidebar-wrapper .nav-treeview .nav-link:hover {
+        background: rgba(255,255,255,.06) !important;
+        color: rgba(255,255,255,.85) !important;
+      }
+      .sidebar-wrapper .nav-treeview .nav-link.active {
+        background: rgba(59,130,246,.15) !important;
+        color: #93c5fd !important;
+        border-left-color: #3b82f6 !important;
+      }
+
+      /* Icons */
+      .sidebar-wrapper .nav-icon {
+        color: rgba(255,255,255,.35) !important;
+        width: 1.6rem !important;
+        font-size: .95rem !important;
+        text-align: center !important;
+        transition: color .18s !important;
+      }
+      .sidebar-wrapper .nav-link:hover  .nav-icon,
+      .sidebar-wrapper .nav-link.active .nav-icon,
+      .sidebar-wrapper .menu-open > .nav-link .nav-icon {
+        color: rgba(255,255,255,.85) !important;
+      }
+      .sidebar-wrapper .nav-treeview .nav-icon {
+        font-size: .82rem !important;
+        width: 1.4rem !important;
+      }
+      .sidebar-wrapper .nav-treeview .nav-link.active .nav-icon {
+        color: #93c5fd !important;
+      }
+
+      /* Section headers */
+      .sidebar-wrapper .nav-header {
+        color: rgba(255,255,255,.25) !important;
+        font-size: 10px !important;
+        font-weight: 700 !important;
+        letter-spacing: .12em !important;
+        padding: 16px 18px 5px !important;
+      }
+
+      /* Arrow */
+      .sidebar-wrapper .nav-arrow {
+        color: rgba(255,255,255,.25) !important;
+        font-size: .7rem !important;
+        transition: color .18s !important;
+      }
+      .sidebar-wrapper .nav-link:hover .nav-arrow,
+      .sidebar-wrapper .menu-open > .nav-link .nav-arrow {
+        color: rgba(255,255,255,.6) !important;
+      }
+
+      /* Scrollbar */
+      .sidebar-wrapper .os-scrollbar-track  { background: rgba(255,255,255,.04) !important; }
+      .sidebar-wrapper .os-scrollbar-handle { background: rgba(255,255,255,.14) !important; }
+    </style>
+
     @yield('css')
   </head>
   <!--end::Head-->
@@ -104,10 +211,12 @@
                 </button>
             </li>
             <li class="nav-item d-none d-md-block">
-                <span id="navbar-sucursal" class="nav-link text-dark">
-                    Sucursal
+                <span id="navbar-sucursal" class="nav-link text-dark fw-semibold">
+                    <i class="bi bi-geo-alt-fill text-primary me-1" style="font-size: 0.85rem;"></i>
                     @if(session('sucursal_nombre'))
-                        : {{ session('sucursal_nombre') }}
+                        {{ session('sucursal_nombre') }}
+                    @else
+                        Todas las Sucursales
                     @endif
                 </span>
             </li>
@@ -438,592 +547,354 @@
       <!--end::Header-->
 
       <!--begin::Sidebar-->
-      <aside class="app-sidebar bg-body-secondary shadow" data-bs-theme="dark">
+      <aside class="app-sidebar shadow" data-bs-theme="dark">
+
         <!--begin::Sidebar Brand-->
         <div class="sidebar-brand">
-          <!--begin::Brand Link-->
-          <a href="{{ route('cpanel.dashboard') }}" class="brand-link">
-            <!--begin::Brand Image-->
-            <img
-              src="{{ asset('assets/img/TSCirculo.png') }}" alt="AdminLTE Logo" class="brand-image opacity-75 shadow"
-            />
-            <!--end::Brand Image-->
-            <!--begin::Brand Text-->
-            <span class="brand-text fw-light">TiendasTenShop</span>
-            <!--end::Brand Text-->
+          <a href="{{ route('cpanel.dashboard') }}" class="brand-link" style="border-bottom:none;">
+            <img src="{{ asset('assets/img/TSCirculo.png') }}"
+                 alt="TiendasTenShop"
+                 class="brand-image shadow" />
+            <span class="brand-text">TiendasTenShop</span>
           </a>
-          <!--end::Brand Link-->
-        </div>        
+        </div>
 
         @if(Str::contains($db, 'db_a509ee_tenshop2026'))
-          <span class="badge bg-warning text-dark"
-                data-bs-toggle="tooltip"
-                data-bs-placement="left"
-                title="Base de datos activa: {{ $db }}">
-              ⚠ DEVELOPER
-          </span>
+          <div class="px-3 pt-1 pb-2">
+            <span class="badge bg-warning text-dark w-100 py-1"
+                  data-bs-toggle="tooltip" data-bs-placement="right"
+                  title="Base de datos activa: {{ $db }}">
+              <i class="bi bi-exclamation-triangle-fill me-1"></i> DEVELOPER
+            </span>
+          </div>
         @endif
-        
         <!--end::Sidebar Brand-->
+
         <!--begin::Sidebar Wrapper-->
         <div class="sidebar-wrapper">
-          <nav class="mt-2">
+          <nav class="mt-1 pb-4">
             <!--begin::Sidebar Menu-->
-            <ul
-              class="nav sidebar-menu flex-column"
-              data-lte-toggle="treeview"
-              role="navigation"
-              aria-label="Main navigation"
-              data-accordion="false"
-              id="navigation"
-            >
+            <ul class="nav sidebar-menu flex-column"
+                data-lte-toggle="treeview"
+                role="navigation"
+                aria-label="Main navigation"
+                data-accordion="false"
+                id="navigation">
+
+              {{-- Inicio --}}
               <li class="nav-item">
-                <a href="{{ route('cpanel.dashboard') }}" class="nav-link {{ session('menu_active') == 'Inicio' ? 'active' : '' }}">
+                <a href="{{ route('cpanel.dashboard') }}"
+                   class="nav-link {{ session('menu_active') == 'Inicio' ? 'active' : '' }}">
                   <i class="nav-icon bi bi-speedometer2"></i>
                   <p>Inicio</p>
                 </a>
               </li>
+
+              {{-- ── REPORTES ─────────────────────────────── --}}
+              <li class="nav-header">REPORTES</li>
+
               <li class="nav-item {{ session('menu_active') == 'Informes - Resumen' ? 'menu-open' : '' }}">
                 <a href="#" class="nav-link">
-                  <i class="nav-icon  bi bi-clipboard-fill"></i>
-                  <p>
-                    Informes - Resumen
-                    <i class="nav-arrow bi bi-chevron-right"></i>
-                  </p>
+                  <i class="nav-icon bi bi-clipboard-data-fill"></i>
+                  <p>Informes - Resumen <i class="nav-arrow bi bi-chevron-right"></i></p>
                 </a>
                 <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.resumen.ventas') }}" class="nav-link {{ session('submenu_active') == 'Resumen de ventas' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Resumen de ventas</p>
+                    <a href="{{ route('cpanel.resumen.ventas') }}"
+                       class="nav-link {{ session('submenu_active') == 'Resumen de ventas' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-receipt"></i><p>Resumen de ventas</p>
                     </a>
                   </li>
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.estado.cuentas') }}" class="nav-link {{ session('submenu_active') == 'Estado de cuentas' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Estado de cuentas</p>
+                    <a href="{{ route('cpanel.estado.cuentas') }}"
+                       class="nav-link {{ session('submenu_active') == 'Estado de cuentas' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-wallet2"></i><p>Estado de cuentas</p>
                     </a>
                   </li>
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.comparativa.sucursales') }}" class="nav-link {{ session('submenu_active') == 'Comparativa' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Comparativa Sucursales</p>
+                    <a href="{{ route('cpanel.comparativa.sucursales') }}"
+                       class="nav-link {{ session('submenu_active') == 'Comparativa' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-bar-chart-line"></i><p>Comparativa Sucursales</p>
                     </a>
                   </li>
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.indice.rotacion') }}" class="nav-link {{ session('submenu_active') == 'Indice de Rotación' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Indice de Rotación</p>
+                    <a href="{{ route('cpanel.indice.rotacion') }}"
+                       class="nav-link {{ session('submenu_active') == 'Indice de Rotación' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-arrow-repeat"></i><p>Indice de Rotación</p>
                     </a>
                   </li>
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.baja.ventas') }}" class="nav-link {{ session('submenu_active') == 'Baja Demanda' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Baja Demanda</p>
+                    <a href="{{ route('cpanel.baja.ventas') }}"
+                       class="nav-link {{ session('submenu_active') == 'Baja Demanda' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-arrow-down-circle"></i><p>Baja Demanda</p>
                     </a>
                   </li>
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.alta.ventas') }}" class="nav-link {{ session('submenu_active') == 'Alta Demanda' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Alta Demanda</p>
+                    <a href="{{ route('cpanel.alta.ventas') }}"
+                       class="nav-link {{ session('submenu_active') == 'Alta Demanda' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-arrow-up-circle"></i><p>Alta Demanda</p>
                     </a>
                   </li>
                 </ul>
               </li>
+
               <li class="nav-item {{ session('menu_active') == 'Análisis de Ventas' ? 'menu-open' : '' }}">
                 <a href="#" class="nav-link">
                   <i class="nav-icon bi bi-shop"></i>
-                  <p>
-                    Análisis de Ventas
-                    <i class="nav-arrow bi bi-chevron-right"></i>
-                  </p>
+                  <p>Análisis de Ventas <i class="nav-arrow bi bi-chevron-right"></i></p>
                 </a>
                 <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.ventas.diarias') }}" class="nav-link {{ session('submenu_active') == 'Ventas Diarias' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Ventas Diarias</p>
+                    <a href="{{ route('cpanel.ventas.diarias') }}"
+                       class="nav-link {{ session('submenu_active') == 'Ventas Diarias' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-calendar-day"></i><p>Ventas Diarias</p>
                     </a>
                   </li>
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.ventas.producto') }}" class="nav-link {{ session('submenu_active') == 'Ventas por producto' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Ventas por producto</p>
+                    <a href="{{ route('cpanel.ventas.producto') }}"
+                       class="nav-link {{ session('submenu_active') == 'Ventas por producto' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-tag"></i><p>Ventas por producto</p>
                     </a>
                   </li>
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.cargar.ventas.diarias') }}" class="nav-link {{ session('submenu_active') == 'Cargar Venta Diaria' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Cargar Ventas Diarias</p>
+                    <a href="{{ route('cpanel.cargar.ventas.diarias') }}"
+                       class="nav-link {{ session('submenu_active') == 'Cargar Venta Diaria' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-upload"></i><p>Cargar Ventas Diarias</p>
                     </a>
                   </li>
                 </ul>
               </li>
+
+              {{-- ── OPERACIONES ──────────────────────────── --}}
+              <li class="nav-header">OPERACIONES</li>
+
               <li class="nav-item {{ session('menu_active') == 'Cuadre de Caja' ? 'menu-open' : '' }}">
                 <a href="#" class="nav-link">
                   <i class="nav-icon bi bi-calculator"></i>
-                  <p>
-                    Cuadre de Caja
-                    <i class="nav-arrow bi bi-chevron-right"></i>
-                  </p>
+                  <p>Cuadre de Caja <i class="nav-arrow bi bi-chevron-right"></i></p>
                 </a>
                 <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.cuadre.resumen_diario') }}" class="nav-link {{ session('submenu_active') == 'Resumen Diario' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Resumen Diario</p>
+                    <a href="{{ route('cpanel.cuadre.resumen_diario') }}"
+                       class="nav-link {{ session('submenu_active') == 'Resumen Diario' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-journal-text"></i><p>Resumen Diario</p>
                     </a>
                   </li>
-                </ul>
-                <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.cuadre.registrar_cierre') }}" class="nav-link {{ session('submenu_active') == 'Registrar Cierre' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Registrar Cierre</p>
+                    <a href="{{ route('cpanel.cuadre.registrar_cierre') }}"
+                       class="nav-link {{ session('submenu_active') == 'Registrar Cierre' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-lock"></i><p>Registrar Cierre</p>
                     </a>
                   </li>
-                </ul>
-                <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.cuadre.auditar_cierre') }}" class="nav-link {{ session('submenu_active') == 'Auditar Cierre' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Auditar Cierre</p>
+                    <a href="{{ route('cpanel.cuadre.auditar_cierre') }}"
+                       class="nav-link {{ session('submenu_active') == 'Auditar Cierre' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-search"></i><p>Auditar Cierre</p>
                     </a>
                   </li>
-                </ul>
-                <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.cuadre.consolidado') }}" class="nav-link {{ session('submenu_active') == 'Consolidado Financiero' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Consolidado Financiero</p>
+                    <a href="{{ route('cpanel.cuadre.consolidado') }}"
+                       class="nav-link {{ session('submenu_active') == 'Consolidado Financiero' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-file-earmark-bar-graph"></i><p>Consolidado Financiero</p>
                     </a>
                   </li>
                 </ul>
               </li>
+
               <li class="nav-item {{ session('menu_active') == 'Contabilidad' ? 'menu-open' : '' }}">
                 <a href="#" class="nav-link">
                   <i class="nav-icon bi bi-cash-stack"></i>
-                  <p>
-                    Contabilidad
-                    <i class="nav-arrow bi bi-chevron-right"></i>
-                  </p>
+                  <p>Contabilidad <i class="nav-arrow bi bi-chevron-right"></i></p>
                 </a>
                 <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.contabilidad.balance_general') }}" class="nav-link {{ session('submenu_active') == 'Balance General' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Balance General</p>
+                    <a href="{{ route('cpanel.contabilidad.balance_general') }}"
+                       class="nav-link {{ session('submenu_active') == 'Balance General' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-journal-bookmark"></i><p>Balance General</p>
                     </a>
                   </li>
-                </ul>
-                <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.contabilidad.show_cerrar_dia') }}" class="nav-link {{ session('submenu_active') == 'Cerrar Día' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Cerrar Día</p>
+                    <a href="{{ route('cpanel.contabilidad.show_cerrar_dia') }}"
+                       class="nav-link {{ session('submenu_active') == 'Cerrar Día' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-calendar-check"></i><p>Cerrar Día</p>
                     </a>
                   </li>
-                </ul>
-                <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.contabilidad.probar_cerrar_dia') }}" class="nav-link {{ session('submenu_active') == 'Probar Cerrar Dia' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Probar Cerrar Dia</p>
+                    <a href="{{ route('cpanel.contabilidad.probar_cerrar_dia') }}"
+                       class="nav-link {{ session('submenu_active') == 'Probar Cerrar Dia' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-calendar-x"></i><p>Probar Cerrar Dia</p>
                     </a>
                   </li>
                 </ul>
               </li>
+
+              {{-- ── EQUIPO ───────────────────────────────── --}}
+              <li class="nav-header">EQUIPO</li>
+
               <li class="nav-item {{ session('menu_active') == 'Empleados' ? 'menu-open' : '' }}">
                 <a href="#" class="nav-link">
                   <i class="nav-icon bi bi-person-badge"></i>
-                  <p>
-                    Empleados
-                    <i class="nav-arrow bi bi-chevron-right"></i>
-                  </p>
+                  <p>Empleados <i class="nav-arrow bi bi-chevron-right"></i></p>
                 </a>
                 <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.empleados.ventas_diarias') }}" class="nav-link {{ session('submenu_active') == 'Ventas Diarias' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Ventas Diarias</p>
+                    <a href="{{ route('cpanel.empleados.ventas_diarias') }}"
+                       class="nav-link {{ session('submenu_active') == 'Ventas Diarias' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-calendar-day"></i><p>Ventas Diarias</p>
                     </a>
                   </li>
-                </ul>
-                <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.empleados.ranking') }}" class="nav-link {{ session('submenu_active') == 'Ranking General' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Ranking General</p>
+                    <a href="{{ route('cpanel.empleados.ranking') }}"
+                       class="nav-link {{ session('submenu_active') == 'Ranking General' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-trophy"></i><p>Ranking General</p>
                     </a>
                   </li>
-                </ul>
-                <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.empleados.vendedores') }}" class="nav-link {{ session('submenu_active') == 'Vendedores' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Vendedores</p>
+                    <a href="{{ route('cpanel.empleados.vendedores') }}"
+                       class="nav-link {{ session('submenu_active') == 'Vendedores' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-people"></i><p>Vendedores</p>
                     </a>
                   </li>
-                </ul>
-                <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.empleados.personal') }}" class="nav-link {{ session('submenu_active') == 'Personal Interno' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Empleado Interno</p>
+                    <a href="{{ route('cpanel.empleados.personal') }}"
+                       class="nav-link {{ session('submenu_active') == 'Personal Interno' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-person-lines-fill"></i><p>Empleado Interno</p>
                     </a>
                   </li>
-                </ul>
-                <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.empleados.agregar') }}" class="nav-link {{ session('submenu_active') == 'Agregar Empleado' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Agregar Empleado</p>
+                    <a href="{{ route('cpanel.empleados.agregar') }}"
+                       class="nav-link {{ session('submenu_active') == 'Agregar Empleado' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-person-plus"></i><p>Agregar Empleado</p>
                     </a>
                   </li>
-                </ul>
-                <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.empleados.lista_empleados_bonos') }}" class="nav-link {{ session('submenu_active') == 'Bonos' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Bonos</p>
+                    <a href="{{ route('cpanel.empleados.lista_empleados_bonos') }}"
+                       class="nav-link {{ session('submenu_active') == 'Bonos' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-gift"></i><p>Bonos</p>
                     </a>
                   </li>
-                </ul>
-                <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.empleados.lista_empleados_deducciones') }}" class="nav-link {{ session('submenu_active') == 'Deducciones' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Deducciones</p>
+                    <a href="{{ route('cpanel.empleados.lista_empleados_deducciones') }}"
+                       class="nav-link {{ session('submenu_active') == 'Deducciones' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-dash-circle"></i><p>Deducciones</p>
                     </a>
                   </li>
-                </ul>
-                <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.empleados.lista_empleados_prestamos') }}" class="nav-link {{ session('submenu_active') == 'Prestamos' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Prestamos</p>
+                    <a href="{{ route('cpanel.empleados.lista_empleados_prestamos') }}"
+                       class="nav-link {{ session('submenu_active') == 'Prestamos' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-cash-coin"></i><p>Prestamos</p>
                     </a>
                   </li>
-                </ul>
-                <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.empleados.lista_liberalidad') }}" class="nav-link {{ session('submenu_active') == 'Liberalidad' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Liberalidad</p>
+                    <a href="{{ route('cpanel.empleados.lista_liberalidad') }}"
+                       class="nav-link {{ session('submenu_active') == 'Liberalidad' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-heart"></i><p>Liberalidad</p>
                     </a>
                   </li>
                 </ul>
               </li>
+
+              {{-- ── LOGÍSTICA ────────────────────────────── --}}
+              <li class="nav-header">LOGÍSTICA</li>
+
               <li class="nav-item {{ session('menu_active') == 'Proveedor Mercancía' ? 'menu-open' : '' }}">
                 <a href="#" class="nav-link">
                   <i class="nav-icon bi bi-truck"></i>
-                  <p>
-                    Proveedor Mercancía
-                    <i class="nav-arrow bi bi-chevron-right"></i>
-                  </p>
+                  <p>Proveedor Mercancía <i class="nav-arrow bi bi-chevron-right"></i></p>
                 </a>
                 <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.proveedor.mercancia.listado') }}" class="nav-link {{ session('submenu_active') == 'Listado Proveedores' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Listado Proveedores</p>
+                    <a href="{{ route('cpanel.proveedor.mercancia.listado') }}"
+                       class="nav-link {{ session('submenu_active') == 'Listado Proveedores' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-list-ul"></i><p>Listado Proveedores</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.proveedor.mercancia.registrar_pagos') }}"
+                       class="nav-link {{ session('submenu_active') == 'Registrar Pagos' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-credit-card"></i><p>Registrar Pagos</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.proveedor.mercancia.registrar_facturas') }}"
+                       class="nav-link {{ session('submenu_active') == 'Registrar Facturas' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-file-text"></i><p>Registrar Facturas</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.proveedor.mercancia.contenedores') }}"
+                       class="nav-link {{ session('submenu_active') == 'Contenedores' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-archive"></i><p>Contenedores</p>
                     </a>
                   </li>
                 </ul>
-                <ul class="nav nav-treeview">
-                  <!-- Opción Registrar Pagos -->
-                  <li class="nav-item">
-                      <a href="{{ route('cpanel.proveedor.mercancia.registrar_pagos') }}" 
-                        class="nav-link {{ session('submenu_active') == 'Registrar Pagos' ? 'active' : '' }}">
-                          <i class="nav-icon bi bi-circle"></i>
-                          <p>Registrar Pagos</p>
-                      </a>
-                  </li>
-
-                  <!-- Opción Registrar Facturas -->
-                  <li class="nav-item">
-                      <a href="{{ route('cpanel.proveedor.mercancia.registrar_facturas') }}" 
-                        class="nav-link {{ session('submenu_active') == 'Registrar Facturas' ? 'active' : '' }}">
-                          <i class="nav-icon bi bi-circle"></i>
-                          <p>Registrar Facturas</p>
-                      </a>
-                  </li>
-
-                  <!-- Contenedores -->
-                  <li class="nav-item">
-                      <a href="{{ route('cpanel.proveedor.mercancia.contenedores') }}" 
-                        class="nav-link {{ session('submenu_active') == 'Contenedores' ? 'active' : '' }}">
-                          <i class="nav-icon bi bi-circle"></i>
-                          <p>Contenedores</p>
-                      </a>
-                  </li>
-                </ul>
               </li>
+
               <li class="nav-item {{ session('menu_active') == 'Recepciones' ? 'menu-open' : '' }}">
                 <a href="#" class="nav-link">
-                  <i class="nav-icon bi bi-truck"></i>
-                  <p>
-                    Recepciones
-                    <i class="nav-arrow bi bi-chevron-right"></i>
-                  </p>
+                  <i class="nav-icon bi bi-box-seam"></i>
+                  <p>Recepciones <i class="nav-arrow bi bi-chevron-right"></i></p>
                 </a>
                 <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.recepciones.proveedor') }}" class="nav-link {{ session('submenu_active') == 'Recibir de proveedor' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Recibir de proveedor</p>
+                    <a href="{{ route('cpanel.recepciones.proveedor') }}"
+                       class="nav-link {{ session('submenu_active') == 'Recibir de proveedor' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-inbox-fill"></i><p>Recibir de proveedor</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.recepciones.sucursal') }}"
+                       class="nav-link {{ session('submenu_active') == 'Recibir de Sucursal' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-inbox-fill"></i><p>Recibir de Sucursal</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.recepciones.finalizadas') }}"
+                       class="nav-link {{ session('submenu_active') == 'Recepciones Finalizadas' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-inbox-fill"></i><p>Recepciones Finalizadas</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.recepciones.auditorias') }}"
+                       class="nav-link {{ session('submenu_active') == 'Auditar Recepciones' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-inbox-fill"></i><p>Auditar Recepciones</p>
                     </a>
                   </li>
                 </ul>
               </li>
-              <li class="nav-item">
+
+              <li class="nav-item {{ session('menu_active') == 'Distribuciones' ? 'menu-open' : '' }}">
                 <a href="#" class="nav-link">
-                  <i class="nav-icon bi bi-table"></i>
-                  <p>
-                    Tables
-                    <i class="nav-arrow bi bi-chevron-right"></i>
-                  </p>
+                  <i class="nav-icon bi bi-box-seam"></i>
+                  <p>Distribuciones <i class="nav-arrow bi bi-chevron-right"></i></p>
                 </a>
                 <ul class="nav nav-treeview">
                   <li class="nav-item">
-                    <a href="./tables/simple.html" class="nav-link">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Simple Tables</p>
-                    </a>
+                      <a href="{{ route('cpanel.distribucion.listado') }}"
+                        class="nav-link {{ session('submenu_active') == 'Listado Dist. / Trans.' ? 'active' : '' }}">
+                          <i class="nav-icon bi bi-list-ul"></i>
+                          <p>Listado Dist. / Trans.</p>
+                      </a>
+                  </li>
+
+                  <li class="nav-item">
+                      <a href="{{ route('cpanel.distribucion.distribuciones') }}"
+                        class="nav-link {{ session('submenu_active') == 'Nueva Distribución' ? 'active' : '' }}">
+                          <i class="nav-icon bi bi-plus-circle"></i>
+                          <p>Nueva Distribución</p>
+                      </a>
+                  </li>
+
+                  <li class="nav-item">
+                      <a href="{{ route('cpanel.distribucion.inventario') }}"
+                        class="nav-link {{ session('submenu_active') == 'Inventario de almacen' ? 'active' : '' }}">
+                          <i class="nav-icon bi bi-box-seam"></i>
+                          <p>Inventario de almacen</p>
+                      </a>
                   </li>
                 </ul>
               </li>
-              <li class="nav-header">EXAMPLES</li>
-              <li class="nav-item">
-                <a href="#" class="nav-link">
-                  <i class="nav-icon bi bi-box-arrow-in-right"></i>
-                  <p>
-                    Auth
-                    <i class="nav-arrow bi bi-chevron-right"></i>
-                  </p>
-                </a>
-                <ul class="nav nav-treeview">
-                  <li class="nav-item">
-                    <a href="#" class="nav-link">
-                      <i class="nav-icon bi bi-box-arrow-in-right"></i>
-                      <p>
-                        Version 1
-                        <i class="nav-arrow bi bi-chevron-right"></i>
-                      </p>
-                    </a>
-                    <ul class="nav nav-treeview">
-                      <li class="nav-item">
-                        <a href="./examples/login.html" class="nav-link">
-                          <i class="nav-icon bi bi-circle"></i>
-                          <p>Login</p>
-                        </a>
-                      </li>
-                      <li class="nav-item">
-                        <a href="./examples/register.html" class="nav-link">
-                          <i class="nav-icon bi bi-circle"></i>
-                          <p>Register</p>
-                        </a>
-                      </li>
-                    </ul>
-                  </li>
-                  <li class="nav-item">
-                    <a href="#" class="nav-link">
-                      <i class="nav-icon bi bi-box-arrow-in-right"></i>
-                      <p>
-                        Version 2
-                        <i class="nav-arrow bi bi-chevron-right"></i>
-                      </p>
-                    </a>
-                    <ul class="nav nav-treeview">
-                      <li class="nav-item">
-                        <a href="./examples/login-v2.html" class="nav-link">
-                          <i class="nav-icon bi bi-circle"></i>
-                          <p>Login</p>
-                        </a>
-                      </li>
-                      <li class="nav-item">
-                        <a href="./examples/register-v2.html" class="nav-link">
-                          <i class="nav-icon bi bi-circle"></i>
-                          <p>Register</p>
-                        </a>
-                      </li>
-                    </ul>
-                  </li>
-                  <li class="nav-item">
-                    <a href="./examples/lockscreen.html" class="nav-link">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Lockscreen</p>
-                    </a>
-                  </li>
-                </ul>
-              </li>
-              <li class="nav-header">DOCUMENTATIONS</li>
-              <li class="nav-item">
-                <a href="./docs/introduction.html" class="nav-link">
-                  <i class="nav-icon bi bi-download"></i>
-                  <p>Installation</p>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a href="./docs/layout.html" class="nav-link">
-                  <i class="nav-icon bi bi-grip-horizontal"></i>
-                  <p>Layout</p>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a href="./docs/color-mode.html" class="nav-link">
-                  <i class="nav-icon bi bi-star-half"></i>
-                  <p>Color Mode</p>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a href="#" class="nav-link">
-                  <i class="nav-icon bi bi-ui-checks-grid"></i>
-                  <p>
-                    Components
-                    <i class="nav-arrow bi bi-chevron-right"></i>
-                  </p>
-                </a>
-                <ul class="nav nav-treeview">
-                  <li class="nav-item">
-                    <a href="./docs/components/main-header.html" class="nav-link">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Main Header</p>
-                    </a>
-                  </li>
-                  <li class="nav-item">
-                    <a href="./docs/components/main-sidebar.html" class="nav-link">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Main Sidebar</p>
-                    </a>
-                  </li>
-                </ul>
-              </li>
-              <li class="nav-item">
-                <a href="#" class="nav-link">
-                  <i class="nav-icon bi bi-filetype-js"></i>
-                  <p>
-                    Javascript
-                    <i class="nav-arrow bi bi-chevron-right"></i>
-                  </p>
-                </a>
-                <ul class="nav nav-treeview">
-                  <li class="nav-item">
-                    <a href="./docs/javascript/treeview.html" class="nav-link">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Treeview</p>
-                    </a>
-                  </li>
-                </ul>
-              </li>
-              <li class="nav-item">
-                <a href="./docs/browser-support.html" class="nav-link">
-                  <i class="nav-icon bi bi-browser-edge"></i>
-                  <p>Browser Support</p>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a href="./docs/how-to-contribute.html" class="nav-link">
-                  <i class="nav-icon bi bi-hand-thumbs-up-fill"></i>
-                  <p>How To Contribute</p>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a href="./docs/faq.html" class="nav-link">
-                  <i class="nav-icon bi bi-question-circle-fill"></i>
-                  <p>FAQ</p>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a href="./docs/license.html" class="nav-link">
-                  <i class="nav-icon bi bi-patch-check-fill"></i>
-                  <p>License</p>
-                </a>
-              </li>
-              <li class="nav-header">MULTI LEVEL EXAMPLE</li>
-              <li class="nav-item">
-                <a href="#" class="nav-link">
-                  <i class="nav-icon bi bi-circle-fill"></i>
-                  <p>Level 1</p>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a href="#" class="nav-link">
-                  <i class="nav-icon bi bi-circle-fill"></i>
-                  <p>
-                    Level 1
-                    <i class="nav-arrow bi bi-chevron-right"></i>
-                  </p>
-                </a>
-                <ul class="nav nav-treeview">
-                  <li class="nav-item">
-                    <a href="#" class="nav-link">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Level 2</p>
-                    </a>
-                  </li>
-                  <li class="nav-item">
-                    <a href="#" class="nav-link">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>
-                        Level 2
-                        <i class="nav-arrow bi bi-chevron-right"></i>
-                      </p>
-                    </a>
-                    <ul class="nav nav-treeview">
-                      <li class="nav-item">
-                        <a href="#" class="nav-link">
-                          <i class="nav-icon bi bi-record-circle-fill"></i>
-                          <p>Level 3</p>
-                        </a>
-                      </li>
-                      <li class="nav-item">
-                        <a href="#" class="nav-link">
-                          <i class="nav-icon bi bi-record-circle-fill"></i>
-                          <p>Level 3</p>
-                        </a>
-                      </li>
-                      <li class="nav-item">
-                        <a href="#" class="nav-link">
-                          <i class="nav-icon bi bi-record-circle-fill"></i>
-                          <p>Level 3</p>
-                        </a>
-                      </li>
-                    </ul>
-                  </li>
-                  <li class="nav-item">
-                    <a href="#" class="nav-link">
-                      <i class="nav-icon bi bi-circle"></i>
-                      <p>Level 2</p>
-                    </a>
-                  </li>
-                </ul>
-              </li>
-              <li class="nav-item">
-                <a href="#" class="nav-link">
-                  <i class="nav-icon bi bi-circle-fill"></i>
-                  <p>Level 1</p>
-                </a>
-              </li>
-              <li class="nav-header">LABELS</li>
-              <li class="nav-item">
-                <a href="#" class="nav-link">
-                  <i class="nav-icon bi bi-circle text-danger"></i>
-                  <p class="text">Important</p>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a href="#" class="nav-link">
-                  <i class="nav-icon bi bi-circle text-warning"></i>
-                  <p>Warning</p>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a href="#" class="nav-link">
-                  <i class="nav-icon bi bi-circle text-info"></i>
-                  <p>Informational</p>
-                </a>
-              </li>
+
             </ul>
             <!--end::Sidebar Menu-->
           </nav>
@@ -1048,14 +919,13 @@
 
       <!--begin::Footer-->
       <footer class="app-footer">
-        
-        <!--begin::Copyright-->
         <strong>
-          Copyright &copy; 2025&nbsp;
-          TiendasTenShop
+          <i class="bi bi-c-circle me-1"></i> 2025 TiendasTenShop
         </strong>
-        All rights reserved.
-        <!--end::Copyright-->
+        <span class="ms-1 text-muted">— Todos los derechos reservados.</span>
+        <div class="float-end d-none d-sm-inline text-muted small">
+          <i class="bi bi-server me-1"></i>{{ $db }}
+        </div>
       </footer>
       <!--end::Footer-->
 

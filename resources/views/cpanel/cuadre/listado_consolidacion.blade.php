@@ -14,11 +14,22 @@
   <div class="container-fluid">
     <!--begin::Row-->
     <div class="row">
-      <div class="col-sm-6"><h3 class="mb-0">Consolidación Financiera</h3></div>
+      <div class="col-sm-6">
+        <div class="d-flex align-items-center gap-2">
+          <div class="d-flex align-items-center justify-content-center rounded-2 me-1"
+               style="width:36px;height:36px;background:linear-gradient(135deg,#10b981,#059669);">
+            <i class="bi bi-bank text-white" style="font-size:1.1rem;"></i>
+          </div>
+          <div>
+            <h4 class="mb-0 fw-bold text-dark" style="font-size:1.1rem;">Consolidación Financiera</h4>
+            <p class="mb-0 text-muted" style="font-size:0.78rem;">Resumen financiero consolidado por período</p>
+          </div>
+        </div>
+      </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
           <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Consolidación Financiera</li>
+          <li class="breadcrumb-item active" aria-current="page">Consolidación</li>
         </ol>
       </div>
     </div>
@@ -33,7 +44,12 @@
     <div class="container-fluid">  
         
         <!-- Card de filtros -->
-        <div class="card card-primary card-outline mb-4">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header border-0 py-3" style="background:linear-gradient(135deg,#10b981 0%,#059669 100%);">
+                <h6 class="mb-0 fw-bold text-white">
+                    <i class="bi bi-funnel me-2"></i>Filtros de búsqueda
+                </h6>
+            </div>
             <div class="card-body">
                 <form action="{{ route('cpanel.cuadre.consolidado') }}" method="GET" id="filtroForm">
                     @csrf

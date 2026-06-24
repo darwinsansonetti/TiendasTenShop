@@ -20,9 +20,16 @@
     <div class="container-fluid">
         <div class="row">
             <div class="col-sm-6">
-                <h3 class="mb-0">
-                    <i class="fas fa-user-plus me-2"></i>Agregar Empleado Interno
-                </h3>
+              <div class="d-flex align-items-center gap-2">
+                <div class="d-flex align-items-center justify-content-center rounded-2 me-1"
+                     style="width:36px;height:36px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);">
+                  <i class="bi bi-person-plus text-white" style="font-size:1.1rem;"></i>
+                </div>
+                <div>
+                  <h4 class="mb-0 fw-bold text-dark" style="font-size:1.1rem;">Agregar Empleado Interno</h4>
+                  <p class="mb-0 text-muted" style="font-size:0.78rem;">Registrar nuevo empleado en el sistema</p>
+                </div>
+              </div>
             </div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-end">

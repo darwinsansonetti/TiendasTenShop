@@ -8,11 +8,21 @@
 
 @section('content')
 
-<!--begin::App Content Header-->
 <div class="app-content-header">
     <div class="container-fluid">
         <div class="row">
-            <div class="col-sm-6"><h3 class="mb-0">Liberalidad</h3></div>
+            <div class="col-sm-6">
+              <div class="d-flex align-items-center gap-2">
+                <div class="d-flex align-items-center justify-content-center rounded-2 me-1"
+                     style="width:36px;height:36px;background:linear-gradient(135deg,#10b981,#059669);">
+                  <i class="bi bi-heart text-white" style="font-size:1.1rem;"></i>
+                </div>
+                <div>
+                  <h4 class="mb-0 fw-bold text-dark" style="font-size:1.1rem;">Liberalidad</h4>
+                  <p class="mb-0 text-muted" style="font-size:0.78rem;">Registro de beneficios y liberalidades</p>
+                </div>
+              </div>
+            </div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-end">
                     <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
@@ -23,38 +33,39 @@
     </div>
 </div>
 
-<!--begin::App Content-->
 <div class="app-content">
-    <div class="container-fluid"> 
-        
-        <!-- Card de filtros -->
-        <div class="card card-primary card-outline mb-4">
-            <div class="card-body">
+    <div class="container-fluid">
+
+        {{-- ================================================ --}}
+        {{-- FILTRO DE PERÍODO --}}
+        {{-- ================================================ --}}
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body py-3">
                 <form action="{{ route('cpanel.empleados.lista_liberalidad') }}" method="GET" id="filtroForm">
-                    <div class="row g-3 align-items-end">
-                        <!-- Selector de Período (Mes/Año) -->
+                    <div class="row g-3 align-items-center">
                         <div class="col-md-4">
-                            <label for="periodo" class="form-label">
-                                <i class="fas fa-calendar-alt me-1"></i>Período
+                            <label for="periodo" class="form-label fw-semibold text-dark"
+                                   style="font-size:0.85rem;">
+                                <i class="bi bi-calendar me-1 text-success"></i>Período
                             </label>
-                            <input type="month" 
-                                name="periodo" 
-                                id="periodo" 
-                                class="form-control"
-                                value="{{ request('periodo', sprintf('%04d-%02d', $filtroMesAnio['anio'], $filtroMesAnio['mes'])) }}">
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0">
+                                    <i class="bi bi-calendar-month text-success"></i>
+                                </span>
+                                <input type="month"
+                                       name="periodo"
+                                       id="periodo"
+                                       class="form-control border-start-0"
+                                       value="{{ request('periodo', sprintf('%04d-%02d', $filtroMesAnio['anio'], $filtroMesAnio['mes'])) }}">
+                            </div>
                         </div>
-                        
-                        <!-- Botón Buscar -->
-                        <div class="col-md-2">
-                            <button type="submit" class="btn btn-primary w-100">
-                                <i class="fas fa-search me-2"></i>Buscar
+                        <div class="col-auto" style="padding-top:1.9rem;">
+                            <button type="submit" class="btn btn-success fw-semibold px-4">
+                                <i class="bi bi-search me-1"></i>Buscar
                             </button>
-                        </div>
-                        
-                        <!-- Botón Limpiar -->
-                        <div class="col-md-2">
-                            <a href="{{ route('cpanel.empleados.lista_liberalidad') }}" class="btn btn-secondary w-100">
-                                <i class="fas fa-undo me-2"></i>Limpiar
+                            <a href="{{ route('cpanel.empleados.lista_liberalidad') }}"
+                               class="btn btn-light border fw-semibold ms-2">
+                                <i class="bi bi-arrow-repeat me-1"></i>Limpiar
                             </a>
                         </div>
                     </div>
@@ -62,84 +73,99 @@
             </div>
         </div>
 
-        @if($liberalidadDTO && $liberalidadDTO->detalles && $liberalidadDTO->detalles->count() > 0)  
+        {{-- ================================================ --}}
+        {{-- BRANCH A: LIBERALIDAD CERRADA (DTO guardado) --}}
+        {{-- ================================================ --}}
+        @if($liberalidadDTO && $liberalidadDTO->detalles && $liberalidadDTO->detalles->count() > 0)
 
-            {{-- Mostrar datos desde el DTO guardado --}}
-            <div class="card">
-                <div class="card-header">
-                    <div class="row align-items-center">
-                        <!-- Título y Buscador (Izquierda) -->
-                        <div class="col-md-8 d-flex align-items-center gap-3">
-                            <h3 class="card-title mb-0">
-                                <i class="fas fa-chart-line me-2"></i>Reporte de Liberalidad
-                                <small class="badge bg-danger text-white ms-2">
-                                    <i class="fas fa-save me-1"></i>Cerrada
-                                </small>
-                            </h3>
-                            
-                            <!-- Buscador -->
-                            <div class="input-group input-group-sm" style="width: 250px;">
-                                <span class="input-group-text">
-                                    <i class="fas fa-search"></i>
-                                </span>
-                                <input type="text" 
-                                    id="buscadorEmpleado" 
-                                    class="form-control" 
-                                    placeholder="Buscar empleado..."
-                                    autocomplete="off">
-                                <button class="btn btn-outline-secondary" type="button" id="limpiarBuscador">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            </div>
+        <div class="card border-0 shadow-sm">
+            <div class="card-header border-0 py-3"
+                 style="background:linear-gradient(135deg,#10b981 0%,#059669 100%);">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <h6 class="mb-0 fw-bold text-white">
+                            <i class="bi bi-chart-line me-2"></i>Reporte de Liberalidad
+                        </h6>
+                        <span class="badge rounded-pill fw-semibold"
+                              style="background:rgba(239,68,68,0.85);color:#fff;font-size:0.75rem;">
+                            <i class="bi bi-lock me-1"></i>Cerrada
+                        </span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <div class="input-group input-group-sm" style="width:220px;">
+                            <span class="input-group-text"
+                                  style="background:rgba(255,255,255,0.2);border-color:rgba(255,255,255,0.3);">
+                                <i class="bi bi-search text-white" style="font-size:0.8rem;"></i>
+                            </span>
+                            <input type="text"
+                                   id="buscadorEmpleado"
+                                   class="form-control"
+                                   style="background:rgba(255,255,255,0.15);border-color:rgba(255,255,255,0.3);color:#fff;font-size:0.82rem;"
+                                   placeholder="Buscar empleado..."
+                                   autocomplete="off">
+                            <button class="btn" type="button" id="limpiarBuscador"
+                                    style="background:rgba(255,255,255,0.2);border-color:rgba(255,255,255,0.3);color:#fff;">
+                                <i class="bi bi-x-lg" style="font-size:0.75rem;"></i>
+                            </button>
                         </div>
-                        
-                        <!-- Botones (Derecha) -->
-                        <div class="col-md-4 text-end">
-                            <div class="btn-group">
-                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="pdfTablaLiberalidad()">
-                                    <i class="fas fa-print me-1"></i>PDF
-                                </button>
-                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="exportarExcelLiberalidad()">
-                                    <i class="fas fa-file-excel me-1"></i>Excel
-                                </button>
-                            </div>
-                        </div>
+                        <button type="button" class="btn btn-sm fw-semibold"
+                                style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.35);font-size:0.8rem;"
+                                onclick="pdfTablaLiberalidad()">
+                            <i class="bi bi-file-pdf me-1"></i>PDF
+                        </button>
+                        <button type="button" class="btn btn-sm fw-semibold"
+                                style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.35);font-size:0.8rem;"
+                                onclick="exportarExcelLiberalidad()">
+                            <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                        </button>
                     </div>
                 </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
-                        <table class="table table-hover mb-0" id="tablaLiberalidad">
-                            <thead class="table-light">
-                                <tr>
-                                    <th width="80" class="text-center">Foto</th>
-                                    <th class="sortable" data-col="empleado">Empleado</th>
-                                    <th width="200" class="sortable" data-col="sucursal">Sucursal</th>
-                                    <th width="150" class="text-center sortable" data-col="unidades">Unidades</th>
-                                    <th width="150" class="text-center sortable" data-col="ventas">Ventas</th>
-                                    <th width="150" class="text-center sortable" data-col="bonos">Bonos</th>
-                                    <th width="150" class="text-center sortable" data-col="deducciones">Deducciones</th>
-                                    <th width="150" class="text-end sortable" data-col="liberalidad">Liberalidad</th>
-                                    <th width="150" class="text-end sortable" data-col="neto">Neto</th>
-                                    <th width="120" class="text-center">Detalle</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach($liberalidadDTO->detalles as $index => $detalle)
-                                    @php
-                                    // Priorizar Usuario sobre Empleado
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height:600px;overflow-y:auto;">
+                    <table class="table table-hover align-middle mb-0" id="tablaLiberalidad">
+                        <thead>
+                            <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;position:sticky;top:0;z-index:10;">
+                                <th class="ps-3 py-3 text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;width:70px;">FOTO</th>
+                                <th class="py-3 text-muted fw-semibold sortable" data-col="empleado" style="font-size:0.75rem;letter-spacing:.06em;cursor:pointer;">
+                                    EMPLEADO <i class="bi bi-arrow-down-up ms-1" style="font-size:0.7rem;opacity:.5;"></i>
+                                </th>
+                                <th class="py-3 text-muted fw-semibold sortable" data-col="sucursal" style="font-size:0.75rem;letter-spacing:.06em;width:180px;cursor:pointer;">
+                                    SUCURSAL <i class="bi bi-arrow-down-up ms-1" style="font-size:0.7rem;opacity:.5;"></i>
+                                </th>
+                                <th class="py-3 text-center text-muted fw-semibold sortable" data-col="unidades" style="font-size:0.75rem;letter-spacing:.06em;width:110px;cursor:pointer;">
+                                    UNIDADES <i class="bi bi-arrow-down-up ms-1" style="font-size:0.7rem;opacity:.5;"></i>
+                                </th>
+                                <th class="py-3 text-center text-muted fw-semibold sortable" data-col="ventas" style="font-size:0.75rem;letter-spacing:.06em;width:130px;cursor:pointer;">
+                                    VENTAS <i class="bi bi-arrow-down-up ms-1" style="font-size:0.7rem;opacity:.5;"></i>
+                                </th>
+                                <th class="py-3 text-center text-muted fw-semibold sortable" data-col="bonos" style="font-size:0.75rem;letter-spacing:.06em;width:130px;cursor:pointer;">
+                                    BONOS <i class="bi bi-arrow-down-up ms-1" style="font-size:0.7rem;opacity:.5;"></i>
+                                </th>
+                                <th class="py-3 text-center text-muted fw-semibold sortable" data-col="deducciones" style="font-size:0.75rem;letter-spacing:.06em;width:140px;cursor:pointer;">
+                                    DEDUCCIONES <i class="bi bi-arrow-down-up ms-1" style="font-size:0.7rem;opacity:.5;"></i>
+                                </th>
+                                <th class="py-3 text-end text-muted fw-semibold sortable" data-col="liberalidad" style="font-size:0.75rem;letter-spacing:.06em;width:130px;cursor:pointer;">
+                                    LIBERALIDAD <i class="bi bi-arrow-down-up ms-1" style="font-size:0.7rem;opacity:.5;"></i>
+                                </th>
+                                <th class="py-3 text-end text-muted fw-semibold sortable" data-col="neto" style="font-size:0.75rem;letter-spacing:.06em;width:130px;cursor:pointer;">
+                                    NETO <i class="bi bi-arrow-down-up ms-1" style="font-size:0.7rem;opacity:.5;"></i>
+                                </th>
+                                <th class="pe-3 py-3 text-center text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;width:90px;">DETALLE</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($liberalidadDTO->detalles as $index => $detalle)
+                                @php
                                     $usuario = $detalle->Usuario ?? null;
                                     $empleado = $detalle->Empleado ?? null;
-                                    
-                                    // Dar prioridad a Usuario si existe
                                     $entidad = $usuario ?: $empleado;
-                                    
-                                    // Obtener datos priorizando Usuario
                                     $usuarioId = $detalle->UsuarioId ?? $detalle->EmpleadoId ?? '';
                                     $nombre = 'Empleado';
                                     $vendedorId = '';
                                     $fotoPerfil = '';
                                     $sucursalId = null;
-                                    
+
                                     if ($usuario) {
                                         $nombre = $usuario->NombreCompleto ?? 'Empleado';
                                         $vendedorId = $usuario->VendedorId ?? '';
@@ -151,13 +177,11 @@
                                         $fotoPerfil = $empleado->FotoPerfil ?? '';
                                         $sucursalId = $empleado->SucursalId ?? null;
                                     }
-                                    
-                                    // Obtener sucursal
+
                                     $sucursalNombre = 'N/A';
-                                    
                                     if (isset($detalle->Sucursal) && $detalle->Sucursal && isset($detalle->Sucursal->Nombre)) {
                                         $sucursalNombre = $detalle->Sucursal->Nombre;
-                                    } 
+                                    }
                                     elseif ($entidad && isset($entidad->Sucursal) && $entidad->Sucursal && isset($entidad->Sucursal->Nombre)) {
                                         $sucursalNombre = $entidad->Sucursal->Nombre;
                                     }
@@ -167,222 +191,184 @@
                                             return $sucursal ? $sucursal->Nombre : 'N/A';
                                         });
                                     }
-                                    
+
                                     $imgSrc = FileHelper::getOrDownloadFile(
                                         'images/usuarios/',
                                         $fotoPerfil,
                                         'assets/img/adminlte/img/default.png'
                                     );
 
-                                    // ============================================
-                                    // PARA LIBERALIDAD CERRADA - USAR CAMPOS GUARDADOS
-                                    // ============================================
-                                    
-                                    // Bonos = OtraLiberalidad (bonos del mes al cerrar)
                                     $bonosUSD = $detalle->OtraLiberalidad ?? 0;
-                                    
-                                    // Deducciones = TotalPagado? No, las deducciones se calculan como:
-                                    // Deducciones = Liberalidad + Bonos - Neto
-                                    // Pero como ya tenemos Neto (TotalPagado), mejor usamos la fórmula inversa
                                     $liberalidadUSD = $detalle->MontoLiberalidad ?? 0;
                                     $netoUSD = $detalle->TotalPagado ?? 0;
-                                    
-                                    // Calcular deducciones: Neto = Liberalidad + Bonos - Deducciones
-                                    // Despejando: Deducciones = Liberalidad + Bonos - Neto
                                     $deduccionesUSD = max(0, $liberalidadUSD + $bonosUSD - $netoUSD);
-                                    
-                                    // Si hay AbonoPrestamo, se puede mostrar como tooltip
                                     $abonoPrestamo = $detalle->AbonoPrestamo ?? 0;
                                     $deudaPrestamo = $detalle->DeudaPrestamo ?? 0;
-                                    @endphp
-
-                                    <tr class="align-middle">
-                                        <!-- Foto -->
-                                        <td class="text-center">
-                                            <img src="{{ $imgSrc }}" 
-                                                alt="{{ $nombre }}"
-                                                class="rounded-circle border border-success img-zoomable" 
-                                                style="width: 50px; height: 50px; object-fit: cover; cursor: zoom-in;"
-                                                onclick="zoomImagen(this)"
-                                                data-full-image="{{ $imgSrc }}"
-                                                data-description="{{ $nombre }}">
-                                        </td>
-                                        
-                                        <!-- Empleado -->
-                                        <td data-order="{{ $nombre }}">
-                                            <strong>{{ $nombre }}</strong>
-                                            @if($vendedorId)
-                                                <br>
-                                                <small class="text-muted">
-                                                    <i class="fas fa-id-badge me-1"></i>{{ $vendedorId }}
-                                                </small>
-                                            @endif
-                                            @if($detalle->EsVendedor ?? false)
-                                                <span class="badge bg-success ms-1">Vendedor</span>
-                                            @else
-                                                <span class="badge bg-info ms-1">Interno</span>
-                                            @endif
-                                        </td>
-                                        
-                                        <!-- Sucursal -->
-                                        <td data-order="{{ $sucursalNombre }}">
-                                            <span class="badge bg-warning text-white p-2">
-                                                <i class="fas fa-store me-1"></i>{{ $sucursalNombre }}
+                                @endphp
+                                <tr style="border-bottom:1px solid #f1f5f9;">
+                                    <td class="ps-3">
+                                        <img src="{{ $imgSrc }}"
+                                             alt="{{ $nombre }}"
+                                             class="rounded-circle img-zoomable"
+                                             style="width:46px;height:46px;object-fit:cover;border:2px solid #e2e8f0;cursor:zoom-in;"
+                                             onclick="zoomImagen(this)"
+                                             data-full-image="{{ $imgSrc }}"
+                                             data-description="{{ $nombre }}">
+                                    </td>
+                                    <td data-order="{{ $nombre }}">
+                                        <p class="mb-0 fw-bold text-dark">{{ $nombre }}</p>
+                                        @if($vendedorId)
+                                            <small class="text-muted">
+                                                <i class="bi bi-person-badge me-1"></i>{{ $vendedorId }}
+                                            </small>
+                                        @endif
+                                        @if($detalle->EsVendedor ?? false)
+                                            <span class="badge rounded-pill ms-1"
+                                                  style="background:rgba(16,185,129,0.1);color:#059669;border:1px solid rgba(16,185,129,0.25);font-size:0.72rem;">Vendedor</span>
+                                        @else
+                                            <span class="badge rounded-pill ms-1"
+                                                  style="background:rgba(6,182,212,0.1);color:#0891b2;border:1px solid rgba(6,182,212,0.25);font-size:0.72rem;">Interno</span>
+                                        @endif
+                                    </td>
+                                    <td data-order="{{ $sucursalNombre }}">
+                                        <span class="badge rounded-pill px-2 py-1 fw-semibold"
+                                              style="background:rgba(245,158,11,0.1);color:#92400e;border:1px solid rgba(245,158,11,0.25);font-size:0.78rem;">
+                                            <i class="bi bi-shop me-1"></i>{{ $sucursalNombre }}
+                                        </span>
+                                    </td>
+                                    <td class="text-center fw-bold" data-order="{{ $detalle->Unidades ?? 0 }}">
+                                        <span class="badge rounded-pill px-2 py-1"
+                                              style="background:rgba(59,130,246,0.1);color:#1d4ed8;border:1px solid rgba(59,130,246,0.25);font-size:0.82rem;">
+                                            {{ number_format($detalle->Unidades ?? 0, 0, ',', '.') }}
+                                        </span>
+                                    </td>
+                                    <td class="text-center fw-semibold text-success" data-order="{{ $detalle->Venta ?? 0 }}">
+                                        $ {{ number_format($detalle->Venta ?? 0, 2, ',', '.') }}
+                                    </td>
+                                    <td class="text-center" data-order="{{ $bonosUSD }}">
+                                        @if($bonosUSD > 0)
+                                            <span class="text-success fw-semibold">
+                                                <i class="bi bi-gift me-1"></i>$ {{ number_format($bonosUSD, 2, ',', '.') }}
                                             </span>
-                                        </td>
-                                        
-                                        <!-- Unidades -->
-                                        <td class="text-center fw-bold" data-order="{{ $detalle->Unidades ?? 0 }}">
-                                            <span class="badge bg-primary text-white p-2">
-                                                {{ number_format($detalle->Unidades ?? 0, 0, ',', '.') }}
+                                        @else
+                                            <span class="text-muted">$ 0,00</span>
+                                        @endif
+                                    </td>
+                                    <td class="text-center" data-order="{{ $deduccionesUSD }}">
+                                        @if($deduccionesUSD > 0)
+                                            <span class="text-danger fw-semibold">
+                                                <i class="bi bi-dash-circle me-1"></i>- $ {{ number_format($deduccionesUSD, 2, ',', '.') }}
                                             </span>
-                                        </td>
-                                        
-                                        <!-- Ventas USD -->
-                                        <td class="text-center text-success fw-bold" data-order="{{ $detalle->Venta ?? 0 }}">
-                                            $ {{ number_format($detalle->Venta ?? 0, 2, ',', '.') }}
-                                        </td>
-                                        
-                                        <!-- Bonos USD (usando OtraLiberalidad) -->
-                                        <td class="text-center" data-order="{{ $bonosUSD }}">
-                                            @if($bonosUSD > 0)
-                                                <span class="text-success">
-                                                    <i class="fas fa-gift me-1"></i>
-                                                    $ {{ number_format($bonosUSD, 2, ',', '.') }}
-                                                </span>
-                                            @else
-                                                <span class="text-muted">$ 0,00</span>
-                                            @endif
-                                        </td>
-                                        
-                                        <!-- Deducciones USD (calculadas) -->
-                                        <td class="text-center" data-order="{{ $deduccionesUSD }}">
-                                            @if($deduccionesUSD > 0)
-                                                <span class="text-danger">
-                                                    <i class="fas fa-minus-circle me-1"></i>
-                                                    - $ {{ number_format($deduccionesUSD, 2, ',', '.') }}
-                                                </span>
-                                            @else
-                                                <span class="text-muted">$ 0,00</span>
-                                            @endif
-                                            
-                                            @if($abonoPrestamo > 0)
-                                                <br>
-                                                <small class="text-muted" title="Abono a préstamo">
-                                                    <i class="fas fa-hand-holding-usd me-1"></i>Préstamo: ${{ number_format($abonoPrestamo, 2) }}
-                                                </small>
-                                            @endif
-                                            @if($deudaPrestamo > 0)
-                                                <br>
-                                                <small class="text-muted" title="Deuda pendiente">
-                                                    <i class="fas fa-clock me-1"></i>Deuda: ${{ number_format($deudaPrestamo, 2) }}
-                                                </small>
-                                            @endif
-                                        </td>
-                                        
-                                        <!-- Liberalidad USD -->
-                                        <td class="text-end fw-bold" data-order="{{ $liberalidadUSD }}">
-                                            $ {{ number_format($liberalidadUSD, 2, ',', '.') }}
-                                        </td>
-                                        
-                                        <!-- Neto USD (usando TotalPagado) -->
-                                        <td class="text-end fw-bold text-primary" data-order="{{ $netoUSD }}">
-                                            <span class="badge bg-dark p-2">
-                                                <i class="fas fa-calculator me-1"></i>
-                                                $ {{ number_format($netoUSD, 2, ',', '.') }}
-                                            </span>
-                                        </td>
-
-                                        <!-- Detalle -->
-                                        <td class="text-center">
-                                            <div class="btn-group" role="group">
-                                                <a href="{{ route('liberalidad.detalle', ['id' => $detalle->LiberalidadDetalleId]) }}"
-                                                    class="btn btn-sm btn-outline-primary"
-                                                    title="Ver detalles del empleado"
-                                                    data-bs-toggle="tooltip">
-                                                    <i class="bi bi-eye"></i>
-                                                </a>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                <div class="card-footer">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <small class="text-muted">
-                                <i class="fas fa-calendar-alt me-1"></i>
-                                Período: {{ $liberalidadDTO->FechaInicio->format('d/m/Y') }} - {{ $liberalidadDTO->FechaFinal->format('d/m/Y') }}
-                            </small>
-                        </div>
-                        <div class="col-md-6 text-end">
-                            <small class="text-muted">
-                                <i class="fas fa-users me-1"></i>
-                                Total empleados: {{ $liberalidadDTO->detalles->count() }}
-                            </small>
-                        </div>
-                    </div>
+                                        @else
+                                            <span class="text-muted">$ 0,00</span>
+                                        @endif
+                                        @if($abonoPrestamo > 0)
+                                            <br><small class="text-muted">
+                                                <i class="bi bi-credit-card me-1"></i>Préstamo: ${{ number_format($abonoPrestamo, 2) }}
+                                            </small>
+                                        @endif
+                                        @if($deudaPrestamo > 0)
+                                            <br><small class="text-muted">
+                                                <i class="bi bi-clock me-1"></i>Deuda: ${{ number_format($deudaPrestamo, 2) }}
+                                            </small>
+                                        @endif
+                                    </td>
+                                    <td class="text-end fw-bold text-dark" data-order="{{ $liberalidadUSD }}">
+                                        $ {{ number_format($liberalidadUSD, 2, ',', '.') }}
+                                    </td>
+                                    <td class="text-end" data-order="{{ $netoUSD }}">
+                                        <span class="badge rounded-pill px-2 py-1 fw-bold"
+                                              style="background:rgba(17,24,39,0.85);color:#fff;font-size:0.82rem;">
+                                            <i class="bi bi-calculator me-1"></i>$ {{ number_format($netoUSD, 2, ',', '.') }}
+                                        </span>
+                                    </td>
+                                    <td class="pe-3 text-center">
+                                        <a href="{{ route('liberalidad.detalle', ['id' => $detalle->LiberalidadDetalleId]) }}"
+                                           class="btn btn-sm rounded-2 d-inline-flex align-items-center justify-content-center"
+                                           style="width:30px;height:30px;background:rgba(59,130,246,0.1);color:#1d4ed8;border:1px solid rgba(59,130,246,0.25);"
+                                           title="Ver detalles del empleado" data-bs-toggle="tooltip">
+                                            <i class="bi bi-eye" style="font-size:0.8rem;"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
                 </div>
             </div>
+            <div class="card-footer border-0 py-2 px-4"
+                 style="background:#f8fafc;border-top:1px solid #e2e8f0 !important;">
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-muted">
+                        <i class="bi bi-calendar me-1"></i>
+                        Período: {{ $liberalidadDTO->FechaInicio->format('d/m/Y') }} — {{ $liberalidadDTO->FechaFinal->format('d/m/Y') }}
+                    </small>
+                    <small class="text-muted">
+                        <i class="bi bi-people me-1"></i>
+                        Total empleados: {{ $liberalidadDTO->detalles->count() }}
+                    </small>
+                </div>
+            </div>
+        </div>
 
+        {{-- ================================================ --}}
+        {{-- BRANCH B: LIBERALIDAD ACTIVA (cálculo en tiempo real) --}}
+        {{-- ================================================ --}}
         @else
-            <!-- Tabla de resultados -->
             @if($liberalidad && $liberalidad->detalles && $liberalidad->detalles->count() > 0)
 
-                {{-- NUEVO: Resumen por Sucursal --}}
+                {{-- Resumen por Sucursal --}}
                 @if(isset($liberalidadPorSucursal) && $liberalidadPorSucursal->count() > 0)
-                <div class="card mb-4">
-                    <div class="card-header bg-gradient-info text-white">
-                        <h5 class="mb-0">
-                            <i class="fas fa-store me-2"></i> Resumen de Liberalidad por Sucursal
-                        </h5>
+                @php
+                    $totalGeneral = $liberalidadPorSucursal->sum('MontoLiberalidadSucursal');
+                    $totalVendedores = $liberalidadPorSucursal->sum('CantidadVendedores');
+                @endphp
+                <div class="card border-0 shadow-sm mb-4">
+                    {{-- Mantener bg-gradient-info para el selector JS: cerrarLiberalidad() busca .card.mb-4:has(.bg-gradient-info) --}}
+                    <div class="card-header bg-gradient-info border-0 py-3"
+                         style="background:linear-gradient(135deg,#0891b2 0%,#0e7490 100%) !important;">
+                        <h6 class="mb-0 fw-bold text-white">
+                            <i class="bi bi-shop me-2"></i>Resumen de Liberalidad por Sucursal
+                        </h6>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body p-0">
                         <div class="table-responsive">
-                            <table class="table table-bordered table-hover">
-                                <thead class="table-light">
-                                    <tr class="text-center">
-                                        <th>Sucursal</th>
-                                        <th>Cantidad de Vendedores</th>
-                                        <th>Monto Liberalidad (USD)</th>
+                            <table class="table table-hover align-middle mb-0">
+                                <thead>
+                                    <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">
+                                        <th class="ps-4 py-3 text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">SUCURSAL</th>
+                                        <th class="py-3 text-center text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;width:200px;">CANT. VENDEDORES</th>
+                                        <th class="pe-4 py-3 text-end text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;width:220px;">MONTO LIBERALIDAD (USD)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @php
-                                        $totalGeneral = $liberalidadPorSucursal->sum('MontoLiberalidadSucursal');
-                                        $totalVendedores = $liberalidadPorSucursal->sum('CantidadVendedores');
-                                    @endphp
                                     @foreach($liberalidadPorSucursal as $sucursal)
-                                    <tr>
-                                        <td>
-                                            <strong>
-                                                <i class="fas fa-store me-2 text-warning"></i>
-                                                {{ $sucursal['SucursalNombre'] }}
-                                            </strong>
+                                    <tr style="border-bottom:1px solid #f1f5f9;">
+                                        <td class="ps-4 fw-semibold text-dark">
+                                            <i class="bi bi-shop me-2 text-warning"></i>{{ $sucursal['SucursalNombre'] }}
                                         </td>
                                         <td class="text-center">
-                                            <span class="badge bg-primary">
+                                            <span class="badge rounded-pill"
+                                                  style="background:rgba(59,130,246,0.1);color:#1d4ed8;border:1px solid rgba(59,130,246,0.25);font-size:0.82rem;">
                                                 {{ $sucursal['CantidadVendedores'] }}
                                             </span>
                                         </td>
-                                        <td class="text-end fw-bold text-success">
+                                        <td class="pe-4 text-end fw-bold text-success">
                                             $ {{ number_format($sucursal['MontoLiberalidadSucursal'], 2, ',', '.') }}
                                         </td>
                                     </tr>
                                     @endforeach
                                 </tbody>
-                                <tfoot class="table-secondary">
-                                    <tr class="fw-bold">
-                                        <td class="text-end">TOTAL GENERAL:</td>
-                                        <td class="text-center">
-                                            <span class="badge bg-dark">
+                                <tfoot>
+                                    <tr style="background:#f0fdf4;border-top:2px solid #bbf7d0;">
+                                        <td class="ps-4 py-2 fw-bold text-dark text-end">TOTAL GENERAL:</td>
+                                        <td class="py-2 text-center">
+                                            <span class="badge rounded-pill fw-bold"
+                                                  style="background:rgba(17,24,39,0.85);color:#fff;font-size:0.82rem;">
                                                 {{ $totalVendedores }} vendedores
                                             </span>
                                         </td>
-                                        <td class="text-end text-success">
+                                        <td class="pe-4 py-2 text-end fw-bold text-success">
                                             $ {{ number_format($totalGeneral, 2, ',', '.') }}
                                         </td>
                                     </tr>
@@ -392,252 +378,240 @@
                     </div>
                 </div>
                 @endif
-            
-            <div class="card">
-                <div class="card-header">
-                    <div class="row align-items-center">
-                        <!-- Título y Buscador (Izquierda) -->
-                        <div class="col-md-8 d-flex align-items-center gap-3">
-                            <h3 class="card-title mb-0">
-                                <i class="fas fa-chart-line me-2"></i>Reporte de Liberalidad
-                            </h3>
-                            
-                            <!-- Buscador -->
-                            <div class="input-group input-group-sm" style="width: 250px;">
-                                <span class="input-group-text">
-                                    <i class="fas fa-search"></i>
-                                </span>
-                                <input type="text" 
-                                    id="buscadorEmpleado" 
-                                    class="form-control" 
-                                    placeholder="Buscar empleado..."
-                                    autocomplete="off">
-                                <button class="btn btn-outline-secondary" type="button" id="limpiarBuscador">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <!-- Botones (Derecha) -->
-                        <div class="col-md-4 text-end">
-                            <div class="btn-group">
-                                <!-- Botón Cerrar Liberalidad (solo cuando NO está cerrada) -->
-                                <button type="button" 
-                                        class="btn btn-sm btn-success" 
+
+                {{-- Tabla principal de liberalidad activa --}}
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header border-0 py-3"
+                         style="background:linear-gradient(135deg,#10b981 0%,#059669 100%);">
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <h6 class="mb-0 fw-bold text-white">
+                                <i class="bi bi-chart-line me-2"></i>Reporte de Liberalidad
+                            </h6>
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <div class="input-group input-group-sm" style="width:220px;">
+                                    <span class="input-group-text"
+                                          style="background:rgba(255,255,255,0.2);border-color:rgba(255,255,255,0.3);">
+                                        <i class="bi bi-search text-white" style="font-size:0.8rem;"></i>
+                                    </span>
+                                    <input type="text"
+                                           id="buscadorEmpleado"
+                                           class="form-control"
+                                           style="background:rgba(255,255,255,0.15);border-color:rgba(255,255,255,0.3);color:#fff;font-size:0.82rem;"
+                                           placeholder="Buscar empleado..."
+                                           autocomplete="off">
+                                    <button class="btn" type="button" id="limpiarBuscador"
+                                            style="background:rgba(255,255,255,0.2);border-color:rgba(255,255,255,0.3);color:#fff;">
+                                        <i class="bi bi-x-lg" style="font-size:0.75rem;"></i>
+                                    </button>
+                                </div>
+                                <button type="button"
+                                        class="btn btn-sm fw-semibold"
                                         id="btnCerrarLiberalidad"
-                                        onclick="cerrarLiberalidad()">
-                                    <i class="fas fa-lock me-1"></i>Cerrar Liberalidad
+                                        onclick="cerrarLiberalidad()"
+                                        style="background:rgba(255,255,255,0.25);color:#fff;border:1px solid rgba(255,255,255,0.5);font-size:0.8rem;">
+                                    <i class="bi bi-lock me-1"></i>Cerrar
                                 </button>
-                                
-                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="pdfTablaLiberalidad()">
-                                    <i class="fas fa-print me-1"></i>PDF
+                                <button type="button" class="btn btn-sm fw-semibold"
+                                        style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.35);font-size:0.8rem;"
+                                        onclick="pdfTablaLiberalidad()">
+                                    <i class="bi bi-file-pdf me-1"></i>PDF
                                 </button>
-                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="exportarExcelLiberalidad()">
-                                    <i class="fas fa-file-excel me-1"></i>Excel
+                                <button type="button" class="btn btn-sm fw-semibold"
+                                        style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.35);font-size:0.8rem;"
+                                        onclick="exportarExcelLiberalidad()">
+                                    <i class="bi bi-file-earmark-excel me-1"></i>Excel
                                 </button>
                             </div>
                         </div>
                     </div>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
-                        <table class="table table-hover mb-0" id="tablaLiberalidad">
-                            <thead class="table-light">
-                                <th width="80" class="text-center">Foto</th>
-                                <th class="sortable" data-col="empleado">Empleado</th>
-                                <th width="200" class="sortable" data-col="sucursal">Sucursal</th>
-                                <th width="150" class="text-center sortable" data-col="unidades">Unidades</th>
-                                <th width="150" class="text-center sortable" data-col="ventas">Ventas</th>
-                                <th width="150" class="text-center sortable" data-col="bonos">Bonos</th>
-                                <th width="150" class="text-center sortable" data-col="deducciones">Deducciones</th>
-                                <th width="150" class="text-end sortable" data-col="liberalidad">Liberalidad</th>
-                                <th width="150" class="text-end sortable" data-col="neto">Neto</th>
-                            </thead>
-                            <tbody>
-                                @foreach($liberalidad->detalles as $index => $detalle)
-                                    @php
-                                        // Obtener datos del usuario
-                                        $usuario = $detalle->Usuario ?? null;
-                                        $usuarioId = $detalle->UsuarioId ?? $detalle->EmpleadoId ?? '';
-                                        $nombre = $usuario->NombreCompleto ?? 'Empleado';
-                                        $vendedorId = $usuario->VendedorId ?? '';
-                                        
-                                        // Obtener nombre de sucursal
-                                        $sucursalNombre = 'N/A';
-                                        if ($usuario) {
-                                            if (isset($usuario->Sucursal) && is_object($usuario->Sucursal)) {
-                                                $sucursalNombre = $usuario->Sucursal->Nombre ?? 'N/A';
-                                            } elseif (isset($usuario->sucursal) && is_object($usuario->sucursal)) {
-                                                $sucursalNombre = $usuario->sucursal->Nombre ?? 'N/A';
-                                            } elseif (isset($usuario->SucursalNombre)) {
-                                                $sucursalNombre = $usuario->SucursalNombre;
-                                            }
-                                        }
-                                        
-                                        $fotoPerfil = $usuario->FotoPerfil ?? '';
-                                        
-                                        $imgSrc = FileHelper::getOrDownloadFile(
-                                            'images/usuarios/',
-                                            $fotoPerfil,
-                                            'assets/img/adminlte/img/default.png'
-                                        );
-                                        
-                                        // Calcular bonos (solo pendientes)
-                                        $bonosPendientes = $detalle->bonos_pendientes ?? 0;
-                                        $totalBonosUSD = 0;
-                                        if (isset($detalle->bonos)) {
-                                            $totalBonosUSD = $detalle->bonos->where('EsPagado', 0)->sum('MontoDivisa');
-                                        }
-                                        
-                                        // Calcular deducciones (solo pendientes) - NUEVO
-                                        $deduccionesPendientes = $detalle->deducciones_pendientes ?? 0;
-                                        $totalDeduccionesUSD = 0;
-                                        if (isset($detalle->deducciones)) {
-                                            $totalDeduccionesUSD = $detalle->deducciones->where('EsPagado', 0)->sum('MontoDivisa');
-                                        }
-                                        
-                                        $liberalidadUSD = $detalle->MontoLiberalidad ?? 0;
-                                        $netoUSD = $liberalidadUSD + $totalBonosUSD - $totalDeduccionesUSD;
-                                    @endphp
-                                    <tr class="align-middle">                                        
-                                        <!-- Foto -->
-                                        <td class="text-center">
-                                            <img src="{{ $imgSrc }}" 
-                                                alt="{{ $nombre }}"
-                                                class="rounded-circle border border-success img-zoomable" 
-                                                style="width: 50px; height: 50px; object-fit: cover; cursor: zoom-in;"
-                                                onclick="zoomImagen(this)"
-                                                data-full-image="{{ $imgSrc }}"
-                                                data-description="{{ $nombre }}">
-                                        </td>
-                                        
-                                        <!-- Empleado -->
-                                        <td data-order="{{ $nombre }}">
-                                            <strong>{{ $nombre }}</strong>
-                                            @if($vendedorId)
-                                                <br>
-                                                <small class="text-muted">
-                                                    <i class="fas fa-id-badge me-1"></i>{{ $vendedorId }}
-                                                </small>
-                                            @endif
-                                            @if($detalle->EsVendedor ?? false)
-                                                <span class="badge bg-success ms-1">Vendedor</span>
-                                            @else
-                                                <span class="badge bg-info ms-1">Interno</span>
-                                            @endif
-                                        </td>
-                                        
-                                        <!-- Sucursal -->
-                                        <td data-order="{{ $sucursalNombre }}">
-                                            <span class="badge bg-warning text-white p-2">
-                                                <i class="fas fa-store me-1"></i>{{ $sucursalNombre }}
-                                            </span>
-                                        </td>
-                                        
-                                        <!-- Unidades -->
-                                        <td class="text-center fw-bold" data-order="{{ $detalle->Unidades ?? 0 }}">
-                                            <span class="badge bg-primary text-white p-2">
-                                                {{ number_format($detalle->Unidades ?? 0, 0, ',', '.') }}
-                                            </span>
-                                        </td>
-                                        
-                                        <!-- Ventas USD -->
-                                        <td class="text-center text-success fw-bold" data-order="{{ $detalle->Venta ?? 0 }}">
-                                            $ {{ number_format($detalle->Venta ?? 0, 2, ',', '.') }}
-                                        </td>
-                                        
-                                        <!-- Bonos USD -->
-                                        <td class="text-center">
-                                            @if($totalBonosUSD > 0)
-                                                <span class="text-success">
-                                                    <i class="fas fa-gift me-1"></i>
-                                                    $ {{ number_format($totalBonosUSD, 2, ',', '.') }}
-                                                </span>
-                                                @if($bonosPendientes > 0)
-                                                    <br><small class="text-muted">({{ $bonosPendientes }} pendiente{{ $bonosPendientes != 1 ? 's' : '' }})</small>
-                                                @endif
-                                            @else
-                                                <span class="text-muted">$ 0,00</span>
-                                            @endif
-                                        </td>
-                                        
-                                        <!-- Deducciones USD (NUEVA) -->
-                                        <td class="text-center">
-                                            @if($totalDeduccionesUSD > 0)
-                                                <span class="text-danger">
-                                                    <i class="fas fa-minus-circle me-1"></i>
-                                                    - $ {{ number_format($totalDeduccionesUSD, 2, ',', '.') }}
-                                                </span>
-                                                @if($deduccionesPendientes > 0)
-                                                    <br><small class="text-muted">({{ $deduccionesPendientes }} pendiente{{ $deduccionesPendientes != 1 ? 's' : '' }})</small>
-                                                @endif
-                                            @else
-                                                <span class="text-muted">$ 0,00</span>
-                                            @endif
-                                        </td>
-                                        
-                                        <!-- Liberalidad USD -->
-                                        <td class="text-center">                                            
-                                            <span class="text-success">
-                                                <i class="fas fa-gift me-1"></i>
-                                                $ {{ number_format($liberalidadUSD, 2, ',', '.') }}
-                                            </span>
-                                        </td>
-                                        
-                                        <!-- Neto USD -->
-                                        <td class="text-end fw-bold text-primary">
-                                            <span class="badge bg-dark p-2">
-                                                <i class="fas fa-calculator me-1"></i>
-                                                $ {{ number_format($netoUSD, 2, ',', '.') }}
-                                            </span>
-                                        </td>
+                    <div class="card-body p-0">
+                        <div class="table-responsive" style="max-height:600px;overflow-y:auto;">
+                            <table class="table table-hover align-middle mb-0" id="tablaLiberalidad">
+                                <thead>
+                                    <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;position:sticky;top:0;z-index:10;">
+                                        <th class="ps-3 py-3 text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;width:70px;">FOTO</th>
+                                        <th class="py-3 text-muted fw-semibold sortable" data-col="empleado" style="font-size:0.75rem;letter-spacing:.06em;cursor:pointer;">
+                                            EMPLEADO <i class="bi bi-arrow-down-up ms-1" style="font-size:0.7rem;opacity:.5;"></i>
+                                        </th>
+                                        <th class="py-3 text-muted fw-semibold sortable" data-col="sucursal" style="font-size:0.75rem;letter-spacing:.06em;width:180px;cursor:pointer;">
+                                            SUCURSAL <i class="bi bi-arrow-down-up ms-1" style="font-size:0.7rem;opacity:.5;"></i>
+                                        </th>
+                                        <th class="py-3 text-center text-muted fw-semibold sortable" data-col="unidades" style="font-size:0.75rem;letter-spacing:.06em;width:110px;cursor:pointer;">
+                                            UNIDADES <i class="bi bi-arrow-down-up ms-1" style="font-size:0.7rem;opacity:.5;"></i>
+                                        </th>
+                                        <th class="py-3 text-center text-muted fw-semibold sortable" data-col="ventas" style="font-size:0.75rem;letter-spacing:.06em;width:130px;cursor:pointer;">
+                                            VENTAS <i class="bi bi-arrow-down-up ms-1" style="font-size:0.7rem;opacity:.5;"></i>
+                                        </th>
+                                        <th class="py-3 text-center text-muted fw-semibold sortable" data-col="bonos" style="font-size:0.75rem;letter-spacing:.06em;width:130px;cursor:pointer;">
+                                            BONOS <i class="bi bi-arrow-down-up ms-1" style="font-size:0.7rem;opacity:.5;"></i>
+                                        </th>
+                                        <th class="py-3 text-center text-muted fw-semibold sortable" data-col="deducciones" style="font-size:0.75rem;letter-spacing:.06em;width:140px;cursor:pointer;">
+                                            DEDUCCIONES <i class="bi bi-arrow-down-up ms-1" style="font-size:0.7rem;opacity:.5;"></i>
+                                        </th>
+                                        <th class="py-3 text-end text-muted fw-semibold sortable" data-col="liberalidad" style="font-size:0.75rem;letter-spacing:.06em;width:130px;cursor:pointer;">
+                                            LIBERALIDAD <i class="bi bi-arrow-down-up ms-1" style="font-size:0.7rem;opacity:.5;"></i>
+                                        </th>
+                                        <th class="pe-3 py-3 text-end text-muted fw-semibold sortable" data-col="neto" style="font-size:0.75rem;letter-spacing:.06em;width:130px;cursor:pointer;">
+                                            NETO <i class="bi bi-arrow-down-up ms-1" style="font-size:0.7rem;opacity:.5;"></i>
+                                        </th>
                                     </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                <div class="card-footer">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <small class="text-muted">
-                                <i class="fas fa-calendar-alt me-1"></i>
-                                Período: {{ $fechaInicio->format('d/m/Y') }} - {{ $fechaFin->format('d/m/Y') }}
-                            </small>
+                                </thead>
+                                <tbody>
+                                    @foreach($liberalidad->detalles as $index => $detalle)
+                                        @php
+                                            $usuario = $detalle->Usuario ?? null;
+                                            $usuarioId = $detalle->UsuarioId ?? $detalle->EmpleadoId ?? '';
+                                            $nombre = $usuario->NombreCompleto ?? 'Empleado';
+                                            $vendedorId = $usuario->VendedorId ?? '';
+
+                                            $sucursalNombre = 'N/A';
+                                            if ($usuario) {
+                                                if (isset($usuario->Sucursal) && is_object($usuario->Sucursal)) {
+                                                    $sucursalNombre = $usuario->Sucursal->Nombre ?? 'N/A';
+                                                } elseif (isset($usuario->sucursal) && is_object($usuario->sucursal)) {
+                                                    $sucursalNombre = $usuario->sucursal->Nombre ?? 'N/A';
+                                                } elseif (isset($usuario->SucursalNombre)) {
+                                                    $sucursalNombre = $usuario->SucursalNombre;
+                                                }
+                                            }
+
+                                            $fotoPerfil = $usuario->FotoPerfil ?? '';
+                                            $imgSrc = FileHelper::getOrDownloadFile(
+                                                'images/usuarios/',
+                                                $fotoPerfil,
+                                                'assets/img/adminlte/img/default.png'
+                                            );
+
+                                            $bonosPendientes = $detalle->bonos_pendientes ?? 0;
+                                            $totalBonosUSD = 0;
+                                            if (isset($detalle->bonos)) {
+                                                $totalBonosUSD = $detalle->bonos->where('EsPagado', 0)->sum('MontoDivisa');
+                                            }
+
+                                            $deduccionesPendientes = $detalle->deducciones_pendientes ?? 0;
+                                            $totalDeduccionesUSD = 0;
+                                            if (isset($detalle->deducciones)) {
+                                                $totalDeduccionesUSD = $detalle->deducciones->where('EsPagado', 0)->sum('MontoDivisa');
+                                            }
+
+                                            $liberalidadUSD = $detalle->MontoLiberalidad ?? 0;
+                                            $netoUSD = $liberalidadUSD + $totalBonosUSD - $totalDeduccionesUSD;
+                                        @endphp
+                                        <tr style="border-bottom:1px solid #f1f5f9;">
+                                            <td class="ps-3">
+                                                <img src="{{ $imgSrc }}"
+                                                     alt="{{ $nombre }}"
+                                                     class="rounded-circle img-zoomable"
+                                                     style="width:46px;height:46px;object-fit:cover;border:2px solid #e2e8f0;cursor:zoom-in;"
+                                                     onclick="zoomImagen(this)"
+                                                     data-full-image="{{ $imgSrc }}"
+                                                     data-description="{{ $nombre }}">
+                                            </td>
+                                            <td data-order="{{ $nombre }}">
+                                                <p class="mb-0 fw-bold text-dark">{{ $nombre }}</p>
+                                                @if($vendedorId)
+                                                    <small class="text-muted">
+                                                        <i class="bi bi-person-badge me-1"></i>{{ $vendedorId }}
+                                                    </small>
+                                                @endif
+                                                @if($detalle->EsVendedor ?? false)
+                                                    <span class="badge rounded-pill ms-1"
+                                                          style="background:rgba(16,185,129,0.1);color:#059669;border:1px solid rgba(16,185,129,0.25);font-size:0.72rem;">Vendedor</span>
+                                                @else
+                                                    <span class="badge rounded-pill ms-1"
+                                                          style="background:rgba(6,182,212,0.1);color:#0891b2;border:1px solid rgba(6,182,212,0.25);font-size:0.72rem;">Interno</span>
+                                                @endif
+                                            </td>
+                                            <td data-order="{{ $sucursalNombre }}">
+                                                <span class="badge rounded-pill px-2 py-1 fw-semibold"
+                                                      style="background:rgba(245,158,11,0.1);color:#92400e;border:1px solid rgba(245,158,11,0.25);font-size:0.78rem;">
+                                                    <i class="bi bi-shop me-1"></i>{{ $sucursalNombre }}
+                                                </span>
+                                            </td>
+                                            <td class="text-center fw-bold" data-order="{{ $detalle->Unidades ?? 0 }}">
+                                                <span class="badge rounded-pill px-2 py-1"
+                                                      style="background:rgba(59,130,246,0.1);color:#1d4ed8;border:1px solid rgba(59,130,246,0.25);font-size:0.82rem;">
+                                                    {{ number_format($detalle->Unidades ?? 0, 0, ',', '.') }}
+                                                </span>
+                                            </td>
+                                            <td class="text-center fw-semibold text-success" data-order="{{ $detalle->Venta ?? 0 }}">
+                                                $ {{ number_format($detalle->Venta ?? 0, 2, ',', '.') }}
+                                            </td>
+                                            <td class="text-center" data-order="{{ $totalBonosUSD }}">
+                                                @if($totalBonosUSD > 0)
+                                                    <span class="text-success fw-semibold">
+                                                        <i class="bi bi-gift me-1"></i>$ {{ number_format($totalBonosUSD, 2, ',', '.') }}
+                                                    </span>
+                                                    @if($bonosPendientes > 0)
+                                                        <br><small class="text-muted">({{ $bonosPendientes }} pendiente{{ $bonosPendientes != 1 ? 's' : '' }})</small>
+                                                    @endif
+                                                @else
+                                                    <span class="text-muted">$ 0,00</span>
+                                                @endif
+                                            </td>
+                                            <td class="text-center" data-order="{{ $totalDeduccionesUSD }}">
+                                                @if($totalDeduccionesUSD > 0)
+                                                    <span class="text-danger fw-semibold">
+                                                        <i class="bi bi-dash-circle me-1"></i>- $ {{ number_format($totalDeduccionesUSD, 2, ',', '.') }}
+                                                    </span>
+                                                    @if($deduccionesPendientes > 0)
+                                                        <br><small class="text-muted">({{ $deduccionesPendientes }} pendiente{{ $deduccionesPendientes != 1 ? 's' : '' }})</small>
+                                                    @endif
+                                                @else
+                                                    <span class="text-muted">$ 0,00</span>
+                                                @endif
+                                            </td>
+                                            <td class="text-end fw-semibold text-success" data-order="{{ $liberalidadUSD }}">
+                                                <i class="bi bi-gift me-1"></i>$ {{ number_format($liberalidadUSD, 2, ',', '.') }}
+                                            </td>
+                                            <td class="pe-3 text-end" data-order="{{ $netoUSD }}">
+                                                <span class="badge rounded-pill px-2 py-1 fw-bold"
+                                                      style="background:rgba(17,24,39,0.85);color:#fff;font-size:0.82rem;">
+                                                    <i class="bi bi-calculator me-1"></i>$ {{ number_format($netoUSD, 2, ',', '.') }}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
                         </div>
-                        <div class="col-md-6 text-end">
+                    </div>
+                    <div class="card-footer border-0 py-2 px-4"
+                         style="background:#f8fafc;border-top:1px solid #e2e8f0 !important;">
+                        <div class="d-flex justify-content-between align-items-center">
                             <small class="text-muted">
-                                <i class="fas fa-users me-1"></i>
+                                <i class="bi bi-calendar me-1"></i>
+                                Período: {{ $fechaInicio->format('d/m/Y') }} — {{ $fechaFin->format('d/m/Y') }}
+                            </small>
+                            <small class="text-muted">
+                                <i class="bi bi-people me-1"></i>
                                 Total empleados: {{ $liberalidad->detalles->count() }}
                             </small>
                         </div>
                     </div>
                 </div>
-            </div>
+
             @else
-            <div class="card">
+            {{-- Empty state --}}
+            <div class="card border-0 shadow-sm">
                 <div class="card-body text-center py-5">
-                    <div class="empty-state">
-                        <div class="empty-state-icon">
-                            <i class="fas fa-chart-line fa-4x text-muted"></i>
-                        </div>
-                        <h3 class="empty-state-title mt-3">No hay datos para mostrar</h3>
-                        <p class="empty-state-subtitle">
-                            No se encontraron ventas o empleados para el período seleccionado.
-                        </p>
+                    <div class="d-flex align-items-center justify-content-center rounded-2 mx-auto mb-3"
+                         style="width:56px;height:56px;background:linear-gradient(135deg,#10b981,#059669);opacity:0.5;">
+                        <i class="bi bi-chart-line text-white" style="font-size:1.5rem;"></i>
                     </div>
+                    <h5 class="fw-bold text-dark mb-1">No hay datos para mostrar</h5>
+                    <p class="text-muted mb-0">No se encontraron ventas o empleados para el período seleccionado.</p>
                 </div>
             </div>
             @endif
         @endif
-        
+
     </div>
 </div>
 
 @endsection
 
 @section('js')
-
 <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
@@ -648,7 +622,7 @@
 
     const liberalidadPorSucursal = @json($liberalidadPorSucursal ?? []);
     const periodoActual = '{{ $periodo ?? date("Y-m") }}';
-    
+
     document.addEventListener("DOMContentLoaded", function() {
         // Tooltips
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
@@ -662,18 +636,18 @@
         const buscador = document.getElementById('buscadorEmpleado');
         const tabla = document.getElementById('tablaLiberalidad');
         const limpiarBtn = document.getElementById('limpiarBuscador');
-        
+
         if (buscador && tabla) {
             function filtrarTabla() {
                 const textoBusqueda = buscador.value.toLowerCase().trim();
                 const filas = tabla.querySelectorAll('tbody tr');
                 let filasVisibles = 0;
-                
+
                 filas.forEach(fila => {
                     const celdaEmpleado = fila.children[1];
                     if (celdaEmpleado) {
                         const textoEmpleado = celdaEmpleado.textContent.toLowerCase();
-                        
+
                         if (textoBusqueda === '' || textoEmpleado.includes(textoBusqueda)) {
                             fila.style.display = '';
                             filasVisibles++;
@@ -682,10 +656,10 @@
                         }
                     }
                 });
-                
+
                 const tbody = tabla.querySelector('tbody');
                 let mensajeNoResultados = document.getElementById('mensajeNoResultados');
-                
+
                 if (filasVisibles === 0 && textoBusqueda !== '') {
                     if (!mensajeNoResultados) {
                         mensajeNoResultados = document.createElement('tr');
@@ -703,9 +677,9 @@
                     mensajeNoResultados.remove();
                 }
             }
-            
+
             buscador.addEventListener('input', filtrarTabla);
-            
+
             if (limpiarBtn) {
                 limpiarBtn.addEventListener('click', function() {
                     buscador.value = '';
@@ -713,7 +687,7 @@
                     buscador.focus();
                 });
             }
-            
+
             buscador.addEventListener('keydown', function(e) {
                 if (e.key === 'Escape') {
                     buscador.value = '';
@@ -736,21 +710,21 @@
 
             ths.forEach(th => {
                 th.style.cursor = 'pointer';
-                
+
                 th.addEventListener('click', () => {
                     const colIndex = Array.from(th.parentNode.children).indexOf(th);
-                    
+
                     document.querySelectorAll('.sort-icon').forEach(icon => {
                         icon.innerHTML = '↕️';
                     });
-                    
+
                     if (columnaActual === colIndex) {
                         ordenAscendente = !ordenAscendente;
                     } else {
                         ordenAscendente = true;
                         columnaActual = colIndex;
                     }
-                    
+
                     const icono = th.querySelector('.sort-icon');
                     if (icono) {
                         icono.innerHTML = ordenAscendente ? '⬆️' : '⬇️';
@@ -758,7 +732,7 @@
                         ths.forEach(t => t.classList.remove('sort-asc', 'sort-desc'));
                         th.classList.add(ordenAscendente ? 'sort-asc' : 'sort-desc');
                     }
-                    
+
                     ordenarTabla(tabla, colIndex, ordenAscendente);
                 });
             });
@@ -770,7 +744,7 @@
                 filasReales.sort((a, b) => {
                     const tdA = a.children[index];
                     const tdB = b.children[index];
-                    
+
                     if (!tdA || !tdB) return 0;
 
                     const valorA = tdA.dataset.order || extraerValorCelda(tdA);
@@ -782,18 +756,18 @@
                     if (!isNaN(numA) && !isNaN(numB)) {
                         return asc ? numA - numB : numB - numA;
                     } else {
-                        return asc 
+                        return asc
                             ? valorA.toString().localeCompare(valorB.toString())
                             : valorB.toString().localeCompare(valorA.toString());
                     }
                 });
 
                 const filasOcultas = Array.from(tbody.querySelectorAll('tr[style*="display: none"]'));
-                
+
                 while (tbody.firstChild) {
                     tbody.removeChild(tbody.firstChild);
                 }
-                
+
                 filasReales.forEach(fila => tbody.appendChild(fila));
                 filasOcultas.forEach(fila => tbody.appendChild(fila));
             }
@@ -803,28 +777,28 @@
                 if (badge) {
                     return badge.textContent.trim().replace(/[$,]/g, '');
                 }
-                
+
                 const strong = td.querySelector('strong');
                 if (strong) {
                     return strong.textContent.trim();
                 }
-                
+
                 return td.textContent.trim().replace(/[$,]/g, '');
             }
         })();
-        
+
         if (sessionStorage.getItem('generarPDF') === 'true') {
             const periodo = sessionStorage.getItem('periodoPDF');
             sessionStorage.removeItem('generarPDF');
             sessionStorage.removeItem('periodoPDF');
-            
+
             // Esperar a que la tabla se actualice completamente
             setTimeout(() => {
                 generarPDFLiberalidadConDatos(periodo);
             }, 1000);
         }
     });
-    
+
     function zoomImagen(img) {
         Swal.fire({
             imageUrl: img.src,
@@ -840,18 +814,18 @@
             }
         });
     }
-    
+
     function pdfTablaLiberalidad() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('landscape');
         let yPosition = 20;
-        
+
         // Título principal
         doc.setFontSize(16);
         doc.setTextColor(41, 128, 185);
         doc.text('Reporte de Liberalidad', 14, yPosition);
         yPosition += 8;
-        
+
         // Información del período
         doc.setFontSize(10);
         doc.setTextColor(100, 100, 100);
@@ -859,7 +833,7 @@
         yPosition += 7;
         doc.text(`Fecha de generación: ${new Date().toLocaleString('es-VE')}`, 14, yPosition);
         yPosition += 10;
-        
+
         // ============================================
         // AGREGAR RESUMEN POR SUCURSAL SI EXISTE
         // ============================================
@@ -869,7 +843,7 @@
             const resumenBody = [];
             let totalVendedores = 0;
             let totalMonto = 0;
-            
+
             liberalidadPorSucursal.forEach(sucursal => {
                 totalVendedores += sucursal.CantidadVendedores;
                 totalMonto += sucursal.MontoLiberalidadSucursal;
@@ -879,20 +853,20 @@
                     `$ ${sucursal.MontoLiberalidadSucursal.toFixed(2)}`
                 ]);
             });
-            
+
             // Agregar fila de totales
             resumenBody.push([
                 'TOTAL GENERAL',
                 totalVendedores.toString(),
                 `$ ${totalMonto.toFixed(2)}`
             ]);
-            
+
             // Título del resumen
             doc.setFontSize(12);
             doc.setTextColor(0, 0, 0);
             doc.text('Resumen por Sucursal', 14, yPosition);
             yPosition += 5;
-            
+
             // Tabla de resumen
             doc.autoTable({
                 head: resumenHeaders,
@@ -919,10 +893,10 @@
                     yPosition = data.cursor.y + 10;
                 }
             });
-            
+
             yPosition = doc.lastAutoTable.finalY + 10;
         }
-        
+
         // ============================================
         // AGREGAR TABLA DE EMPLEADOS
         // ============================================
@@ -930,10 +904,10 @@
         if (tabla) {
             // Clonar la tabla para no modificar la original
             const tablaClone = tabla.cloneNode(true);
-            
+
             // OBTENER TODAS LAS FILAS (incluyendo thead y tbody)
             const todasLasFilas = tablaClone.querySelectorAll('tr');
-            
+
             // Ocultar la primera columna (Foto) en TODAS las filas
             todasLasFilas.forEach(row => {
                 const primeraCelda = row.querySelector('th:first-child, td:first-child');
@@ -941,7 +915,7 @@
                     primeraCelda.style.display = 'none';
                 }
             });
-            
+
             // También eliminar específicamente el texto "Foto" del encabezado si quedara
             const thead = tablaClone.querySelector('thead');
             if (thead) {
@@ -950,7 +924,7 @@
                     thumbs[0].style.display = 'none';
                 }
             }
-            
+
             // Opcional: Ocultar columna de Detalle si existe (última columna)
             const headers = thead ? thead.querySelectorAll('th') : [];
             if (headers.length > 0) {
@@ -965,17 +939,17 @@
                     });
                 }
             }
-            
+
             // Generar tabla de empleados
             doc.autoTable({
                 html: tablaClone,
                 startY: yPosition,
                 theme: 'grid',
-                styles: { 
+                styles: {
                     fontSize: 7,
                     cellPadding: 2
                 },
-                headStyles: { 
+                headStyles: {
                     fillColor: [41, 128, 185],
                     textColor: [255, 255, 255],
                     fontSize: 8,
@@ -1003,16 +977,16 @@
             doc.setTextColor(150, 150, 150);
             doc.text('No hay datos de empleados para mostrar', 14, yPosition);
         }
-        
+
         // Guardar PDF
         const fecha = new Date().toISOString().slice(0, 10);
         doc.save(`Liberalidad_${periodoActual}_${fecha}.pdf`);
     }
-    
+
     function exportarExcelLiberalidad() {
         const tabla = document.getElementById('tablaLiberalidad');
         if (!tabla) return;
-        
+
         const wb = XLSX.utils.table_to_book(tabla, {sheet: "Liberalidad"});
         XLSX.writeFile(wb, `Liberalidad_${new Date().toISOString().slice(0,10)}.xlsx`);
     }
@@ -1024,7 +998,7 @@
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('landscape');
         let yPosition = 20;
-        
+
         // ============================================
         // FUNCIÓN AUXILIAR PARA LIMPIAR NÚMEROS
         // ============================================
@@ -1036,26 +1010,26 @@
             limpio = limpio.replace(',', '.');
             return parseFloat(limpio) || 0;
         };
-        
+
         const limpiarEntero = (texto) => {
             if (!texto) return 0;
             return parseInt(texto.replace(/\./g, '')) || 0;
         };
-        
+
         const limpiarNombre = (texto) => {
             if (!texto) return '';
             return texto.replace('Vendedor', '').replace('Interno', '').trim();
         };
-        
+
         // ============================================
         // OBTENER RESUMEN POR SUCURSAL
         // ============================================
         let resumenData = null;
-        
+
         // Intentar obtener de la variable global
         if (typeof liberalidadPorSucursal !== 'undefined' && liberalidadPorSucursal && liberalidadPorSucursal.length > 0) {
             resumenData = liberalidadPorSucursal;
-        } 
+        }
         // Intentar obtener del sessionStorage (para después del reload)
         else if (sessionStorage.getItem('resumenPorSucursal')) {
             resumenData = JSON.parse(sessionStorage.getItem('resumenPorSucursal'));
@@ -1083,7 +1057,7 @@
                 }
             }
         }
-        
+
         // ============================================
         // AGREGAR RESUMEN POR SUCURSAL SI EXISTE
         // ============================================
@@ -1093,7 +1067,7 @@
             doc.setTextColor(41, 128, 185);
             doc.text('Reporte de Liberalidad', 14, yPosition);
             yPosition += 8;
-            
+
             // Información del período
             doc.setFontSize(10);
             doc.setTextColor(100, 100, 100);
@@ -1101,13 +1075,13 @@
             yPosition += 7;
             doc.text(`Fecha de generación: ${new Date().toLocaleString('es-VE')}`, 14, yPosition);
             yPosition += 10;
-            
+
             // Preparar datos del resumen
             const resumenHeaders = [['Sucursal', 'Cantidad Vendedores', 'Monto Liberalidad (USD)']];
             const resumenBody = [];
             let totalVendedores = 0;
             let totalMonto = 0;
-            
+
             resumenData.forEach(sucursal => {
                 totalVendedores += sucursal.CantidadVendedores;
                 totalMonto += sucursal.MontoLiberalidadSucursal;
@@ -1117,20 +1091,20 @@
                     `$ ${sucursal.MontoLiberalidadSucursal.toFixed(2)}`
                 ]);
             });
-            
+
             // Agregar fila de totales
             resumenBody.push([
                 'TOTAL GENERAL',
                 totalVendedores.toString(),
                 `$ ${totalMonto.toFixed(2)}`
             ]);
-            
+
             // Título del resumen
             doc.setFontSize(12);
             doc.setTextColor(0, 0, 0);
             doc.text('Resumen por Sucursal', 14, yPosition);
             yPosition += 5;
-            
+
             // Tabla de resumen
             doc.autoTable({
                 head: resumenHeaders,
@@ -1154,7 +1128,7 @@
                     2: { cellWidth: 45, halign: 'right' }
                 }
             });
-            
+
             yPosition = doc.lastAutoTable.finalY + 15;
         } else {
             // Si no hay resumen, mostrar solo el encabezado normal
@@ -1162,7 +1136,7 @@
             doc.setTextColor(41, 128, 185);
             doc.text('Reporte de Liberalidad', 14, yPosition);
             yPosition += 8;
-            
+
             doc.setFontSize(10);
             doc.setTextColor(100, 100, 100);
             doc.text(`Período: ${periodo}`, 14, yPosition);
@@ -1170,7 +1144,7 @@
             doc.text(`Fecha de generación: ${new Date().toLocaleString('es-VE')}`, 14, yPosition);
             yPosition += 10;
         }
-        
+
         // ============================================
         // EXTRAER DATOS DE LA TABLA
         // ============================================
@@ -1179,14 +1153,14 @@
             console.error('No se encontró la tabla');
             return;
         }
-        
+
         const headers = [
             ['Empleado', 'Sucursal', 'Unidades', 'Ventas USD', 'Bonos USD', 'Deducciones USD', 'Liberalidad USD', 'Neto USD']
         ];
         const rows = [];
-        
+
         const filas = tabla.querySelectorAll('tbody tr');
-        
+
         filas.forEach(fila => {
             const celdas = fila.querySelectorAll('td');
             if (celdas.length >= 9) {
@@ -1202,7 +1176,7 @@
                 ]);
             }
         });
-        
+
         // ============================================
         // CALCULAR TOTALES
         // ============================================
@@ -1214,7 +1188,7 @@
             liberalidad: 0,
             neto: 0
         };
-        
+
         rows.forEach(row => {
             totales.unidades += row[2];
             totales.ventas += row[3];
@@ -1223,7 +1197,7 @@
             totales.liberalidad += row[6];
             totales.neto += row[7];
         });
-        
+
         // Agregar fila de totales
         rows.push([
             'TOTALES',
@@ -1235,7 +1209,7 @@
             `$ ${totales.liberalidad.toFixed(2)}`,
             `$ ${totales.neto.toFixed(2)}`
         ]);
-        
+
         // Formatear filas para visualización
         const filasFormateadas = rows.map((row, index) => {
             if (index === rows.length - 1) return row; // Totales
@@ -1250,7 +1224,7 @@
                 `$ ${row[7].toFixed(2)}`
             ];
         });
-        
+
         // ============================================
         // GENERAR TABLA DE EMPLEADOS
         // ============================================
@@ -1294,7 +1268,7 @@
                 );
             }
         });
-        
+
         // Guardar PDF
         doc.save(`Liberalidad_${periodo}_${new Date().toISOString().slice(0,10)}.pdf`);
     }
@@ -1309,7 +1283,7 @@
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
-            
+
             // Limpiar memoria
             pdfEnMemoria = null;
             nombreArchivo = null;
@@ -1318,7 +1292,7 @@
 
     function cerrarLiberalidad() {
         const periodo = document.getElementById('periodo').value;
-        
+
         // Guardar el resumen por sucursal si existe antes de cerrar
         if (typeof liberalidadPorSucursal !== 'undefined' && liberalidadPorSucursal && liberalidadPorSucursal.length > 0) {
             sessionStorage.setItem('resumenPorSucursal', JSON.stringify(liberalidadPorSucursal));
@@ -1346,7 +1320,7 @@
                 }
             }
         }
-        
+
         Swal.fire({
             title: '¿Cerrar Liberalidad?',
             html: `Esta acción no se puede deshacer.<br>
@@ -1367,7 +1341,7 @@
                         Swal.showLoading();
                     }
                 });
-                
+
                 fetch('{{ route("cpanel.empleados.liberalidad.cerrar") }}', {
                     method: 'POST',
                     headers: {
@@ -1398,83 +1372,20 @@
         });
     }
 </script>
-
-<style>
-    .table td {
-        vertical-align: middle;
-        padding: 0.75rem 0.5rem;
-    }
-    
-    .badge.bg-warning {
-        background-color: #ffc107 !important;
-        font-size: 0.85rem;
-        padding: 0.5rem 0.75rem !important;
-    }
-    
-    .btn-group .btn {
-        padding: 0.25rem 0.5rem;
-        margin: 0 2px;
-    }
-    
-    .btn-group .btn i {
-        font-size: 0.9rem;
-    }
-    
-    .empty-state {
-        max-width: 500px;
-        margin: 0 auto;
-    }
-    
-    .empty-state-icon {
-        margin-bottom: 1rem;
-        opacity: 0.5;
-    }
-    
-    .img-zoomable {
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-        cursor: zoom-in;
-    }
-    
-    .img-zoomable:hover {
-        transform: scale(1.05);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-    }
-
-    /* Estilo para el scroll de la tabla de empleados */
-    .card-body.p-0::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-    }
-
-    .card-body.p-0::-webkit-scrollbar-track {
-        background: #f1f1f1;
-        border-radius: 4px;
-    }
-
-    .card-body.p-0::-webkit-scrollbar-thumb {
-        background: #c1c1c1;
-        border-radius: 4px;
-    }
-
-    .card-body.p-0::-webkit-scrollbar-thumb:hover {
-        background: #a8a8a8;
-    }
-
-    /* Sticky header para la tabla dentro del scroll */
-    .sticky-top {
-        position: sticky;
-        top: 0;
-        z-index: 10;
-    }
-
-    /* Mejorar visualización de la tabla */
-    #tablaEmpleadosSeleccionados {
-        margin-bottom: 0;
-    }
-
-    #tablaEmpleadosSeleccionados thead th {
-        background-color: #f8f9fa;
-        border-bottom: 2px solid #dee2e6;
-    }
-</style>
 @endsection
+
+@push('styles')
+<style>
+    .img-zoomable { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .img-zoomable:hover { transform: scale(1.08); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+
+    #tablaLiberalidad tbody tr:hover { background: #f8fafc; }
+    #tablaLiberalidad thead th.sortable:hover { background: #ecfdf5; color: #059669; }
+
+    .form-control:focus { border-color: #10b981; box-shadow: 0 0 0 0.2rem rgba(16,185,129,.15); }
+
+    /* Input buscador sobre fondo verde — placeholder blanco */
+    #buscadorEmpleado::placeholder { color: rgba(255,255,255,0.6); }
+    #buscadorEmpleado:focus { box-shadow: none; border-color: rgba(255,255,255,0.6); }
+</style>
+@endpush

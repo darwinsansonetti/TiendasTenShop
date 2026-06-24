@@ -14,7 +14,18 @@
   <div class="container-fluid">
     <!--begin::Row-->
     <div class="row">
-      <div class="col-sm-6"><h3 class="mb-0">Estado de Cuentas</h3></div>
+      <div class="col-sm-6">
+        <div class="d-flex align-items-center gap-2">
+          <div class="d-flex align-items-center justify-content-center rounded-2 me-1"
+               style="width:36px;height:36px;background:linear-gradient(135deg,#10b981,#059669);">
+            <i class="bi bi-journal-text text-white" style="font-size:1.1rem;"></i>
+          </div>
+          <div>
+            <h4 class="mb-0 fw-bold text-dark" style="font-size:1.1rem;">Estado de Cuentas</h4>
+            <p class="mb-0 text-muted" style="font-size:0.78rem;">Resumen financiero mensual de ventas, gastos y utilidad</p>
+          </div>
+        </div>
+      </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
           <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
@@ -30,81 +41,79 @@
     <!--begin::Container-->
     <div class="container-fluid">
 
-        <!-- Info boxes -->
-        <div class="row">
+        <!-- KPI Cards -->
+        <div class="row g-3 mb-2">
             <div class="col-12 col-sm-6 col-md-3">
-                <div class="info-box">
-                    <span class="info-box-icon text-bg-primary shadow-sm">
-                    <i class="bi bi-cart-fill"></i>
-                    </span>
-                    <div class="info-box-content">
-                    <span class="info-box-text">Ventas del Mes</span>
-                    <span class="info-box-number">
-                        @if(!empty($Ventas['listaVentasDiarias']) && count($Ventas['listaVentasDiarias']) > 0)
-                            {{ number_format($Ventas['listaVentasDiarias'][0]->montoDivisaGlobal, 2, ',', '.') }}
-                        @else
-                            0
-                        @endif
-                    </span>
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="rounded-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                                 style="width:42px;height:42px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);">
+                                <i class="bi bi-cart-fill text-white" style="font-size:1.1rem;"></i>
+                            </div>
+                            <div>
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.72rem;letter-spacing:.05em;font-weight:600;">Ventas del Mes</p>
+                                <h5 class="mb-0 fw-bold text-dark">
+                                    @if(!empty($Ventas['listaVentasDiarias']) && count($Ventas['listaVentasDiarias']) > 0)
+                                        {{ number_format($Ventas['listaVentasDiarias'][0]->montoDivisaGlobal, 2, ',', '.') }}
+                                    @else
+                                        0
+                                    @endif
+                                </h5>
+                            </div>
+                        </div>
                     </div>
-                    <!-- /.info-box-content -->
                 </div>
-                <!-- /.info-box -->
             </div>
-            <!-- /.col -->
             <div class="col-12 col-sm-6 col-md-3">
-                <div class="info-box">
-                    <span class="info-box-icon text-bg-danger shadow-sm">
-                    <i class="bi bi-currency-exchange"></i>
-                    </span>
-                    <div class="info-box-content">
-                    <span class="info-box-text">Gastos del Mes</span>
-                    <span class="info-box-number">
-                        {{ number_format($GastosDivisaPeriodo ?? 0, 2, ',', '.') }}
-                    </span>
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="rounded-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                                 style="width:42px;height:42px;background:linear-gradient(135deg,#ef4444,#dc2626);">
+                                <i class="bi bi-currency-exchange text-white" style="font-size:1.1rem;"></i>
+                            </div>
+                            <div>
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.72rem;letter-spacing:.05em;font-weight:600;">Gastos del Mes</p>
+                                <h5 class="mb-0 fw-bold text-dark">{{ number_format($GastosDivisaPeriodo ?? 0, 2, ',', '.') }}</h5>
+                            </div>
+                        </div>
                     </div>
-                    <!-- /.info-box-content -->
                 </div>
-                <!-- /.info-box -->
             </div>
-            <!-- /.col -->
-            <!-- fix for small devices only -->
-            <!-- <div class="clearfix hidden-md-up"></div> -->
             <div class="col-12 col-sm-6 col-md-3">
-                <div class="info-box">
-                    <span class="info-box-icon text-bg-success shadow-sm">
-                    <i class="bi bi-clipboard-data"></i>
-                    </span>
-                    <div class="info-box-content">
-                    <span class="info-box-text">Utilidad Venta</span>
-                    <span class="info-box-number">
-                        {{ $Ventas['UtilidadDivisaPeriodoDsp'] }}
-                    </span>
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="rounded-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                                 style="width:42px;height:42px;background:linear-gradient(135deg,#10b981,#059669);">
+                                <i class="bi bi-clipboard-data text-white" style="font-size:1.1rem;"></i>
+                            </div>
+                            <div>
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.72rem;letter-spacing:.05em;font-weight:600;">Utilidad Venta</p>
+                                <h5 class="mb-0 fw-bold text-dark">{{ $Ventas['UtilidadDivisaPeriodoDsp'] }}</h5>
+                            </div>
+                        </div>
                     </div>
-                    <!-- /.info-box-content -->
                 </div>
-                <!-- /.info-box -->
             </div>
-            <!-- /.col -->
             <div class="col-12 col-sm-6 col-md-3">
-                <div class="info-box">
-                    <span class="info-box-icon text-bg-warning shadow-sm">
-                    <i class="bi bi-arrow-up-right-square"></i>
-                    </span>
-                    <div class="info-box-content">
-                    <span class="info-box-text">Margen Promedio</span>
-                    <span class="info-box-number">
-                        {{ $Ventas['MargenNetoPeriodoDsp'] }}
-                        <small>%</small>
-                    </span>
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="rounded-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                                 style="width:42px;height:42px;background:linear-gradient(135deg,#f59e0b,#d97706);">
+                                <i class="bi bi-arrow-up-right-square text-white" style="font-size:1.1rem;"></i>
+                            </div>
+                            <div>
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.72rem;letter-spacing:.05em;font-weight:600;">Margen Promedio</p>
+                                <h5 class="mb-0 fw-bold text-dark">{{ $Ventas['MargenNetoPeriodoDsp'] }} <small class="text-muted fw-normal">%</small></h5>
+                            </div>
+                        </div>
                     </div>
-                    <!-- /.info-box-content -->
                 </div>
-                <!-- /.info-box -->
             </div>
-            <!-- /.col -->
         </div>
-        <!-- /.row Info Boxes-->
 
     </div>
     <!--end::Container-->
@@ -114,12 +123,12 @@
         <div class="col-12">
             <div class="card">
                 <!-- Header con selector de fecha -->
-                <div class="card-header bg-light">
+                <div class="card-header border-0 py-3" style="background:linear-gradient(135deg,#10b981 0%,#059669 100%);">
                     <div class="row align-items-center">
                         <div class="col-md-8">
-                            <h3 class="card-title mb-0">
+                            <h5 class="card-title mb-0 fw-bold text-white">
                                 <i class="bi bi-bar-chart-line me-2"></i>Estadísticas Detalladas
-                            </h3>
+                            </h5>
                         </div>
                         <div class="col-md-4">
 
@@ -144,7 +153,7 @@
                                 <input type="hidden" name="mes" id="mes">
                                 <input type="hidden" name="anio" id="anio">
 
-                                <button type="submit" class="btn btn-sm btn-primary">
+                                <button type="submit" class="btn btn-sm btn-light">
                                     <i class="bi bi-search"></i>
                                 </button>
                             </form>

@@ -8,18 +8,19 @@
     <div class="container-fluid">
         <div class="row">
             <div class="col-sm-6">
-                <h3 class="mb-0">
-                    Asignar Deducción -
-                    <small class="text-muted ms-2">
-                        <i class="fas fa-user-circle me-1"></i>
-                        {{ $empleado->NombreCompleto ?? 'Empleado' }}
-                    </small>
-                </h3>
-                <div class="mt-1">
-                    <small class="text-muted">
-                        <i class="fas fa-store me-1"></i>{{ $sucursal->Nombre ?? 'N/A' }}
-                    </small>
+              <div class="d-flex align-items-center gap-2">
+                <div class="d-flex align-items-center justify-content-center rounded-2 me-1"
+                     style="width:36px;height:36px;background:linear-gradient(135deg,#ef4444,#dc2626);">
+                  <i class="bi bi-dash-circle text-white" style="font-size:1.1rem;"></i>
                 </div>
+                <div>
+                  <h4 class="mb-0 fw-bold text-dark" style="font-size:1.1rem;">Asignar Deducción</h4>
+                  <p class="mb-0 text-muted" style="font-size:0.78rem;">
+                    <i class="bi bi-person me-1"></i>{{ $empleado->NombreCompleto ?? 'Empleado' }}
+                    &nbsp;·&nbsp;<i class="bi bi-shop me-1"></i>{{ $sucursal->Nombre ?? 'N/A' }}
+                  </p>
+                </div>
+              </div>
             </div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-end">

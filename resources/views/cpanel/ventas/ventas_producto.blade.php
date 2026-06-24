@@ -14,11 +14,22 @@
   <div class="container-fluid">
     <!--begin::Row-->
     <div class="row">
-      <div class="col-sm-6"><h3 class="mb-0">Ventas por producto</h3></div>
+      <div class="col-sm-6">
+        <div class="d-flex align-items-center gap-2">
+          <div class="d-flex align-items-center justify-content-center rounded-2 me-1"
+               style="width:36px;height:36px;background:linear-gradient(135deg,#8b5cf6,#7c3aed);">
+            <i class="bi bi-box-seam text-white" style="font-size:1.1rem;"></i>
+          </div>
+          <div>
+            <h4 class="mb-0 fw-bold text-dark" style="font-size:1.1rem;">Ventas por Producto</h4>
+            <p class="mb-0 text-muted" style="font-size:0.78rem;">Rendimiento de ventas por artículo</p>
+          </div>
+        </div>
+      </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
           <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Ventas por producto</li>
+          <li class="breadcrumb-item active" aria-current="page">Ventas por Producto</li>
         </ol>
       </div>
     </div>
@@ -33,11 +44,11 @@
     <div class="container-fluid">
         
         <!-- Card de filtros -->
-        <div class="card card-primary card-outline mb-4">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="fas fa-filter me-2"></i>Filtros de búsqueda
-                </h5>
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header border-0 py-3" style="background:linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%);">
+                <h6 class="mb-0 fw-bold text-white">
+                    <i class="bi bi-funnel me-2"></i>Filtros de búsqueda
+                </h6>
             </div>
             <div class="card-body">
                 <form action="{{ route('cpanel.ventas.producto') }}" method="GET" id="filtroForm">
@@ -83,8 +94,8 @@
         
         @if($ventas)
         <!-- Card de tabla -->
-        <div class="card">
-            <div class="card-header">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-bottom">
                 <div class="row g-2">
                     <div class="col-12 text-end">
                         <div class="btn-group">

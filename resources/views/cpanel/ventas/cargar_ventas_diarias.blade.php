@@ -14,7 +14,18 @@
   <div class="container-fluid">
     <!--begin::Row-->
     <div class="row">
-      <div class="col-sm-6"><h3 class="mb-0">Cargar Venta Diaria</h3></div>
+      <div class="col-sm-6">
+        <div class="d-flex align-items-center gap-2">
+          <div class="d-flex align-items-center justify-content-center rounded-2 me-1"
+               style="width:36px;height:36px;background:linear-gradient(135deg,#f59e0b,#d97706);">
+            <i class="bi bi-cloud-upload text-white" style="font-size:1.1rem;"></i>
+          </div>
+          <div>
+            <h4 class="mb-0 fw-bold text-dark" style="font-size:1.1rem;">Cargar Venta Diaria</h4>
+            <p class="mb-0 text-muted" style="font-size:0.78rem;">Importar ventas desde archivo Excel</p>
+          </div>
+        </div>
+      </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
           <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
@@ -36,9 +47,11 @@
         <div class="row">
             <div class="col-12">
                 <!--begin::Card-->
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">Carga de Archivos Excel</h5>
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header border-0 py-3" style="background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);">
+                        <h6 class="mb-0 fw-bold text-white">
+                            <i class="bi bi-cloud-upload me-2"></i>Carga de Archivos Excel
+                        </h6>
                     </div>
                     <div class="card-body">
                         <form id="uploadForm" enctype="multipart/form-data">

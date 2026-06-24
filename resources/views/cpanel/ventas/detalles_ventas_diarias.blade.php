@@ -14,11 +14,22 @@
   <div class="container-fluid">
     <!--begin::Row-->
     <div class="row">
-      <div class="col-sm-6"><h3 class="mb-0">Detalles de la Ventas</h3></div>
+      <div class="col-sm-6">
+        <div class="d-flex align-items-center gap-2">
+          <div class="d-flex align-items-center justify-content-center rounded-2 me-1"
+               style="width:36px;height:36px;background:linear-gradient(135deg,#10b981,#059669);">
+            <i class="bi bi-list-check text-white" style="font-size:1.1rem;"></i>
+          </div>
+          <div>
+            <h4 class="mb-0 fw-bold text-dark" style="font-size:1.1rem;">Detalles de las Ventas</h4>
+            <p class="mb-0 text-muted" style="font-size:0.78rem;">Análisis detallado por producto</p>
+          </div>
+        </div>
+      </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
           <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Detalles de la Ventas</li>
+          <li class="breadcrumb-item active" aria-current="page">Detalles de Ventas</li>
         </ol>
       </div>
     </div>
@@ -31,45 +42,77 @@
 <!--begin::App Content-->
 <div class="app-content">
     <div class="container-fluid">
-        <!--begin::Row-->
+        <!-- KPI Cards -->
         <div class="row g-3 mb-3">
             <div class="col-md-3">
-                <div class="border rounded p-3 text-center metric-card">
-                    <small class="text-muted">Total Items</small>
-                    <h4 class="mb-0">{{ $totalItems }}</h4>
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="rounded-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                                 style="width:42px;height:42px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);">
+                                <i class="bi bi-hash text-white" style="font-size:1.1rem;"></i>
+                            </div>
+                            <div>
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.72rem;letter-spacing:.05em;font-weight:600;">Total Items</p>
+                                <h4 class="mb-0 fw-bold text-dark">{{ $totalItems }}</h4>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-
             <div class="col-md-3">
-                <div class="border rounded p-3 text-center metric-card">
-                    <small class="text-muted">Total Venta $</small>
-                    <h4 class="mb-0 text-primary">${{ number_format($totalDivisa, 2) }}</h4>
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="rounded-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                                 style="width:42px;height:42px;background:linear-gradient(135deg,#10b981,#059669);">
+                                <i class="bi bi-currency-dollar text-white" style="font-size:1.1rem;"></i>
+                            </div>
+                            <div>
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.72rem;letter-spacing:.05em;font-weight:600;">Total Venta $</p>
+                                <h4 class="mb-0 fw-bold text-dark">${{ number_format($totalDivisa, 2) }}</h4>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-
             <div class="col-md-3">
-                <div class="border rounded p-3 text-center metric-card">
-                    <small class="text-muted">Utilidad Total</small>
-                    <h4 class="mb-0 {{ $totalUtilidad >= 0 ? 'text-success' : 'text-danger' }}">
-                        ${{ number_format($totalUtilidad, 2) }}
-                    </h4>
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="rounded-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                                 style="width:42px;height:42px;background:linear-gradient(135deg,{{ $totalUtilidad >= 0 ? '#10b981,#059669' : '#ef4444,#dc2626' }});">
+                                <i class="bi bi-graph-up text-white" style="font-size:1.1rem;"></i>
+                            </div>
+                            <div>
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.72rem;letter-spacing:.05em;font-weight:600;">Utilidad Total</p>
+                                <h4 class="mb-0 fw-bold {{ $totalUtilidad >= 0 ? 'text-success' : 'text-danger' }}">${{ number_format($totalUtilidad, 2) }}</h4>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-
             <div class="col-md-3">
-                <div class="border rounded p-3 text-center metric-card">
-                    <small class="text-muted">Margen Promedio</small>
-                    <h4 class="mb-0 {{ $promedioMargen >= 0 ? 'text-success' : 'text-danger' }}">
-                        {{ number_format($promedioMargen, 2) }}%
-                    </h4>
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="rounded-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                                 style="width:42px;height:42px;background:linear-gradient(135deg,#f59e0b,#d97706);">
+                                <i class="bi bi-percent text-white" style="font-size:1.1rem;"></i>
+                            </div>
+                            <div>
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.72rem;letter-spacing:.05em;font-weight:600;">Margen Promedio</p>
+                                <h4 class="mb-0 fw-bold {{ $promedioMargen >= 0 ? 'text-success' : 'text-danger' }}">{{ number_format($promedioMargen, 2) }}%</h4>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-        <!--end::Row-->
     
         <!-- Card de tabla -->
-        <div class="card">
-            <div class="card-header">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-bottom">
                 <div class="row g-2">
                     <div class="col-12 text-end">
                         <div class="btn-group">

@@ -14,7 +14,18 @@
   <div class="container-fluid">
     <!--begin::Row-->
     <div class="row">
-      <div class="col-sm-6"><h3 class="mb-0">Resumen Diario</h3></div>
+      <div class="col-sm-6">
+        <div class="d-flex align-items-center gap-2">
+          <div class="d-flex align-items-center justify-content-center rounded-2 me-1"
+               style="width:36px;height:36px;background:linear-gradient(135deg,#10b981,#059669);">
+            <i class="bi bi-clipboard2-check text-white" style="font-size:1.1rem;"></i>
+          </div>
+          <div>
+            <h4 class="mb-0 fw-bold text-dark" style="font-size:1.1rem;">Resumen Diario</h4>
+            <p class="mb-0 text-muted" style="font-size:0.78rem;">Consolidado de operaciones del día</p>
+          </div>
+        </div>
+      </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
           <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
@@ -32,53 +43,73 @@
 <div class="app-content">
     <div class="container-fluid">   
          
-        <!--begin::Row-->
-        <div class="card card-success card-outline mb-4">
-            <div class="card-body">
-                
-                <div class="row g-3">
-                    
-                    <div class="col-md-3">
-                        <div class="border rounded p-3 text-center metric-card">
-                            <small class="text-muted">Total Divisa</small>
-                            <h4 class="mb-0">
-                                ${{ number_format($totalGeneralDivisa, 2, ',', '.') }}
-                            </h4>
+        <!-- KPI Cards -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="rounded-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                                 style="width:42px;height:42px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);">
+                                <i class="bi bi-currency-dollar text-white" style="font-size:1.1rem;"></i>
+                            </div>
+                            <div>
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.72rem;letter-spacing:.05em;font-weight:600;">Total Divisa</p>
+                                <h4 class="mb-0 fw-bold text-dark">${{ number_format($totalGeneralDivisa, 2, ',', '.') }}</h4>
+                            </div>
                         </div>
                     </div>
-
-                    <div class="col-md-3">
-                        <div class="border rounded p-3 text-center metric-card">
-                            <small class="text-muted">Total Bs</small>
-                            <h4 class="mb-0">
-                                {{ number_format($totalBs, 2, ',', '.') }} Bs
-                            </h4>
-                        </div>
-                    </div>
-
-                    <div class="col-md-3">
-                        <div class="border rounded p-3 text-center metric-card">
-                            <small class="text-muted">Ventas en Sistema</small>
-                            <h4 class="mb-0">
-                                {{ number_format($totalSistemaBs, 2, ',', '.') }} Bs
-                            </h4>
-                        </div>
-                    </div>
-
-                    <div class="col-md-3">
-                        <div class="border rounded p-3 text-center metric-card">
-                            <small class="text-muted">Diferencia (No incluye Usd)</small>
-                            <h4 class="mb-0 
-                                @if ($diferencia > 0) text-success 
-                                @elseif ($diferencia < 0) text-danger 
-                                @else text-muted @endif">
-                                {{ number_format($diferencia, 2, ',', '.') }} Bs
-                            </h4>
-                        </div>
-                    </div>
-
                 </div>
-
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="rounded-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                                 style="width:42px;height:42px;background:linear-gradient(135deg,#10b981,#059669);">
+                                <i class="bi bi-cash text-white" style="font-size:1.1rem;"></i>
+                            </div>
+                            <div>
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.72rem;letter-spacing:.05em;font-weight:600;">Total Bs</p>
+                                <h4 class="mb-0 fw-bold text-dark">{{ number_format($totalBs, 2, ',', '.') }} Bs</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="rounded-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                                 style="width:42px;height:42px;background:linear-gradient(135deg,#8b5cf6,#7c3aed);">
+                                <i class="bi bi-pc-display text-white" style="font-size:1.1rem;"></i>
+                            </div>
+                            <div>
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.72rem;letter-spacing:.05em;font-weight:600;">Ventas en Sistema</p>
+                                <h4 class="mb-0 fw-bold text-dark">{{ number_format($totalSistemaBs, 2, ',', '.') }} Bs</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="rounded-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                                 style="width:42px;height:42px;background:linear-gradient(135deg,{{ $diferencia > 0 ? '#10b981,#059669' : ($diferencia < 0 ? '#ef4444,#dc2626' : '#94a3b8,#64748b') }});">
+                                <i class="bi bi-arrow-left-right text-white" style="font-size:1.1rem;"></i>
+                            </div>
+                            <div>
+                                <p class="text-uppercase text-muted mb-1" style="font-size:0.72rem;letter-spacing:.05em;font-weight:600;">Diferencia</p>
+                                <h4 class="mb-0 fw-bold @if ($diferencia > 0) text-success @elseif ($diferencia < 0) text-danger @else text-muted @endif">
+                                    {{ number_format($diferencia, 2, ',', '.') }} Bs
+                                </h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 

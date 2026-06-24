@@ -12,7 +12,18 @@
 <div class="app-content-header">
     <div class="container-fluid">
         <div class="row">
-            <div class="col-sm-6"><h3 class="mb-0">Cambiar Contraseña</h3></div>
+            <div class="col-sm-6">
+              <div class="d-flex align-items-center gap-2">
+                <div class="d-flex align-items-center justify-content-center rounded-2 me-1"
+                     style="width:36px;height:36px;background:linear-gradient(135deg,#ef4444,#dc2626);">
+                  <i class="bi bi-key text-white" style="font-size:1.1rem;"></i>
+                </div>
+                <div>
+                  <h4 class="mb-0 fw-bold text-dark" style="font-size:1.1rem;">Cambiar Contraseña</h4>
+                  <p class="mb-0 text-muted" style="font-size:0.78rem;">Actualizar credenciales de acceso</p>
+                </div>
+              </div>
+            </div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-end">
                     <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
@@ -25,12 +36,12 @@
 
 <div class="app-content">
     <div class="container-fluid">
-        <div class="card card-danger card-outline">
-            <div class="card-header">
-                <h3 class="card-title">
-                    <i class="fas fa-user-shield me-2"></i>
+        <div class="card border-0 shadow-sm">
+            <div class="card-header border-0 py-3" style="background:linear-gradient(135deg,#ef4444 0%,#dc2626 100%);">
+                <h6 class="mb-0 fw-bold text-white">
+                    <i class="bi bi-person-fill me-2"></i>
                     {{ $usuarioInterno->NombreCompleto }}
-                </h3>
+                </h6>
                 <div class="card-tools">
                     <span class="badge bg-{{ $usuarioInterno->EsActivo ? 'success' : 'danger' }}">
                         {{ $usuarioInterno->EsActivo ? 'Activo' : 'Inactivo' }}
