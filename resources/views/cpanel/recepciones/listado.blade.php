@@ -182,18 +182,21 @@
             cancelButtonText: 'Cancelar'
         }).then((result) => {
             if (result.isConfirmed) {
-                fetch(`{{ url("cpanel/recepciones") }}/${id}`, {
+                const url = `{{ route('cpanel.recepciones.eliminar', '') }}/${id}`;
+                
+                fetch(url, {
                     method: 'DELETE',
                     headers: {
                         'X-CSRF-TOKEN': '{{ csrf_token() }}',
                         'X-Requested-With': 'XMLHttpRequest',
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
                     }
                 })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        Swal.fire('Eliminado', 'Recepción eliminada correctamente', 'success').then(() => {
+                        Swal.fire('Eliminado', 'Recepción cancelada correctamente', 'success').then(() => {
                             location.reload();
                         });
                     } else {

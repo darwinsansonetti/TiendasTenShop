@@ -4118,4 +4118,147 @@ class RecepcionesController extends Controller
 
         Log::info('✅ Estatus de recepción cambiado a EnAuditoria (4)');
     }
+
+    public function eliminarRecepcion($recepcionId)
+    {
+        Log::info('=== INICIO eliminarRecepcion ===', ['recepcion_id' => $recepcionId]);
+        
+        try {
+            DB::connection('sqlsrv')->beginTransaction();
+            
+            // 1. Verificar si la recepción existe
+            $recepcion = DB::connection('sqlsrv')
+                ->table('Recepciones')
+                ->where('RecepcionId', $recepcionId)
+                ->first();
+            
+            if (!$recepcion) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La recepción no existe'
+                ], 404);
+            }
+            
+            // 2. RecepcionesTransferencias
+            $rt = DB::connection('sqlsrv')
+                ->table('RecepcionesTransferencias')
+                ->where('RecepcionId', $recepcionId)
+                ->first();
+            
+            if ($rt) {
+                // Eliminar la relación
+                DB::connection('sqlsrv')
+                    ->table('RecepcionesTransferencias')
+                    ->where('RecepcionId', $recepcionId)
+                    ->delete();
+                
+                // Actualizar el Estatus de la Transferencia a 3 (Registrada)
+                DB::connection('sqlsrv')
+                    ->table('Transferencias')
+                    ->where('TransferenciaId', $rt->TransferenciaId)
+                    ->update([
+                        'Estatus' => 3 // EnumTransferencia.Registrada
+                    ]);
+                
+                Log::info('Transferencia actualizada a Registrada', [
+                    'transferencia_id' => $rt->TransferenciaId,
+                    'estatus' => 3
+                ]);
+            }
+            
+            // 3. RecepcionesFacturas
+            $rf = DB::connection('sqlsrv')
+                ->table('RecepcionesFacturas')
+                ->where('RecepcionId', $recepcionId)
+                ->first();
+            
+            if ($rf) {
+                // Eliminar la relación
+                DB::connection('sqlsrv')
+                    ->table('RecepcionesFacturas')
+                    ->where('RecepcionId', $recepcionId)
+                    ->delete();
+                
+                // Actualizar el Estatus de la Factura a 1 (EnProceso)
+                DB::connection('sqlsrv')
+                    ->table('Facturas')
+                    ->where('ID', $rf->FacturaId)
+                    ->update([
+                        'Estatus' => 1 // EnumFactura.EnProceso
+                    ]);
+                
+                Log::info('Factura actualizada a EnProceso', [
+                    'factura_id' => $rf->FacturaId,
+                    'estatus' => 1
+                ]);
+            }
+            
+            // 4. Recepciones Auditorias y sus detalles
+            $ra = DB::connection('sqlsrv')
+                ->table('Auditorias')
+                ->where('RecepcionId', $recepcionId)
+                ->first();
+            
+            if ($ra) {
+                // Eliminar los detalles de la auditoría primero
+                DB::connection('sqlsrv')
+                    ->table('AuditoriaDetalles')
+                    ->where('AuditoriaId', $ra->AuditoriaId)
+                    ->delete();
+                
+                // Eliminar la auditoría
+                DB::connection('sqlsrv')
+                    ->table('Auditorias')
+                    ->where('RecepcionId', $recepcionId)
+                    ->delete();
+                
+                Log::info('Auditoria eliminada', [
+                    'auditoria_id' => $ra->AuditoriaId,
+                    'recepcion_id' => $recepcionId
+                ]);
+            }
+            
+            // 5. Eliminar los detalles de la recepción
+            $detallesEliminados = DB::connection('sqlsrv')
+                ->table('RecepcionesDetalles')
+                ->where('RecepcionId', $recepcionId)
+                ->delete();
+            
+            Log::info('Detalles de recepción eliminados', [
+                'recepcion_id' => $recepcionId,
+                'detalles_eliminados' => $detallesEliminados
+            ]);
+            
+            // 6. Eliminar la recepción
+            DB::connection('sqlsrv')
+                ->table('Recepciones')
+                ->where('RecepcionId', $recepcionId)
+                ->delete();
+            
+            DB::connection('sqlsrv')->commit();
+            
+            Log::info('=== FIN eliminarRecepcion - EXITOSO ===', [
+                'recepcion_id' => $recepcionId
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Recepción cancelada correctamente'
+            ]);
+            
+        } catch (\Exception $e) {
+            DB::connection('sqlsrv')->rollBack();
+            
+            Log::error('=== ERROR en eliminarRecepcion ===', [
+                'recepcion_id' => $recepcionId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cancelar la recepción: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

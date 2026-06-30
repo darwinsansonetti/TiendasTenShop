@@ -408,7 +408,8 @@ Route::middleware('auth')->group(function() {
     //Route::get('/recepciones/{id}/detalle', [RecepcionesController::class, 'detalleRecepcion'])->name('cpanel.recepciones.detalle');
     Route::get('/recepciones/{id}/editar', [RecepcionesController::class, 'editarRecepcion'])->name('cpanel.recepciones.editar');
     Route::put('/recepciones/{id}', [RecepcionesController::class, 'actualizarRecepcion'])->name('cpanel.recepciones.actualizar');
-    Route::delete('/recepciones/{id}', [RecepcionesController::class, 'eliminarRecepcion'])->name('cpanel.recepciones.eliminar');
+    Route::delete('/cpanel/recepciones/{id}', [RecepcionesController::class, 'eliminarRecepcion'])
+    ->name('cpanel.recepciones.eliminar');
 
     Route::post('/recepciones/{id}/recuperar-factura', [RecepcionesController::class, 'recuperarFactura'])->name('cpanel.recepciones.recuperar.factura');
 
