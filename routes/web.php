@@ -405,7 +405,7 @@ Route::middleware('auth')->group(function() {
     Route::get('/recepciones/crear/{proveedorId}', [RecepcionesController::class, 'crearRecepcion'])->name('cpanel.recepciones.crear');
     Route::post('/recepciones/guardar', [RecepcionesController::class, 'guardarRecepcion'])->name('cpanel.recepciones.guardar');
 
-    Route::get('/recepciones/{id}/detalle', [RecepcionesController::class, 'detalleRecepcion'])->name('cpanel.recepciones.detalle');
+    //Route::get('/recepciones/{id}/detalle', [RecepcionesController::class, 'detalleRecepcion'])->name('cpanel.recepciones.detalle');
     Route::get('/recepciones/{id}/editar', [RecepcionesController::class, 'editarRecepcion'])->name('cpanel.recepciones.editar');
     Route::put('/recepciones/{id}', [RecepcionesController::class, 'actualizarRecepcion'])->name('cpanel.recepciones.actualizar');
     Route::delete('/recepciones/{id}', [RecepcionesController::class, 'eliminarRecepcion'])->name('cpanel.recepciones.eliminar');
@@ -518,9 +518,25 @@ Route::middleware('auth')->group(function() {
     Route::get('/cpanel/distribucion/inventario', [DistribucionController::class, 'distribuciones_inventario'])
         ->name('cpanel.distribucion.inventario');
 
-    // // Devolver productos de transferencia 
-    // Route::post('/cpanel/transferencias/{id}/devolver', [DistribucionController::class, 'devolverTransferenciaProducto'])
-    //     ->name('cpanel.transferencias.devolver-productos');
+    // Ver detalle de recepcion en la sucursal
+    Route::get('/cpanel/recepcion/{id}/detallesucursal', [RecepcionesController::class, 'detalleTransferenciaSucursal'])
+        ->name('cpanel.transferencias.detallesucursal');
+
+    // Nueva Recepcion en la Sucursal
+    Route::post('/cpanel/recepcion/crear-recepcion/{id}', [RecepcionesController::class, 'crearRecepcionTransferencia'])
+        ->name('cpanel.recepcion.crear-recepcion');
+
+    // ✅ Descargar plantilla Excel para recepción
+    Route::get('/cpanel/download-template/{id}', [RecepcionesController::class, 'downloadTemplateRecepcion'])
+        ->name('cpanel.recibir-sucursal.download-template');
+
+    // ✅ Cargar Excel con cantidades recibidas
+    Route::post('/cpanel/upload-excel/{id}', [RecepcionesController::class, 'uploadExcelRecepcion'])
+        ->name('cpanel.recibir-sucursal.upload-excel');
+
+    // ✅ Confirmar/Finalizar recepción (POST)
+    Route::post('/cpanel/confirmar/{id}', [RecepcionesController::class, 'confirmarRecepcion'])
+        ->name('cpanel.recibir-sucursal.confirmar');
 });
 
 

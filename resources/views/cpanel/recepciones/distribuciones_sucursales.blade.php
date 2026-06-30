@@ -56,7 +56,7 @@
                                 onclick="exportarExcelTransferencias()">
                             <i class="bi bi-file-earmark-excel me-1"></i>Excel
                         </button>
-                        <a href="{{ route('cpanel.transferencias.create') }}"
+                        <a href="{{ route('cpanel.recepciones.nuevo') }}"
                            class="btn btn-sm fw-semibold"
                            style="background:rgba(255,255,255,0.85);color:#059669;border:1px solid rgba(255,255,255,0.4);font-size:0.8rem;">
                             <i class="bi bi-plus-circle me-1"></i>Nueva Transferencia
@@ -144,18 +144,18 @@
                                 </td>
                                 <td class="pe-4 text-center">
                                     <div class="d-flex align-items-center justify-content-center gap-1">
-                                        <a href="{{ route('cpanel.transferencias.recibir', $item->TransferenciaId) }}"
+                                        <a href="{{ route('cpanel.transferencias.detallesucursal', $item->TransferenciaId) }}"
                                            class="btn btn-sm rounded-2 d-flex align-items-center justify-content-center"
                                            style="width:30px;height:30px;background:rgba(245,158,11,0.1);color:#d97706;border:1px solid rgba(245,158,11,0.25);"
                                            title="Recibir Distribución" data-bs-toggle="tooltip">
                                             <i class="bi bi-arrow-down-circle" style="font-size:0.8rem;"></i>
                                         </a>
                                         <button type="button"
-                                                class="btn btn-sm rounded-2 d-flex align-items-center justify-content-center"
-                                                style="width:30px;height:30px;background:rgba(16,185,129,0.1);color:#059669;border:1px solid rgba(16,185,129,0.25);"
-                                                onclick="finalizarTransferencia({{ $item->TransferenciaId }})"
-                                                title="Finalizar transferencia" data-bs-toggle="tooltip">
-                                            <i class="bi bi-check-circle" style="font-size:0.8rem;"></i>
+                                            class="btn btn-sm rounded-2 d-flex align-items-center justify-content-center"
+                                            style="width:30px;height:30px;background:rgba(239,68,68,0.1);color:#dc2626;border:1px solid rgba(239,68,68,0.25);"
+                                            onclick="cancelarTransferencia({{ $item->TransferenciaId }})"
+                                            title="Cancelar transferencia">
+                                            <i class="bi bi-x-circle" style="font-size:0.8rem;"></i>
                                         </button>
                                     </div>
                                 </td>
@@ -246,6 +246,92 @@
                     console.error('Error:', error);
                     Swal.fire('Error', 'Error al finalizar la transferencia', 'error');
                 });
+            }
+        });
+    }
+
+    function cancelarTransferencia(id) {
+        console.log('🔍 ID recibido:', id);
+        
+        // Validar ID
+        if (!id || isNaN(id)) {
+            console.error('❌ ID inválido');
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'ID de transferencia inválido'
+            });
+            return;
+        }
+        
+        // ✅ Generar URL usando route() (como en la vista que funciona)
+        const url = '{{ route("cpanel.distribuciones.cancelar", ":id") }}'.replace(':id', id);
+        console.log('🌐 URL:', url);
+        
+        Swal.fire({
+            title: '¿Cancelar transferencia?',
+            text: 'Esta acción devolverá los productos a la sucursal de origen',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, cancelar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire({
+                    title: 'Procesando...',
+                    text: 'Cancelando transferencia',
+                    allowOutsideClick: false,
+                    didOpen: () => { Swal.showLoading(); }
+                });
+                
+                // ✅ Obtener CSRF con fallback (como en la vista que funciona)
+                const csrfToken = document.querySelector('meta[name="csrf-token"]');
+                
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken ? csrfToken.getAttribute('content') : '{{ csrf_token() }}',
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({})
+                })
+                .then(response => {
+                    console.log('📡 Status:', response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('📦 Datos:', data);
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡Transferencia cancelada!',
+                            text: data.message,
+                            timer: 3000,
+                            showConfirmButton: false
+                        }).then(() => {
+                            location.reload();
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: data.message || 'Error al cancelar la transferencia'
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ Error:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Error al conectar con el servidor: ' + error.message
+                    });
+                });
+            } else {
+                console.log('❌ Usuario canceló la operación');
             }
         });
     }

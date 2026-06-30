@@ -19,6 +19,8 @@ use App\Services\VentasService;
 // use PhpOffice\PhpSpreadsheet\Reader\Xls;
 // use PhpOffice\PhpSpreadsheet\Reader\Xlsx;
 // use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xls;
@@ -670,7 +672,8 @@ class RecepcionesController extends Controller
                     'rd.*',
                     'p.Codigo',
                     'p.Descripcion as producto_nombre',
-                    'p.Referencia'
+                    'p.Referencia',
+                    'p.UrlFoto'
                 ])
                 ->get();
             
@@ -2833,38 +2836,67 @@ class RecepcionesController extends Controller
                 'menu_active' => 'Recepciones',
                 'submenu_active' => 'Recibir de Sucursal' 
             ]);
-            
-            // Obtener fecha de inicio y fin del mes actual
-            $fechaInicio = now()->startOfMonth()->format('Y-m-d');
-            $fechaFin = now()->endOfMonth()->format('Y-m-d');
 
-            // Obtener la sucursal del usuario autenticado
+            // Obtener datos del usuario
             $sucursalId = auth()->user()->SucursalId ?? null;
-            
-            if (!$sucursalId) {
-                return redirect()->back()->with('error', 'No se ha asignado una sucursal al usuario');
-            }
-            
-            // Buscar transferencias con estatus: Registrada(3), Recibiendo(4), Disponible(5)
-            // y que la sucursal destino sea la del usuario
-            $transferencias = DB::connection('sqlsrv')
+            $userEmail = auth()->user()->Email ?? null;
+            $userName = auth()->user()->NombreCompleto ?? null;
+
+            // ✅ Verificar si es Super Admin
+            $esSuperAdmin = (
+                $userEmail == 'Hussein@Tiendastenshop.com' ||
+                $userName == 'MASTER GENERAL' ||
+                $userEmail == 'admin@tiendastenshop.com'
+            );
+
+            // ✅ Construir consulta base
+            $query = DB::connection('sqlsrv')
                 ->table('TransferenciaTotalizadaView')
-                ->whereIn('Estatus', [3, 4, 5])  // Registrada, Recibiendo, Disponible
-                ->where('SucursalDestinoId', $sucursalId)
-                ->orderBy('Fecha', 'desc')
-                ->get();
-            
+                ->whereIn('Estatus', [3, 4, 5]); // Registrada, Recibiendo, Disponible
+
+            // ✅ Si NO es Super Admin, filtrar por sucursal destino
+            if (!$esSuperAdmin) {
+                if (!$sucursalId) {
+                    return redirect()->back()->with('error', 'No se ha asignado una sucursal al usuario');
+                }
+                $query->where('SucursalDestinoId', $sucursalId);
+            }
+
+            // ✅ Ejecutar consulta
+            $transferencias = $query->orderBy('Fecha', 'desc')->get();
+
             // Calcular porcentaje de avance para cada transferencia
             foreach ($transferencias as $transferencia) {
                 $transferencia->PorcentajeRecibido = $transferencia->CantidadEmitida > 0 
                     ? ($transferencia->CantidadRecibida / $transferencia->CantidadEmitida) * 100 
                     : 0;
             }
-            
-            return view('cpanel.recepciones.distribuciones_sucursales', compact('transferencias'));
-            
+
+            // ✅ Mapear estatus para la vista
+            $estatusMap = [
+                1 => ['texto' => 'Nueva', 'clase' => 'badge bg-secondary text-white'],
+                2 => ['texto' => 'En Edición', 'clase' => 'badge bg-warning text-dark'],
+                3 => ['texto' => 'Registrada', 'clase' => 'badge bg-info text-white'],
+                4 => ['texto' => 'Recibiendo', 'clase' => 'badge bg-primary text-white'],
+                5 => ['texto' => 'Disponible', 'clase' => 'badge bg-success text-white'],
+                6 => ['texto' => 'Procesada', 'clase' => 'badge bg-dark text-white'],
+                9 => ['texto' => 'Anulada', 'clase' => 'badge bg-danger text-white']
+            ];
+
+            // ✅ Log para depuración
+            \Log::info('📊 listado_recepciones_sucursal', [
+                'usuario' => $userEmail,
+                'es_super_admin' => $esSuperAdmin,
+                'sucursal_filtro' => $esSuperAdmin ? 'NINGUNO (Super Admin)' : $sucursalId,
+                'total_transferencias' => $transferencias->count()
+            ]);
+
+            return view('cpanel.recepciones.distribuciones_sucursales', compact('transferencias', 'estatusMap'));
+
         } catch (\Exception $e) {
-            \Log::error('Error en listado_recepciones_sucursal: ' . $e->getMessage());
+            \Log::error('❌ Error en listado_recepciones_sucursal: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
             return back()->with('error', 'Error al cargar el listado de recepciones de sucursal: ' . $e->getMessage());
         }
     }
@@ -2898,5 +2930,1192 @@ class RecepcionesController extends Controller
             return redirect()->route('cpanel.transferencias.distribuciones')
                 ->with('error', 'Error al cargar el formulario de creación: ' . $e->getMessage());
         }
+    }    
+
+    public function detalleTransferenciaSucursal($id)
+    {
+        try {
+            // 1. Obtener la transferencia
+            $transferencia = DB::connection('sqlsrv')
+                ->table('Transferencias as t')
+                ->leftJoin('Sucursales as so', 't.SucursalOrigenId', '=', 'so.ID')
+                ->leftJoin('Sucursales as sd', 't.SucursalDestinoId', '=', 'sd.ID')
+                ->where('t.TransferenciaId', $id)
+                ->select([
+                    't.*',
+                    'so.Nombre as sucursal_origen',
+                    'sd.Nombre as sucursal_destino'
+                ])
+                ->first();
+            
+            if (!$transferencia) {
+                return redirect()->route('cpanel.distribucion.listado')
+                    ->with('error', 'Transferencia no encontrada');
+            }
+            
+            // 2. Validar que la transferencia se pueda recibir (3, 4, 5)
+            $estatusPermitidos = [3, 4, 5];
+            if (!in_array($transferencia->Estatus, $estatusPermitidos)) {
+                return redirect()->route('cpanel.distribucion.listado')
+                    ->with('error', 'Esta transferencia no está disponible para recibir');
+            }
+            
+            // // 3. ✅ Obtener SOLO los productos pendientes
+            // $detalles = DB::connection('sqlsrv')
+            //     ->table('TransferenciaDetalles as td')
+            //     ->leftJoin('Productos as p', 'td.ProductoId', '=', 'p.ID')
+            //     ->where('td.TransferenciaId', $id)
+            //     ->whereRaw('td.CantidadEmitida > td.CantidadRecibida')  // ✅ SOLO PENDIENTES
+            //     ->select([
+            //         'td.*',
+            //         'p.Codigo',
+            //         'p.Descripcion as producto_nombre',
+            //         'p.Referencia',
+            //         'p.UrlFoto',
+            //         'p.CostoDivisa'
+            //     ])
+            //     ->get();
+
+            // 3. Obtener SOLO los productos pendientes con su cantidad disponible
+            $detalles = DB::connection('sqlsrv')
+                ->table('TransferenciaDetalles as td')
+                ->leftJoin('Productos as p', 'td.ProductoId', '=', 'p.ID')
+                ->where('td.TransferenciaId', $id)
+                ->whereRaw('td.CantidadEmitida > td.CantidadRecibida')
+                ->select([
+                    'td.*',
+                    'p.Codigo',
+                    'p.Descripcion as producto_nombre',
+                    'p.Referencia',
+                    'p.UrlFoto',
+                    'p.CostoDivisa',
+                    // ✅ NUEVO: Calcular la cantidad realmente disponible
+                    DB::raw('(td.CantidadEmitida - td.CantidadRecibida) as CantidadDisponible')
+                ])
+                ->get();
+            
+            // 4. ✅ BUSCAR RECEPCIÓN EN BD
+            $recepcionData = DB::connection('sqlsrv')
+                ->table('RecepcionesTransferencias as rt')
+                ->join('Recepciones as r', 'rt.RecepcionId', '=', 'r.RecepcionId')
+                ->where('rt.TransferenciaId', $id)
+                ->where('r.Estatus', 1) // EnProceso
+                ->select('r.*')
+                ->first();
+
+            $existeRecepcion = ($recepcionData !== null);
+
+            // 5. ✅ Si no existe en BD, buscar en sesión
+            if (!$existeRecepcion) {
+                $sessionData = session('recepcion_activa');
+                if ($sessionData && $sessionData['transferencia_id'] == $id) {
+                    // Validar que la sesión no sea de una recepción ya finalizada
+                    $recepcionEnBD = DB::connection('sqlsrv')
+                        ->table('Recepciones')
+                        ->where('RecepcionId', $sessionData['recepcion_id'])
+                        ->first();
+                    
+                    if ($recepcionEnBD && $recepcionEnBD->Estatus == 1) {
+                        $recepcionData = (object) [
+                            'RecepcionId' => $sessionData['recepcion_id'],
+                            'FechaCreacion' => $sessionData['fecha_recepcion'] ?? date('Y-m-d'),
+                            'Observacion' => $sessionData['observacion'] ?? null
+                        ];
+                        $existeRecepcion = true;
+                    } else {
+                        session()->forget('recepcion_activa');
+                    }
+                }
+            }
+
+            // 6. ✅ Si no existe recepción, crear objeto en memoria (ID = 0)
+            if (!$existeRecepcion) {
+                $recepcionData = (object) [
+                    'RecepcionId' => 0,
+                    'FechaCreacion' => date('Y-m-d'),
+                    'Observacion' => null
+                ];
+            }
+
+            // 7. ✅ DETERMINAR BOTONES
+            $botonNuevaRecepcionActivo = (in_array($transferencia->Estatus, [3, 5]) && !$existeRecepcion);
+            $mostrarBotonFinalizar = $existeRecepcion && $transferencia->Estatus != 6;
+
+            // 8. ✅ Guardar en sesión SOLO si existe recepción activa en BD
+            if ($existeRecepcion) {
+                session([
+                    'recepcion_activa' => [
+                        'recepcion_id' => $recepcionData->RecepcionId ?? 0,
+                        'transferencia_id' => $id,
+                        'fecha_recepcion' => $recepcionData->FechaCreacion ?? date('Y-m-d'),
+                        'observacion' => $recepcionData->Observacion ?? null
+                    ]
+                ]);
+            } else {
+                session()->forget('recepcion_activa');
+            }
+
+            // 9. Calcular totales
+            $totalItems = $detalles->count();
+            $totalUnidades = $detalles->sum('CantidadEmitida');
+            $totalRecibido = $detalles->sum('CantidadRecibida');
+            
+            // 10. Mapear estatus
+            $estatusMap = [
+                1 => ['texto' => 'Nueva', 'clase' => 'badge bg-secondary text-white'],
+                2 => ['texto' => 'En Edición', 'clase' => 'badge bg-warning text-dark'],
+                3 => ['texto' => 'Registrada', 'clase' => 'badge bg-info text-white'],
+                4 => ['texto' => 'Recibiendo', 'clase' => 'badge bg-primary text-white'],
+                5 => ['texto' => 'Disponible', 'clase' => 'badge bg-success text-white'],
+                6 => ['texto' => 'Procesada', 'clase' => 'badge bg-dark text-white'],
+                9 => ['texto' => 'Anulada', 'clase' => 'badge bg-danger text-white']
+            ];
+            
+            $estatus = $estatusMap[$transferencia->Estatus] ?? ['texto' => 'Desconocido', 'clase' => 'badge bg-secondary text-white'];
+            
+            return view('cpanel.distribuciones.detalle_recepcion_sucursal', compact(
+                'transferencia',
+                'detalles',
+                'estatus',
+                'totalItems',
+                'totalUnidades',
+                'totalRecibido',
+                'recepcionData',
+                'botonNuevaRecepcionActivo',
+                'mostrarBotonFinalizar',
+                'existeRecepcion'
+            ));
+            
+        } catch (\Exception $e) {
+            \Log::error('❌ Error en detalleTransferenciaSucursal: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+            return redirect()->route('cpanel.distribucion.listado')
+                ->with('error', 'Error al cargar el detalle: ' . $e->getMessage());
+        }
+    }
+
+    public function crearRecepcionTransferencia(Request $request, $id)
+    {
+        Log::info('=== INICIO crearRecepcionTransferencia ===', [
+            'transferencia_id' => $id,
+            'usuario' => auth()->id() ?? 'Sistema',
+            'fecha_hora' => now()->format('Y-m-d H:i:s'),
+            'ip' => $request->ip()
+        ]);
+
+        try {
+            $request->validate([
+                'fecha_recepcion' => 'required|date',
+                'observacion' => 'nullable|string|max:500'
+            ]);
+
+            $transferencia = DB::connection('sqlsrv')
+                ->table('Transferencias')
+                ->where('TransferenciaId', $id)
+                ->first();
+
+            if (!$transferencia) {
+                return redirect()->back()
+                    ->with('error', 'Transferencia no encontrada')
+                    ->withInput();
+            }
+
+            $estatusPermitidos = [3, 5];
+            if (!in_array($transferencia->Estatus, $estatusPermitidos)) {
+                return redirect()->back()
+                    ->with('error', 'La transferencia no está en estado Registrada o Disponible para crear una nueva recepción')
+                    ->withInput();
+            }
+
+            DB::connection('sqlsrv')->beginTransaction();
+
+            $numero = 'REC' . date('YmdHis') . '-' . 
+                    $transferencia->SucursalOrigenId . '-' . 
+                    $transferencia->SucursalDestinoId;
+
+            $recepcionId = DB::connection('sqlsrv')
+                ->table('Recepciones')
+                ->insertGetId([
+                    'Numero' => $numero,
+                    'ProveedorId' => 0,
+                    'SucursalOrigenId' => $transferencia->SucursalOrigenId,
+                    'SucursalDestinoId' => $transferencia->SucursalDestinoId,
+                    'Estatus' => 1,
+                    'Tipo' => 1,
+                    'FechaCreacion' => now(),
+                    'FechaRecepcion' => $request->fecha_recepcion,
+                    'EsConFactura' => 1,
+                    'TasaDeCambio' => 0
+                ]);
+
+            Log::info('✅ Recepción creada en BD', [
+                'recepcion_id' => $recepcionId,
+                'numero' => $numero
+            ]);
+
+            DB::connection('sqlsrv')
+                ->table('Transferencias')
+                ->where('TransferenciaId', $id)
+                ->update(['Estatus' => 4]);
+
+            Log::info('✅ Transferencia actualizada a estatus 4 (Recibiendo)');
+
+            DB::connection('sqlsrv')
+                ->table('RecepcionesTransferencias')
+                ->insert([
+                    'RecepcionId' => $recepcionId,
+                    'TransferenciaId' => $id
+                ]);
+
+            Log::info('✅ Relación Recepción-Transferencia creada');
+
+            // ✅ AGREGAR DETALLES - SIN SucursalId
+            $detalles = DB::connection('sqlsrv')
+                ->table('TransferenciaDetalles')
+                ->where('TransferenciaId', $id)
+                ->get();
+
+            $productosAgregados = 0;
+            $totalCantidadPedida = 0;
+
+            foreach ($detalles as $detalle) {
+                $cantidad = $detalle->CantidadEmitida ?? 0;
+                
+                if ($cantidad > 0) {
+                    $producto = DB::connection('sqlsrv')
+                        ->table('Productos')
+                        ->where('ID', $detalle->ProductoId)
+                        ->first();
+
+                    // ✅ CORRECTO - Sin SucursalId
+                    DB::connection('sqlsrv')
+                        ->table('RecepcionesDetalles')
+                        ->insert([
+                            'RecepcionId' => $recepcionId,
+                            'ProductoId' => $detalle->ProductoId,
+                            'CantidadPedida' => $cantidad,
+                            'CantidadRecibida' => 0,
+                            'CostoBs' => $producto->CostoBs ?? 0,
+                            'CostoDivisa' => $producto->CostoDivisa ?? 0,
+                            'CantidadPieSolo' => 0,
+                            'CantidadPieInvertido' => 0,
+                            'CantidadCajaVacia' => 0,
+                            'CantidadPiezaDanada' => 0
+                            // ❌ 'SucursalId' => $transferencia->SucursalDestinoId  // ELIMINADO
+                        ]);
+
+                    $productosAgregados++;
+                    $totalCantidadPedida += $cantidad;
+
+                    Log::info('✅ Producto agregado a recepción', [
+                        'producto_id' => $detalle->ProductoId,
+                        'cantidad_pedida' => $cantidad,
+                        'costo_divisa' => $producto->CostoDivisa ?? 0
+                    ]);
+                }
+            }
+
+            Log::info('📊 Resumen de detalles agregados', [
+                'total_productos' => $productosAgregados,
+                'total_cantidad_pedida' => $totalCantidadPedida
+            ]);
+
+            DB::connection('sqlsrv')->commit();
+
+            session([
+                'recepcion_activa' => [
+                    'recepcion_id' => $recepcionId,
+                    'transferencia_id' => $id,
+                    'numero' => $numero,
+                    'fecha_recepcion' => $request->fecha_recepcion,
+                    'observacion' => $request->observacion,
+                    'total_productos' => $productosAgregados,
+                    'total_cantidad' => $totalCantidadPedida
+                ]
+            ]);
+
+            Log::info('✅ Recepción guardada en sesión');
+
+            return redirect()->route('cpanel.transferencias.detallesucursal', $id)
+                ->with('success', 'Recepción creada correctamente. Ahora puede cargar los productos.');
+
+        } catch (\Exception $e) {
+            DB::connection('sqlsrv')->rollBack();
+
+            Log::error('❌ ERROR en crearRecepcionTransferencia', [
+                'transferencia_id' => $id,
+                'error' => $e->getMessage(),
+                'linea' => $e->getLine(),
+                'archivo' => $e->getFile()
+            ]);
+
+            return redirect()->back()
+                ->with('error', 'Error al crear la recepción: ' . $e->getMessage())
+                ->withInput();
+        }
+    }
+
+    public function downloadTemplateRecepcion($id)
+    {
+        try {
+            Log::info('=== INICIO downloadTemplateRecepcion ===', [
+                'transferencia_id' => $id,
+                'usuario' => auth()->id() ?? 'Sistema'
+            ]);
+
+            // 1. Obtener la transferencia
+            $transferencia = DB::connection('sqlsrv')
+                ->table('Transferencias')
+                ->where('TransferenciaId', $id)
+                ->first();
+
+            if (!$transferencia) {
+                Log::warning('Transferencia no encontrada', ['id' => $id]);
+                return redirect()->back()->with('error', 'Transferencia no encontrada');
+            }
+
+            // 2. Obtener los detalles de la transferencia con productos
+            $detalles = DB::connection('sqlsrv')
+                ->table('TransferenciaDetalles as td')
+                ->leftJoin('Productos as p', 'td.ProductoId', '=', 'p.ID')
+                ->where('td.TransferenciaId', $id)
+                ->select([
+                    'td.*',
+                    'p.Codigo',
+                    'p.Descripcion as producto_nombre',
+                    'p.Referencia'
+                ])
+                ->get();
+
+            Log::info('📊 Productos encontrados para plantilla', [
+                'total' => $detalles->count()
+            ]);
+
+            // 3. Obtener nombres de sucursales
+            $sucursalOrigen = DB::connection('sqlsrv')
+                ->table('Sucursales')
+                ->where('ID', $transferencia->SucursalOrigenId)
+                ->first();
+
+            $sucursalDestino = DB::connection('sqlsrv')
+                ->table('Sucursales')
+                ->where('ID', $transferencia->SucursalDestinoId)
+                ->first();
+
+            // 4. Crear el Excel
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+
+            // ============================================
+            // ENCABEZADO
+            // ============================================
+            
+            // Fila 1: Título "Recepcion"
+            $sheet->mergeCells('A1:I1');
+            $sheet->setCellValue('A1', 'Recepcion');
+            $sheet->getStyle('A1')->getFont()->setSize(14)->setBold(true);
+            $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle('A1')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+
+            // Fila 2: Subtítulo "ENTRADA DE RECEPCION"
+            $sheet->mergeCells('A2:I2');
+            $sheet->setCellValue('A2', 'ENTRADA DE RECEPCION');
+            $sheet->getStyle('A2')->getFont()->setSize(12)->setBold(true);
+            $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle('A2')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+
+            // Fila 3: Empresa
+            $sheet->setCellValue('A3', 'Empresa');
+            $sheet->setCellValue('B3', 'Tiendas TenShop');
+            $sheet->mergeCells('B3:I3');
+            $sheet->getStyle('A3')->getFont()->setBold(true);
+
+            // Fila 4: Espacio vacío
+
+            // Fila 5: Fecha
+            $sheet->setCellValue('A5', 'Fecha');
+            $sheet->setCellValue('B5', \Carbon\Carbon::parse($transferencia->Fecha)->format('d/m/Y, H:i:s'));
+            $sheet->mergeCells('B5:I5');
+            $sheet->getStyle('A5')->getFont()->setBold(true);
+
+            // Fila 6: Espacio vacío
+
+            // Fila 7: Origen
+            $sheet->setCellValue('A7', 'Origen');
+            $sheet->setCellValue('B7', 'CodigoOrigen');
+            $sheet->setCellValue('C7', $sucursalOrigen->ID ?? 'N/A');
+            $sheet->setCellValue('D7', 'Nombre');
+            $sheet->setCellValue('E7', $sucursalOrigen->Nombre ?? 'N/A');
+            $sheet->mergeCells('E7:I7');
+            $sheet->getStyle('A7')->getFont()->setBold(true);
+            $sheet->getStyle('B7')->getFont()->setBold(true);
+            $sheet->getStyle('D7')->getFont()->setBold(true);
+
+            // Fila 8: Destino
+            $sheet->setCellValue('A8', 'Destino');
+            $sheet->setCellValue('B8', 'CodigoDestino');
+            $sheet->setCellValue('C8', $sucursalDestino->ID ?? 'N/A');
+            $sheet->setCellValue('D8', 'Nombre');
+            $sheet->setCellValue('E8', $sucursalDestino->Nombre ?? 'N/A');
+            $sheet->mergeCells('E8:I8');
+            $sheet->getStyle('A8')->getFont()->setBold(true);
+            $sheet->getStyle('B8')->getFont()->setBold(true);
+            $sheet->getStyle('D8')->getFont()->setBold(true);
+
+            // Fila 9: Espacio vacío
+
+            // ============================================
+            // TABLA DE PRODUCTOS
+            // ============================================
+            
+            // Fila 10: Encabezados de la tabla
+            $row = 10;
+            $headers = [
+                'A' => 'Codigo',
+                'B' => 'Referencia',
+                'C' => 'Descripcion',
+                'D' => 'Enviada',
+                'E' => 'Recibido',
+                'F' => 'Pie Solo',
+                'G' => 'Pie Invertido',
+                'H' => 'Dañado',
+                'I' => 'Vacío'
+            ];
+
+            foreach ($headers as $col => $header) {
+                $sheet->setCellValue($col . $row, $header);
+            }
+
+            // Estilo de los encabezados
+            $headerStyle = $sheet->getStyle('A10:I10');
+            $headerStyle->getFont()->setBold(true);
+            $headerStyle->getFont()->setSize(10);
+            $headerStyle->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $headerStyle->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+            $headerStyle->getFill()->setFillType(Fill::FILL_SOLID);
+            $headerStyle->getFill()->getStartColor()->setARGB('FF4F81BD');
+            $headerStyle->getFont()->getColor()->setARGB('FFFFFFFF');
+            $headerStyle->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+
+            // ============================================
+            // DATOS DE PRODUCTOS
+            // ============================================
+            
+            $row = 11;
+            foreach ($detalles as $detalle) {
+                $sheet->setCellValue('A' . $row, $detalle->Codigo ?? 'N/A');
+                $sheet->setCellValue('B' . $row, $detalle->Referencia ?? 'N/A');
+                $sheet->setCellValue('C' . $row, $detalle->producto_nombre ?? 'N/A');
+                $sheet->setCellValue('D' . $row, (float)($detalle->CantidadEmitida ?? 0));  // Enviada (solo lectura)
+                $sheet->setCellValue('E' . $row, 0);  // Recibido (editable)
+                $sheet->setCellValue('F' . $row, 0);  // Pie Solo (editable)
+                $sheet->setCellValue('G' . $row, 0);  // Pie Invertido (editable)
+                $sheet->setCellValue('H' . $row, 0);  // Dañado (editable)
+                $sheet->setCellValue('I' . $row, 0);  // Vacío (editable)
+                $row++;
+            }
+
+            // Estilo de los datos
+            $dataStyle = $sheet->getStyle('A11:I' . ($row - 1));
+            $dataStyle->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+            $dataStyle->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $dataStyle->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+
+            // Columna D (Enviada) - fondo gris claro (solo lectura)
+            $readOnlyStyle = $sheet->getStyle('D11:D' . ($row - 1));
+            $readOnlyStyle->getFill()->setFillType(Fill::FILL_SOLID);
+            $readOnlyStyle->getFill()->getStartColor()->setARGB('FFF2F2F2');
+
+            // ============================================
+            // AJUSTAR ANCHO DE COLUMNAS
+            // ============================================
+            
+            $sheet->getColumnDimension('A')->setWidth(15);  // Codigo
+            $sheet->getColumnDimension('B')->setWidth(18);  // Referencia
+            $sheet->getColumnDimension('C')->setWidth(40);  // Descripcion
+            $sheet->getColumnDimension('D')->setWidth(12);  // Enviada
+            $sheet->getColumnDimension('E')->setWidth(12);  // Recibido
+            $sheet->getColumnDimension('F')->setWidth(12);  // Pie Solo
+            $sheet->getColumnDimension('G')->setWidth(14);  // Pie Invertido
+            $sheet->getColumnDimension('H')->setWidth(12);  // Dañado
+            $sheet->getColumnDimension('I')->setWidth(12);  // Vacío
+
+            // ============================================
+            // GENERAR NOMBRE DEL ARCHIVO
+            // ============================================
+            
+            $baseName = 'Plantilla_Recepcion_' . $transferencia->Numero;
+            $baseName = preg_replace('/[^A-Za-z0-9_\-]/', '_', $baseName);
+            $filename = $baseName . '.xlsx';
+
+            Log::info('✅ Excel generado correctamente', ['filename' => $filename]);
+
+            // ============================================
+            // DESCARGAR
+            // ============================================
+            
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
+            header('Cache-Control: max-age=0');
+
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
+            exit;
+
+        } catch (\Exception $e) {
+            Log::error('❌ Error en downloadTemplateRecepcion: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al generar la plantilla: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function uploadExcelRecepcion(Request $request, $id)
+    {
+        Log::info('=== INICIO uploadExcelRecepcion (SOLO LECTURA) ===', [
+            'transferencia_id' => $id,
+            'usuario' => auth()->id() ?? 'Sistema'
+        ]);
+
+        try {
+            // 1. Validar que se haya subido un archivo
+            if (!$request->hasFile('excel_file')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se ha seleccionado ningún archivo'
+                ], 400);
+            }
+
+            $file = $request->file('excel_file');
+            
+            // 2. Validar extensión
+            $extension = $file->getClientOriginalExtension();
+            if (!in_array($extension, ['xlsx', 'xls'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El archivo debe ser Excel (.xlsx o .xls)'
+                ], 400);
+            }
+
+            // 3. Leer el archivo Excel
+            $spreadsheet = IOFactory::load($file->getPathname());
+            $sheet = $spreadsheet->getActiveSheet();
+            $rows = $sheet->toArray();
+
+            Log::info('📊 Excel leído', ['total_filas' => count($rows)]);
+
+            // 4. Buscar la fila donde comienzan los productos
+            $startRow = -1;
+            $headerRow = [];
+            
+            foreach ($rows as $index => $row) {
+                if (!empty($row) && is_array($row)) {
+                    $firstCell = trim($row[0] ?? '');
+                    if (strtoupper($firstCell) == 'CODIGO' || $firstCell == 'Codigo' || $firstCell == 'Código') {
+                        $startRow = $index;
+                        $headerRow = $row;
+                        break;
+                    }
+                }
+            }
+
+            if ($startRow == -1) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se encontró la tabla de productos en el Excel.'
+                ], 400);
+            }
+
+            // 5. Mapear columnas
+            $columnMap = [];
+            foreach ($headerRow as $index => $column) {
+                $colName = trim($column);
+                if (strtoupper($colName) == 'CODIGO' || $colName == 'Codigo' || $colName == 'Código') {
+                    $columnMap['codigo'] = $index;
+                } elseif (strtoupper($colName) == 'REFERENCIA' || $colName == 'Referencia') {
+                    $columnMap['referencia'] = $index;
+                } elseif (strtoupper($colName) == 'DESCRIPCION' || $colName == 'Descripcion' || $colName == 'Descripción') {
+                    $columnMap['descripcion'] = $index;
+                } elseif (strtoupper($colName) == 'ENVIADA' || $colName == 'Enviada') {
+                    $columnMap['enviada'] = $index;
+                } elseif (strtoupper($colName) == 'RECIBIDO' || $colName == 'Recibido') {
+                    $columnMap['recibido'] = $index;
+                } elseif (strtoupper($colName) == 'PIE SOLO' || $colName == 'Pie Solo') {
+                    $columnMap['pie_solo'] = $index;
+                } elseif (strtoupper($colName) == 'PIE INVERTIDO' || $colName == 'Pie Invertido') {
+                    $columnMap['pie_invertido'] = $index;
+                } elseif (strtoupper($colName) == 'DAÑADO' || $colName == 'Dañado') {
+                    $columnMap['danado'] = $index;
+                } elseif (strtoupper($colName) == 'VACÍO' || $colName == 'Vacío' || $colName == 'Vacio') {
+                    $columnMap['vacio'] = $index;
+                }
+            }
+
+            // 6. Procesar datos (SOLO LECTURA, NO GUARDA EN BD)
+            $productos = [];
+            $productosNoEncontrados = [];
+
+            for ($i = $startRow + 1; $i < count($rows); $i++) {
+                $row = $rows[$i];
+                
+                if (empty(array_filter($row))) {
+                    continue;
+                }
+
+                $codigo = trim($row[$columnMap['codigo']] ?? '');
+                $recibido = floatval($row[$columnMap['recibido']] ?? 0);
+                $pieSolo = floatval($row[$columnMap['pie_solo']] ?? 0);
+                $pieInvertido = floatval($row[$columnMap['pie_invertido']] ?? 0);
+                $danado = floatval($row[$columnMap['danado']] ?? 0);
+                $vacio = floatval($row[$columnMap['vacio']] ?? 0);
+
+                if (empty($codigo)) {
+                    continue;
+                }
+
+                // Buscar el producto en la transferencia (para validar que existe)
+                $detalle = DB::connection('sqlsrv')
+                    ->table('TransferenciaDetalles as td')
+                    ->leftJoin('Productos as p', 'td.ProductoId', '=', 'p.ID')
+                    ->where('td.TransferenciaId', $id)
+                    ->where('p.Codigo', $codigo)
+                    ->select('td.ProductoId', 'p.Codigo')
+                    ->first();
+
+                if ($detalle) {
+                    $productos[] = [
+                        'producto_id' => $detalle->ProductoId,
+                        'codigo' => $codigo,
+                        'recibido' => $recibido,
+                        'pie_solo' => $pieSolo,
+                        'pie_invertido' => $pieInvertido,
+                        'danado' => $danado,
+                        'vacio' => $vacio
+                    ];
+                } else {
+                    $productosNoEncontrados[] = $codigo;
+                }
+            }
+
+            Log::info('✅ Excel procesado (SOLO LECTURA)', [
+                'productos_encontrados' => count($productos),
+                'productos_no_encontrados' => count($productosNoEncontrados)
+            ]);
+
+            // 7. Retornar SOLO los datos (NO se guarda en BD)
+            return response()->json([
+                'success' => true,
+                'message' => 'Excel procesado correctamente. Los datos se han cargado en la tabla.',
+                'data' => [
+                    'productos' => $productos,
+                    'productos_no_encontrados' => $productosNoEncontrados
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Error en uploadExcelRecepcion: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al procesar el archivo: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function confirmarRecepcion(Request $request, $id)
+    {
+        Log::info('=== INICIO confirmarRecepcion ===', [
+            'transferencia_id' => $id,
+            'usuario' => auth()->id() ?? 'Sistema',
+            'fecha_hora' => now()->format('Y-m-d H:i:s'),
+            'ip' => $request->ip()
+        ]);
+
+        try {
+            // 1. Validar datos
+            Log::info('📝 Paso 1: Validando datos del formulario');
+            
+            $request->validate([
+                'cantidades' => 'required|array',
+                'cantidades.*.recibido' => 'numeric|min:0',
+                'cantidades.*.pie_solo' => 'numeric|min:0',
+                'cantidades.*.pie_invertido' => 'numeric|min:0',
+                'cantidades.*.vacio' => 'numeric|min:0',
+                'cantidades.*.danado' => 'numeric|min:0',
+                'fecha_recepcion' => 'nullable|date',
+                'observacion' => 'nullable|string|max:500'
+            ]);
+
+            Log::info('✅ Datos validados correctamente', [
+                'total_productos' => count($request->input('cantidades')),
+                'fecha_recepcion' => $request->fecha_recepcion
+            ]);
+
+            // 2. Obtener la transferencia
+            Log::info('🔍 Paso 2: Buscando transferencia', ['transferencia_id' => $id]);
+
+            $transferencia = DB::connection('sqlsrv')
+                ->table('Transferencias')
+                ->where('TransferenciaId', $id)
+                ->first();
+
+            if (!$transferencia) {
+                Log::warning('❌ Transferencia no encontrada', ['transferencia_id' => $id]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Transferencia no encontrada'
+                ], 404);
+            }
+
+            Log::info('✅ Transferencia encontrada', [
+                'id' => $transferencia->TransferenciaId,
+                'numero' => $transferencia->Numero,
+                'estatus' => $transferencia->Estatus,
+                'origen' => $transferencia->SucursalOrigenId,
+                'destino' => $transferencia->SucursalDestinoId
+            ]);
+
+            // 3. Verificar que esté en estatus 4 (Recibiendo)
+            Log::info('📝 Paso 3: Verificando estatus de transferencia', ['estatus_actual' => $transferencia->Estatus]);
+
+            if ($transferencia->Estatus != 4) {
+                Log::warning('⚠️ Transferencia no está en estado Recibiendo', [
+                    'estatus_actual' => $transferencia->Estatus,
+                    'esperado' => 4
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La transferencia no está en estado Recibiendo para finalizar'
+                ], 400);
+            }
+
+            Log::info('✅ Estatus verificado correctamente (Recibiendo = 4)');
+
+            // 4. Obtener la recepción activa
+            Log::info('🔍 Paso 4: Buscando recepción activa', ['transferencia_id' => $id]);
+
+            $recepcionData = DB::connection('sqlsrv')
+                ->table('RecepcionesTransferencias as rt')
+                ->join('Recepciones as r', 'rt.RecepcionId', '=', 'r.RecepcionId')
+                ->where('rt.TransferenciaId', $id)
+                ->where('r.Estatus', 1) // EnProceso
+                ->select('r.*')
+                ->first();
+
+            if (!$recepcionData) {
+                Log::warning('❌ No hay recepción activa', ['transferencia_id' => $id]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No hay una recepción activa para esta transferencia'
+                ], 400);
+            }
+
+            Log::info('✅ Recepción activa encontrada', [
+                'recepcion_id' => $recepcionData->RecepcionId,
+                'numero' => $recepcionData->Numero,
+                'estatus' => $recepcionData->Estatus
+            ]);
+
+            // 5. Obtener los detalles de la recepción
+            Log::info('🔍 Paso 5: Obteniendo detalles de la recepción', ['recepcion_id' => $recepcionData->RecepcionId]);
+
+            $detallesRecepcion = DB::connection('sqlsrv')
+                ->table('RecepcionesDetalles as rd')
+                ->leftJoin('Productos as p', 'rd.ProductoId', '=', 'p.ID')
+                ->where('rd.RecepcionId', $recepcionData->RecepcionId)
+                ->select([
+                    'rd.*',
+                    'p.Codigo',
+                    'p.CodigoBarra',
+                    'p.Referencia',
+                    'p.Descripcion',
+                    'p.UrlFoto'
+                ])
+                ->get();
+
+            Log::info('✅ Detalles de recepción encontrados', [
+                'total_detalles' => $detallesRecepcion->count()
+            ]);
+
+            DB::connection('sqlsrv')->beginTransaction();
+            Log::info('🔄 Transacción iniciada');
+
+            // 6. ACTUALIZAR RECEPCIONES A PROCESADA (2)
+            Log::info('📝 Paso 6: Actualizando estatus de recepción a Procesada (2)');
+
+            DB::connection('sqlsrv')
+                ->table('Recepciones')
+                ->where('RecepcionId', $recepcionData->RecepcionId)
+                ->update(['Estatus' => 2]); // Procesada
+
+            Log::info('✅ Estatus de recepción actualizado a Procesada (2)', [
+                'recepcion_id' => $recepcionData->RecepcionId
+            ]);
+
+            // 7. ACTUALIZAR INVENTARIO Y DETALLES
+            Log::info('📝 Paso 7: Procesando productos de la recepción');
+
+            $cantidades = $request->input('cantidades');
+            $productosActualizados = 0;
+            $productosEliminados = 0;
+            $totalRecibido = 0;
+
+            foreach ($detallesRecepcion as $detalle) {
+                $productoId = $detalle->ProductoId;
+                
+                // Obtener todos los valores del frontend
+                $cantidadRecibida = $cantidades[$productoId]['recibido'] ?? 0;
+                $pieSolo = $cantidades[$productoId]['pie_solo'] ?? 0;
+                $pieInvertido = $cantidades[$productoId]['pie_invertido'] ?? 0;
+                $cajaVacia = $cantidades[$productoId]['vacio'] ?? 0;
+                $piezaDanada = $cantidades[$productoId]['danado'] ?? 0;
+                
+                Log::info('📦 Procesando producto', [
+                    'producto_id' => $productoId,
+                    'codigo' => $detalle->Codigo,
+                    'cantidad_recibida' => $cantidadRecibida,
+                    'pie_solo' => $pieSolo,
+                    'pie_invertido' => $pieInvertido,
+                    'caja_vacia' => $cajaVacia,
+                    'pieza_danada' => $piezaDanada
+                ]);
+
+                if ($cantidadRecibida > 0 || $pieSolo > 0 || $pieInvertido > 0 || $cajaVacia > 0 || $piezaDanada > 0) {
+                    // Actualizar TODOS los campos en RecepcionesDetalles
+                    DB::connection('sqlsrv')
+                        ->table('RecepcionesDetalles')
+                        ->where('RecepcionesDetallesId', $detalle->RecepcionesDetallesId)
+                        ->update([
+                            'CantidadRecibida' => $cantidadRecibida,
+                            'CantidadPieSolo' => $pieSolo,
+                            'CantidadPieInvertido' => $pieInvertido,
+                            'CantidadCajaVacia' => $cajaVacia,
+                            'CantidadPiezaDanada' => $piezaDanada
+                        ]);
+
+                    Log::info('✅ Producto actualizado en RecepcionesDetalles', [
+                        'detalle_id' => $detalle->RecepcionesDetallesId,
+                        'producto_id' => $productoId,
+                        'codigo' => $detalle->Codigo
+                    ]);
+
+                    // Actualizar inventario (solo con CantidadRecibida)
+                    if ($cantidadRecibida > 0) {
+                        Log::info('📦 Actualizando inventario para producto', [
+                            'producto_id' => $productoId,
+                            'cantidad' => $cantidadRecibida,
+                            'sucursal_destino' => $transferencia->SucursalDestinoId
+                        ]);
+
+                        $this->actualizarInventarioProductoRecepcion(
+                            $detalle->ProductoId,
+                            $detalle->Codigo,
+                            $detalle->CodigoBarra,
+                            $detalle->Referencia,
+                            $detalle->CostoDivisa ?? 0,
+                            $detalle->CostoBs ?? 0,
+                            $detalle->Descripcion,
+                            $detalle->UrlFoto,
+                            $cantidadRecibida,
+                            $transferencia->SucursalDestinoId
+                        );
+                    }
+
+                    $productosActualizados++;
+                    $totalRecibido += $cantidadRecibida;
+                } else {
+                    // Eliminar detalle si TODOS los valores son 0
+                    DB::connection('sqlsrv')
+                        ->table('RecepcionesDetalles')
+                        ->where('RecepcionesDetallesId', $detalle->RecepcionesDetallesId)
+                        ->delete();
+
+                    $productosEliminados++;
+                    Log::info('🗑️ RecepcionDetalle eliminado (todos los valores en 0)', [
+                        'detalle_id' => $detalle->RecepcionesDetallesId,
+                        'producto_id' => $productoId,
+                        'codigo' => $detalle->Codigo
+                    ]);
+                }
+            }
+
+            Log::info('📊 Resumen de procesamiento de productos', [
+                'productos_actualizados' => $productosActualizados,
+                'productos_eliminados' => $productosEliminados,
+                'total_recibido' => $totalRecibido
+            ]);
+
+            // 8. ✅ ACTUALIZAR CANTIDADES EN TRANSFERENCIA (SOLO UNA VEZ)
+            Log::info('📝 Paso 8: Actualizando TransferenciaDetalles');
+            $this->actualizarCantidadesEnTransferencia($id, $detallesRecepcion, $cantidades);
+
+            // 9. GENERAR AUDITORÍA (si hay diferencias)
+            Log::info('📝 Paso 9: Verificando diferencias en recepción');
+
+            $hayDiferencias = $this->verificarDiferenciasRecepcion($detallesRecepcion, $cantidades);
+
+            if ($hayDiferencias) {
+                Log::info('⚠️ Se detectaron diferencias. Generando auditoría...');
+                $this->generarAuditoriaRecepcion($recepcionData->RecepcionId, $detallesRecepcion, $cantidades);
+                Log::info('✅ Auditoría generada por diferencias en recepción');
+            } else {
+                Log::info('✅ No se detectaron diferencias en la recepción');
+            }
+
+            // 10. Limpiar sesión
+            Log::info('📝 Paso 10: Limpiando sesión');
+            session()->forget('recepcion_activa');
+            Log::info('✅ Sesión limpiada');
+
+            DB::connection('sqlsrv')->commit();
+            Log::info('✅ Transacción confirmada exitosamente');
+
+            Log::info('=== FIN confirmarRecepcion (EXITOSO) ===', [
+                'productos_actualizados' => $productosActualizados,
+                'total_recibido' => $totalRecibido,
+                'hay_auditoria' => $hayDiferencias
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => $hayDiferencias 
+                    ? 'Recepción finalizada con diferencias. Se ha generado una auditoría.'
+                    : 'Recepción finalizada exitosamente',
+                'data' => [
+                    'productos_actualizados' => $productosActualizados,
+                    'productos_eliminados' => $productosEliminados,
+                    'total_recibido' => $totalRecibido,
+                    'hay_auditoria' => $hayDiferencias
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            DB::connection('sqlsrv')->rollBack();
+
+            Log::error('❌ ERROR en confirmarRecepcion', [
+                'transferencia_id' => $id,
+                'error' => $e->getMessage(),
+                'linea' => $e->getLine(),
+                'archivo' => $e->getFile(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al finalizar la recepción: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    private function actualizarInventarioProductoRecepcion($productoId, $codigo, $codigoBarra, $referencia, $costoDivisa, $costoBs, $descripcion, $urlFoto, $existencia, $sucursalId)
+    {
+        // Buscar si existe el producto en la sucursal
+        $productoSucursal = DB::connection('sqlsrv')
+            ->table('ProductoSucursal')
+            ->where('ProductoId', $productoId)
+            ->where('SucursalId', $sucursalId)
+            ->first();
+
+        if ($productoSucursal) {
+            // ✅ Actualizar existencia
+            DB::connection('sqlsrv')
+                ->table('ProductoSucursal')
+                ->where('ProductoId', $productoId)
+                ->where('SucursalId', $sucursalId)
+                ->update([
+                    'Existencia' => $productoSucursal->Existencia + $existencia,
+                    'PvpDivisa' => $costoDivisa,
+                    'PvpBs' => $costoBs
+                ]);
+
+            Log::info('✅ Inventario actualizado (existente)', [
+                'producto_id' => $productoId,
+                'sucursal_id' => $sucursalId,
+                'existencia_anterior' => $productoSucursal->Existencia,
+                'cantidad_agregada' => $existencia,
+                'existencia_nueva' => $productoSucursal->Existencia + $existencia
+            ]);
+        } else {
+            // ✅ Crear nuevo registro en ProductoSucursal
+            DB::connection('sqlsrv')
+                ->table('ProductoSucursal')
+                ->insert([
+                    'SucursalId' => $sucursalId,
+                    'ProductoId' => $productoId,
+                    'Existencia' => $existencia,
+                    'PvpBs' => $costoBs,
+                    'PvpDivisa' => $costoDivisa,
+                    'Estatus' => 1,
+                    'FechaIngreso' => now()
+                ]);
+
+            Log::info('✅ Producto creado en sucursal', [
+                'producto_id' => $productoId,
+                'sucursal_id' => $sucursalId,
+                'existencia_inicial' => $existencia
+            ]);
+        }
+    }
+
+    private function actualizarCantidadesEnTransferencia($transferenciaId, $detallesRecepcion, $cantidades)
+    {
+        Log::info('=== actualizarCantidadesEnTransferencia ===', [
+            'transferencia_id' => $transferenciaId,
+            'total_detalles' => $detallesRecepcion->count()
+        ]);
+
+        foreach ($detallesRecepcion as $detalle) {
+            // ✅ Obtener el valor 'recibido' del array
+            $cantidadRecibida = $cantidades[$detalle->ProductoId]['recibido'] ?? 0;
+            
+            Log::info('📦 Procesando TransferenciaDetalle', [
+                'producto_id' => $detalle->ProductoId,
+                'cantidad_recibida' => $cantidadRecibida
+            ]);
+
+            // Buscar en TransferenciaDetalles
+            $detalleTransferencia = DB::connection('sqlsrv')
+                ->table('TransferenciaDetalles')
+                ->where('TransferenciaId', $transferenciaId)
+                ->where('ProductoId', $detalle->ProductoId)
+                ->first();
+
+            if ($detalleTransferencia) {
+                // ✅ Actualizar CantidadRecibida (sumar al existente)
+                $nuevaCantidad = $detalleTransferencia->CantidadRecibida + $cantidadRecibida;
+                
+                DB::connection('sqlsrv')
+                    ->table('TransferenciaDetalles')
+                    ->where('TransferenciaDetalleId', $detalleTransferencia->TransferenciaDetalleId)
+                    ->update([
+                        'CantidadRecibida' => $nuevaCantidad
+                    ]);
+
+                Log::info('✅ TransferenciaDetalle actualizado', [
+                    'producto_id' => $detalle->ProductoId,
+                    'cantidad_recibida_anterior' => $detalleTransferencia->CantidadRecibida,
+                    'cantidad_agregada' => $cantidadRecibida,
+                    'cantidad_recibida_nueva' => $nuevaCantidad
+                ]);
+            } else {
+                // ✅ Crear nuevo detalle en Transferencia
+                DB::connection('sqlsrv')
+                    ->table('TransferenciaDetalles')
+                    ->insert([
+                        'TransferenciaId' => $transferenciaId,
+                        'ProductoId' => $detalle->ProductoId,
+                        'CantidadEmitida' => 0,
+                        'CantidadRecibida' => $cantidadRecibida
+                    ]);
+
+                Log::info('✅ Nuevo TransferenciaDetalle creado', [
+                    'producto_id' => $detalle->ProductoId,
+                    'cantidad_recibida' => $cantidadRecibida
+                ]);
+            }
+        }
+
+        // ✅ ACTUALIZAR ESTATUS DE TRANSFERENCIA
+        $detallesTransferencia = DB::connection('sqlsrv')
+            ->table('TransferenciaDetalles')
+            ->where('TransferenciaId', $transferenciaId)
+            ->get();
+
+        $todosDisponibles = true;
+        foreach ($detallesTransferencia as $detalle) {
+            $cantidadDisponible = $detalle->CantidadEmitida - $detalle->CantidadRecibida;
+            if ($cantidadDisponible > 0) {
+                $todosDisponibles = false;
+                break;
+            }
+        }
+
+        $nuevoEstatus = $todosDisponibles ? 6 : 5;
+
+        DB::connection('sqlsrv')
+            ->table('Transferencias')
+            ->where('TransferenciaId', $transferenciaId)
+            ->update(['Estatus' => $nuevoEstatus]);
+
+        Log::info('✅ Estatus de transferencia actualizado', [
+            'transferencia_id' => $transferenciaId,
+            'nuevo_estatus' => $nuevoEstatus,
+            'todos_disponibles' => $todosDisponibles
+        ]);
+    }
+
+    private function verificarDiferenciasRecepcion($detallesRecepcion, $cantidades)
+    {
+        foreach ($detallesRecepcion as $detalle) {
+            $cantidadEmitida = $detalle->CantidadPedida ?? 0;
+            // ✅ Obtener el valor 'recibido' del array
+            $cantidadRecibida = $cantidades[$detalle->ProductoId]['recibido'] ?? 0;
+
+            if ($cantidadEmitida != $cantidadRecibida) {
+                Log::info('⚠️ Diferencia detectada', [
+                    'producto_id' => $detalle->ProductoId,
+                    'cantidad_emitida' => $cantidadEmitida,
+                    'cantidad_recibida' => $cantidadRecibida,
+                    'diferencia' => $cantidadEmitida - $cantidadRecibida
+                ]);
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    private function generarAuditoriaRecepcion($recepcionId, $detallesRecepcion, $cantidades)
+    {
+        // 1. Crear auditoría
+        $numero = 'AUD' . date('YmdHis') . '-' . $recepcionId;
+        
+        $auditoriaId = DB::connection('sqlsrv')
+            ->table('Auditorias')
+            ->insertGetId([
+                'Numero' => $numero,
+                'RecepcionId' => $recepcionId,
+                'Estatus' => 0, // Nueva
+                'Observacion' => 'Diferencias en Recepción',
+                'Fecha' => now()
+            ]);
+
+        Log::info('✅ Auditoría creada', [
+            'auditoria_id' => $auditoriaId,
+            'numero' => $numero
+        ]);
+
+        // 2. Agregar detalles de auditoría (solo los que tienen diferencias)
+        foreach ($detallesRecepcion as $detalle) {
+            $cantidadEmitida = $detalle->CantidadPedida ?? 0;
+            // ✅ Obtener el valor 'recibido' del array
+            $cantidadRecibida = $cantidades[$detalle->ProductoId]['recibido'] ?? 0;
+
+            if ($cantidadEmitida != $cantidadRecibida) {
+                DB::connection('sqlsrv')
+                    ->table('AuditoriaDetalles')
+                    ->insert([
+                        'AuditoriaId' => $auditoriaId,
+                        'RecepcionDetalleId' => $detalle->RecepcionesDetallesId
+                    ]);
+
+                Log::info('✅ AuditoriaDetalle creado', [
+                    'recepcion_detalle_id' => $detalle->RecepcionesDetallesId
+                ]);
+            }
+        }
+
+        // 3. Cambiar estatus de recepción a EnAuditoria (4)
+        DB::connection('sqlsrv')
+            ->table('Recepciones')
+            ->where('RecepcionId', $recepcionId)
+            ->update(['Estatus' => 4]); // EnAuditoria
+
+        Log::info('✅ Estatus de recepción cambiado a EnAuditoria (4)');
     }
 }

@@ -144,12 +144,10 @@
                        title="Registrar Pago" data-bs-toggle="tooltip">
                         <i class="bi bi-cash-stack me-1"></i>Registrar Pago
                     </a>
-                    <button type="button"
-                            class="btn btn-primary px-3 fw-semibold"
-                            data-bs-toggle="modal"
-                            data-bs-target="#modalCrearFactura">
+                    <a href="{{ route('cpanel.proveedores.nueva.factura', $proveedor->ProveedorId) }}"
+                    class="btn btn-primary px-3 fw-semibold">
                         <i class="bi bi-file-earmark-plus me-1"></i>Crear Factura
-                    </button>
+                    </a>
                 </div>
             </div>
         </div>

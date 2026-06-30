@@ -2053,10 +2053,158 @@ class ProveedoresController extends Controller
         }
     }
 
+    // private function guardarNuevoProductosDeFactura($productos, $facturaId)
+    // {
+    //     $productosConId = [];
+    //     $proveedorId = null;
+    //     $porcentajeGastos = 0;
+        
+    //     // Obtener el proveedor de la factura
+    //     $factura = DB::connection('sqlsrv')
+    //         ->table('Facturas')
+    //         ->where('ID', $facturaId)
+    //         ->first();
+        
+    //     if ($factura) {
+    //         $proveedorId = $factura->ProveedorId;
+
+    //         // Obtener el porcentaje de gastos del contenedor
+    //         if ($factura->ContenedorId) {
+    //             $contenedor = DB::connection('sqlsrv')
+    //                 ->table('Contenedor')
+    //                 ->where('Id', $factura->ContenedorId)
+    //                 ->first();
+                
+    //             if ($contenedor) {
+    //                 $porcentajeGastos = $contenedor->PorcentajeGastos ?? 0;
+                    
+    //                 // Log para debug
+    //                 \Log::info('Porcentaje de gastos obtenido', [
+    //                     'factura_id' => $facturaId,
+    //                     'contenedor_id' => $factura->ContenedorId,
+    //                     'porcentaje_gastos' => $porcentajeGastos
+    //                 ]);
+    //             }
+    //         }
+    //     }
+        
+    //     // Obtener sucursal de tipo Almacén (si existe en tu BD)
+    //     $sucursalAlmacen = $this->buscarSucursalAlmacen();
+    //     $sucursalId = $sucursalAlmacen ? $sucursalAlmacen->ID : null;
+        
+    //     foreach ($productos as $producto) {
+    //         // Buscar producto por código
+    //         $productoModel = DB::connection('sqlsrv')
+    //             ->table('Productos')
+    //             ->where('Codigo', $producto['codigo'])
+    //             ->first();
+            
+    //         $productoId = null;
+
+    //         // Calcular costo con gastos
+    //         $costoUnitario = $producto['costo_unitario'] ?? 0;
+    //         $costoConGastos = $costoUnitario * (1 + ($porcentajeGastos / 100));
+            
+    //         // Redondear a 2 decimales para moneda
+    //         $costoConGastos = round($costoConGastos, 2);
+            
+    //         \Log::info('Calculando costo con gastos', [
+    //             'codigo' => $producto['codigo'],
+    //             'costo_unitario' => $costoUnitario,
+    //             'porcentaje_gastos' => $porcentajeGastos,
+    //             'costo_final' => $costoConGastos
+    //         ]);
+            
+    //         if (!$productoModel) {
+    //             // Crear nuevo producto
+    //             $productoId = DB::connection('sqlsrv')->table('Productos')->insertGetId([
+    //                 'Codigo' => $producto['codigo'],
+    //                 'Descripcion' => $producto['descripcion'],
+    //                 'Referencia' => $producto['referencia'] ?? '',
+    //                 //'CostoDivisa' => $producto['costo_unitario'],
+    //                 'CostoDivisa' => $costoConGastos, // ✅ Costo unitario + % gastos
+    //                 // 'CostoBs' => $producto['costo'] * 40,
+    //                 'Estatus' => 1,
+    //                 'EsProveedorAsignado' => 1,
+    //                 'FechaCreacion' => now(),
+    //                 'FechaActualizacion' => now()
+    //             ]);
+    //         } else {
+    //             // Actualizar producto existente
+    //             DB::connection('sqlsrv')
+    //                 ->table('Productos')
+    //                 ->where('ID', $productoModel->ID)
+    //                 ->update([
+    //                     'Descripcion' => $producto['descripcion'],
+    //                     'Referencia' => $producto['referencia'] ?? '',
+    //                     // 'CostoDivisa' => $producto['costo_unitario'],
+    //                     'CostoDivisa' => $costoConGastos, // ✅ Costo unitario + % gastos
+    //                     'CostoBs' => 0,
+    //                     'EsProveedorAsignado' => 1,
+    //                     'FechaActualizacion' => now()
+    //                 ]);
+    //             $productoId = $productoModel->ID;
+    //         }
+            
+    //         // Guardar en almacén (ProductoSucursal) - si existe la tabla
+    //         if ($sucursalId) {
+    //             $existeAlmacen = DB::connection('sqlsrv')
+    //                 ->table('ProductoSucursal')
+    //                 ->where('SucursalId', $sucursalId)
+    //                 ->where('ProductoId', $productoId)
+    //                 ->exists();
+                
+    //             if (!$existeAlmacen) {
+    //                 DB::connection('sqlsrv')->table('ProductoSucursal')->insert([
+    //                     'SucursalId' => $sucursalId,
+    //                     'ProductoId' => $productoId,
+    //                     'PvpBs' => 0,
+    //                     'PvpDivisa' => 0,
+    //                     'Estatus' => 1,
+    //                     'Existencia' => 0,
+    //                     'FechaIngreso' => now(),
+    //                     'FechaUltimaVenta' => null
+    //                 ]);
+    //             }
+    //         }
+            
+    //         // Guardar asociación proveedor-producto
+    //         if ($proveedorId) {
+    //             $existeAsociacion = DB::connection('sqlsrv')
+    //                 ->table('ProveedorProducto')
+    //                 ->where('ProveedorId', $proveedorId)
+    //                 ->where('ProductoId', $productoId)
+    //                 ->exists();
+                
+    //             if (!$existeAsociacion) {
+    //                 DB::connection('sqlsrv')->table('ProveedorProducto')->insert([
+    //                     'ProveedorId' => $proveedorId,
+    //                     'ProductoId' => $productoId
+    //                 ]);
+    //             }
+    //         }
+            
+    //         $productosConId[] = [
+    //             'producto_id' => $productoId,
+    //             'codigo' => $producto['codigo'],
+    //             'descripcion' => $producto['descripcion'],
+    //             'referencia' => $producto['referencia'] ?? '',  // ✅ Agregar referencia
+    //             'costo' => $producto['costo'],
+    //             'costo_unitario' => $producto['costo_unitario'] ?? 0,  // ✅ AGREGAR
+    //             'costo_excel' => $producto['costo_excel'] ?? 0,
+    //             'cantidad' => $producto['cantidad'],
+    //             'empaque' => $producto['empaque']
+    //         ];
+    //     }
+        
+    //     return $productosConId;
+    // }
+
     private function guardarNuevoProductosDeFactura($productos, $facturaId)
     {
         $productosConId = [];
         $proveedorId = null;
+        $porcentajeGastos = 0;
         
         // Obtener el proveedor de la factura
         $factura = DB::connection('sqlsrv')
@@ -2066,60 +2214,157 @@ class ProveedoresController extends Controller
         
         if ($factura) {
             $proveedorId = $factura->ProveedorId;
+
+            // Obtener el porcentaje de gastos del contenedor
+            if ($factura->ContenedorId) {
+                $contenedor = DB::connection('sqlsrv')
+                    ->table('Contenedor')
+                    ->where('Id', $factura->ContenedorId)
+                    ->first();
+                
+                if ($contenedor) {
+                    $porcentajeGastos = $contenedor->PorcentajeGastos ?? 0;
+                    
+                    \Log::info('Porcentaje de gastos obtenido', [
+                        'factura_id' => $facturaId,
+                        'contenedor_id' => $factura->ContenedorId,
+                        'porcentaje_gastos' => $porcentajeGastos
+                    ]);
+                }
+            }
         }
         
-        // Obtener sucursal de tipo Almacén (si existe en tu BD)
+        // Obtener sucursal de tipo Almacén
         $sucursalAlmacen = $this->buscarSucursalAlmacen();
         $sucursalId = $sucursalAlmacen ? $sucursalAlmacen->ID : null;
         
+        // --- PASO 1: Obtener TODOS los códigos de productos del Excel ---
+        $codigos = array_column($productos, 'codigo');
+        
+        // --- PASO 2: Obtener TODOS los productos existentes en UNA sola consulta ---
+        $productosExistentes = DB::connection('sqlsrv')
+            ->table('Productos')
+            ->whereIn('Codigo', $codigos)
+            ->get()
+            ->keyBy('Codigo'); // Indexar por código para acceso rápido
+        
+        \Log::info('Productos existentes encontrados', [
+            'total_excel' => count($productos),
+            'existentes' => $productosExistentes->count()
+        ]);
+        
+        // Preparar datos para inserciones/actualizaciones masivas
+        $productosNuevos = [];
+        $productosActualizar = [];
+        $idsProductosExistentes = [];
+        
         foreach ($productos as $producto) {
-            // Buscar producto por código
-            $productoModel = DB::connection('sqlsrv')
-                ->table('Productos')
-                ->where('Codigo', $producto['codigo'])
-                ->first();
+            $costoUnitario = $producto['costo_unitario'] ?? 0;
+            $costoConGastos = round($costoUnitario * (1 + ($porcentajeGastos / 100)), 2);
             
-            $productoId = null;
+            $productoData = [
+                'Codigo' => $producto['codigo'],
+                'Descripcion' => $producto['descripcion'],
+                'Referencia' => $producto['referencia'] ?? '',
+                'CostoDivisa' => $costoConGastos,
+                'CostoBs' => 0,
+                'Estatus' => 1,
+                'EsProveedorAsignado' => 1,
+                'FechaActualizacion' => now()
+            ];
             
-            if (!$productoModel) {
-                // Crear nuevo producto
-                $productoId = DB::connection('sqlsrv')->table('Productos')->insertGetId([
-                    'Codigo' => $producto['codigo'],
-                    'Descripcion' => $producto['descripcion'],
-                    'Referencia' => $producto['referencia'] ?? '',
-                    'CostoDivisa' => $producto['costo_unitario'],
-                    // 'CostoBs' => $producto['costo'] * 40,
-                    'Estatus' => 1,
-                    'EsProveedorAsignado' => 1,
-                    'FechaCreacion' => now(),
-                    'FechaActualizacion' => now()
-                ]);
+            // Verificar si el producto ya existe
+            if (isset($productosExistentes[$producto['codigo']])) {
+                // Producto existe - guardar para actualización masiva
+                $productoId = $productosExistentes[$producto['codigo']]->ID;
+                $idsProductosExistentes[] = $productoId;
+                
+                $productosActualizar[] = [
+                    'ID' => $productoId,
+                    'data' => $productoData
+                ];
             } else {
-                // Actualizar producto existente
-                DB::connection('sqlsrv')
-                    ->table('Productos')
-                    ->where('ID', $productoModel->ID)
-                    ->update([
-                        'Descripcion' => $producto['descripcion'],
-                        'Referencia' => $producto['referencia'] ?? '',
-                        'CostoDivisa' => $producto['costo_unitario'],
-                        'CostoBs' => 0,
-                        'EsProveedorAsignado' => 1,
-                        'FechaActualizacion' => now()
-                    ]);
-                $productoId = $productoModel->ID;
+                // Producto nuevo - preparar para inserción masiva
+                $productoData['FechaCreacion'] = now();
+                $productosNuevos[] = $productoData;
+                $productoId = null;
             }
             
-            // Guardar en almacén (ProductoSucursal) - si existe la tabla
-            if ($sucursalId) {
-                $existeAlmacen = DB::connection('sqlsrv')
-                    ->table('ProductoSucursal')
-                    ->where('SucursalId', $sucursalId)
-                    ->where('ProductoId', $productoId)
-                    ->exists();
+            // Guardar en array de resultados (el ID se asignará después)
+            $productosConId[] = [
+                'producto_id' => $productoId ?? null,
+                'codigo' => $producto['codigo'],
+                'descripcion' => $producto['descripcion'],
+                'referencia' => $producto['referencia'] ?? '',
+                'costo' => $producto['costo'],
+                'costo_unitario' => $costoUnitario,
+                'costo_con_gastos' => $costoConGastos,
+                'costo_excel' => $producto['costo_excel'] ?? 0,
+                'cantidad' => $producto['cantidad'],
+                'empaque' => $producto['empaque']
+            ];
+        }
+        
+        // --- PASO 3: Insertar TODOS los productos nuevos en UNA sola operación ---
+        if (!empty($productosNuevos)) {
+            \Log::info('Insertando productos nuevos', ['cantidad' => count($productosNuevos)]);
+            
+            // Insertar en lotes de 50 para no sobrecargar
+            foreach (array_chunk($productosNuevos, 50) as $chunk) {
+                DB::connection('sqlsrv')->table('Productos')->insert($chunk);
+            }
+            
+            // Obtener los IDs de los productos recién insertados
+            $codigosNuevos = array_column($productosNuevos, 'Codigo');
+            $productosInsertados = DB::connection('sqlsrv')
+                ->table('Productos')
+                ->whereIn('Codigo', $codigosNuevos)
+                ->get()
+                ->keyBy('Codigo');
+            
+            // Actualizar los IDs en el array de resultados
+            foreach ($productosConId as &$item) {
+                if (isset($productosInsertados[$item['codigo']])) {
+                    $item['producto_id'] = $productosInsertados[$item['codigo']]->ID;
+                    $idsProductosExistentes[] = $item['producto_id'];
+                }
+            }
+            unset($item); // Romper la referencia
+        }
+        
+        // --- PASO 4: Actualizar TODOS los productos existentes ---
+        if (!empty($productosActualizar)) {
+            \Log::info('Actualizando productos existentes', ['cantidad' => count($productosActualizar)]);
+            
+            foreach ($productosActualizar as $item) {
+                DB::connection('sqlsrv')
+                    ->table('Productos')
+                    ->where('ID', $item['ID'])
+                    ->update($item['data']);
+            }
+        }
+        
+        // Recolectar todos los IDs de productos (nuevos y existentes)
+        $todosLosIds = array_column($productosConId, 'producto_id');
+        $todosLosIds = array_filter($todosLosIds);
+        
+        // --- PASO 5: Guardar en almacén (ProductoSucursal) en UNA sola operación ---
+        if ($sucursalId && !empty($todosLosIds)) {
+            // Obtener los IDs que ya existen en ProductoSucursal
+            $existentesEnAlmacen = DB::connection('sqlsrv')
+                ->table('ProductoSucursal')
+                ->where('SucursalId', $sucursalId)
+                ->whereIn('ProductoId', $todosLosIds)
+                ->pluck('ProductoId')
+                ->toArray();
+            
+            $nuevosEnAlmacen = array_diff($todosLosIds, $existentesEnAlmacen);
+            
+            if (!empty($nuevosEnAlmacen)) {
+                \Log::info('Insertando en ProductoSucursal', ['cantidad' => count($nuevosEnAlmacen)]);
                 
-                if (!$existeAlmacen) {
-                    DB::connection('sqlsrv')->table('ProductoSucursal')->insert([
+                $productoSucursalData = array_map(function($productoId) use ($sucursalId) {
+                    return [
                         'SucursalId' => $sucursalId,
                         'ProductoId' => $productoId,
                         'PvpBs' => 0,
@@ -2128,38 +2373,50 @@ class ProveedoresController extends Controller
                         'Existencia' => 0,
                         'FechaIngreso' => now(),
                         'FechaUltimaVenta' => null
-                    ]);
+                    ];
+                }, $nuevosEnAlmacen);
+                
+                // Insertar en lotes de 50
+                foreach (array_chunk($productoSucursalData, 50) as $chunk) {
+                    DB::connection('sqlsrv')->table('ProductoSucursal')->insert($chunk);
                 }
             }
+        }
+        
+        // --- PASO 6: Guardar asociaciones proveedor-producto en UNA sola operación ---
+        if ($proveedorId && !empty($todosLosIds)) {
+            // Obtener las asociaciones que ya existen
+            $existentesProveedor = DB::connection('sqlsrv')
+                ->table('ProveedorProducto')
+                ->where('ProveedorId', $proveedorId)
+                ->whereIn('ProductoId', $todosLosIds)
+                ->pluck('ProductoId')
+                ->toArray();
             
-            // Guardar asociación proveedor-producto
-            if ($proveedorId) {
-                $existeAsociacion = DB::connection('sqlsrv')
-                    ->table('ProveedorProducto')
-                    ->where('ProveedorId', $proveedorId)
-                    ->where('ProductoId', $productoId)
-                    ->exists();
+            $nuevosProveedor = array_diff($todosLosIds, $existentesProveedor);
+            
+            if (!empty($nuevosProveedor)) {
+                \Log::info('Insertando en ProveedorProducto', ['cantidad' => count($nuevosProveedor)]);
                 
-                if (!$existeAsociacion) {
-                    DB::connection('sqlsrv')->table('ProveedorProducto')->insert([
+                $proveedorProductoData = array_map(function($productoId) use ($proveedorId) {
+                    return [
                         'ProveedorId' => $proveedorId,
                         'ProductoId' => $productoId
-                    ]);
+                    ];
+                }, $nuevosProveedor);
+                
+                // Insertar en lotes de 50
+                foreach (array_chunk($proveedorProductoData, 50) as $chunk) {
+                    DB::connection('sqlsrv')->table('ProveedorProducto')->insert($chunk);
                 }
             }
-            
-            $productosConId[] = [
-                'producto_id' => $productoId,
-                'codigo' => $producto['codigo'],
-                'descripcion' => $producto['descripcion'],
-                'referencia' => $producto['referencia'] ?? '',  // ✅ Agregar referencia
-                'costo' => $producto['costo'],
-                'costo_unitario' => $producto['costo_unitario'] ?? 0,  // ✅ AGREGAR
-                'costo_excel' => $producto['costo_excel'] ?? 0,
-                'cantidad' => $producto['cantidad'],
-                'empaque' => $producto['empaque']
-            ];
         }
+        
+        \Log::info('Productos procesados exitosamente', [
+            'total' => count($productosConId),
+            'nuevos' => count($productosNuevos),
+            'actualizados' => count($productosActualizar)
+        ]);
         
         return $productosConId;
     }
