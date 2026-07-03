@@ -454,6 +454,9 @@ Route::middleware('auth')->group(function() {
     // Detalles de la recepcion
     Route::get('/cpanel/recepciones/{id}/detalle', [RecepcionesController::class, 'detalleRecepcion'])->name('cpanel.recepciones.detalle');
 
+    // Cambiar precio de la recepcion finalizada
+    Route::get('/cpanel/recepciones/{id}/precios', [RecepcionesController::class, 'pvpRecepcion'])->name('cpanel.recepciones.precios');
+
     // Crear Recepciones de sucursal
     Route::get('/transferencias/create', [RecepcionesController::class, 'createTransferencia'])->name('cpanel.transferencias.create');
 
@@ -538,6 +541,18 @@ Route::middleware('auth')->group(function() {
     // ✅ Confirmar/Finalizar recepción (POST)
     Route::post('/cpanel/confirmar/{id}', [RecepcionesController::class, 'confirmarRecepcion'])
         ->name('cpanel.recibir-sucursal.confirmar');
+
+    // Ruta para actualizar precios de una recepción finalizada
+    Route::post('/cpanel/recepciones/{id}/actualizar-precios', [RecepcionesController::class, 'actualizarPrecios'])
+        ->name('cpanel.recepciones.actualizar-precios');
+
+    // Llamado a la vista para cargar cambios de precios masivos
+    Route::get('/cpanel/productos/cambios/masivos', [RecepcionesController::class, 'mostrarCargaProductos'])
+        ->name('cpanel.productos.cambiar.pvp');
+
+    // Guardar precios masivos de productos
+    Route::post('/cpanel/precios/guardar-manual', [RecepcionesController::class, 'guardarPreciosManual'])
+    ->name('cpanel.precios.guardar-manual');
 });
 
 

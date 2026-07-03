@@ -1016,7 +1016,24 @@ class ProveedoresController extends Controller
             ->where('FacturaId', $facturaId)
             ->sum(DB::raw('CantidadEmitida * CostoDivisa'));
         
-        $montoReal = ($sumaProductos ?? 0) + ($factura->Traspaso ?? 0);
+        // Si es factura de mercancía, buscar contenedor
+        if ($factura->Tipo == 0 && $factura->ContenedorId) {
+            $factura->Contenedor = DB::connection('sqlsrv')
+                ->table('Contenedor')
+                ->where('Id', $factura->ContenedorId)
+                ->first();
+            
+            $factura->PorcentajeGastos = $this->uspObtenerPorcentajeGastosFlete($factura->ContenedorId);
+            $factura->Flete = $factura->Contenedor->Flete ?? 0;
+            $factura->Aduana = $factura->Contenedor->Aduana ?? 0;
+        } else {
+            $factura->Contenedor = null;
+            $factura->PorcentajeGastos = 0;
+            $factura->Flete = 0;
+            $factura->Aduana = 0;
+        }
+        
+        $montoReal = ($sumaProductos ?? 0) + ($factura->Traspaso ?? 0) + $factura->Flete;
         $factura->MontoDivisaReal = $montoReal;
         
         // Calcular total pagado de esta factura
@@ -1063,23 +1080,6 @@ class ProveedoresController extends Controller
         
         $factura->sucursal_nombre = $sucursal->Nombre ?? 'N/A';
         $factura->sucursal_direccion = $sucursal->Direccion ?? '';
-        
-        // Si es factura de mercancía, buscar contenedor
-        if ($factura->Tipo == 0 && $factura->ContenedorId) {
-            $factura->Contenedor = DB::connection('sqlsrv')
-                ->table('Contenedor')
-                ->where('Id', $factura->ContenedorId)
-                ->first();
-            
-            $factura->PorcentajeGastos = $this->uspObtenerPorcentajeGastosFlete($factura->ContenedorId);
-            $factura->Flete = $factura->Contenedor->Flete ?? 0;
-            $factura->Aduana = $factura->Contenedor->Aduana ?? 0;
-        } else {
-            $factura->Contenedor = null;
-            $factura->PorcentajeGastos = 0;
-            $factura->Flete = 0;
-            $factura->Aduana = 0;
-        }
         
         // Buscar detalles de la factura (productos)
         $factura->Detalles = $this->buscarDetallesFactura($facturaId);

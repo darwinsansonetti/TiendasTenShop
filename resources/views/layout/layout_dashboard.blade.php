@@ -895,6 +895,24 @@
                 </ul>
               </li>
 
+              {{-- ── PRODUCTOS ────────────────────────────── --}}
+              <li class="nav-header">PRODUCTOS</li>
+
+              <li class="nav-item {{ session('menu_active') == 'Productos' ? 'menu-open' : '' }}">
+                <a href="#" class="nav-link">
+                  <i class="nav-icon bi bi-truck"></i>
+                  <p>Productos <i class="nav-arrow bi bi-chevron-right"></i></p>
+                </a>
+                <ul class="nav nav-treeview">
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.productos.cambiar.pvp') }}"
+                       class="nav-link {{ session('submenu_active') == 'Gestión de Precios' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-list-ul"></i><p>Gestión de Precios</p>
+                    </a>
+                  </li>
+                </ul>
+              </li>
+
             </ul>
             <!--end::Sidebar Menu-->
           </nav>

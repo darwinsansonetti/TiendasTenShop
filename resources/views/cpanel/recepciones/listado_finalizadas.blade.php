@@ -200,6 +200,14 @@
                                            title="Ver detalle" data-bs-toggle="tooltip">
                                             <i class="bi bi-eye" style="font-size:0.8rem;"></i>
                                         </a>
+                                        @if(isset($recepcion->sucursal_destino) && $recepcion->sucursal_destino !== 'ALMACEN')
+                                        <a href="{{ route('cpanel.recepciones.precios', $recepcion->RecepcionId) }}"
+                                        class="btn btn-sm fw-semibold rounded-2"
+                                        style="background:rgba(59,130,246,0.1);color:#1d4ed8;border:1px solid rgba(59,130,246,0.25);font-size:0.78rem;"
+                                        title="Cambiar PVP" data-bs-toggle="tooltip">
+                                            <i class="bi bi-graph-up-arrow"></i>
+                                        </a>
+                                        @endif
                                         <a href="{{ route('cpanel.recepciones.exportar.excel', $recepcion->RecepcionId) }}"
                                            class="btn btn-sm fw-semibold rounded-2"
                                            style="background:rgba(16,185,129,0.1);color:#059669;border:1px solid rgba(16,185,129,0.25);font-size:0.78rem;"

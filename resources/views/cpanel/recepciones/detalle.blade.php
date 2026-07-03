@@ -113,27 +113,44 @@
                     {{-- Columna derecha --}}
                     <div class="col-md-5">
                         <div class="row g-3">
-                            <div class="col-6">
-                                <p class="text-uppercase text-muted mb-1" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Proveedor</p>
-                                <p class="mb-0 fw-semibold text-dark">{{ $recepcion->proveedor_nombre ?? 'N/A' }}</p>
-                            </div>
-                            <div class="col-6">
-                                <p class="text-uppercase text-muted mb-1" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">RIF / Cédula</p>
-                                <p class="mb-0 text-muted" style="font-size:0.88rem;">{{ $recepcion->proveedor_rif ?? 'N/A' }}</p>
-                            </div>
-                            <div class="col-6">
-                                <p class="text-uppercase text-muted mb-1" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Sucursal Destino</p>
-                                <p class="mb-0 fw-semibold text-dark">{{ $recepcion->sucursal_destino ?? 'N/A' }}</p>
-                            </div>
-                            <div class="col-6">
-                                <p class="text-uppercase text-muted mb-1" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Factura</p>
-                                <p class="mb-0 text-muted" style="font-size:0.88rem;">{{ $recepcion->factura_numero ?? 'N/A' }}</p>
-                            </div>
-                            @if(isset($recepcion->sucursal_origen))
-                            <div class="col-6">
-                                <p class="text-uppercase text-muted mb-1" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Sucursal Origen</p>
-                                <p class="mb-0 text-muted" style="font-size:0.88rem;">{{ $recepcion->sucursal_origen ?? 'N/A' }}</p>
-                            </div>
+                            @if($relacionTransferencia)
+                                {{-- Mostrar datos de la Transferencia --}}
+                                <div class="col-6">
+                                    <p class="text-uppercase text-muted mb-1" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Número</p>
+                                    <p class="mb-0 fw-bold text-dark">#{{ $relacionTransferencia->Numero ?? 'N/A' }}</p>
+                                </div>
+                                <div class="col-6">
+                                    <p class="text-uppercase text-muted mb-1" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Sucursal Destino</p>
+                                    <p class="mb-0 fw-semibold text-dark">{{ $recepcion->sucursal_destino ?? 'N/A' }}</p>
+                                </div>
+                                <div class="col-12">
+                                    <p class="text-uppercase text-muted mb-1" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Observación Transferencia</p>
+                                    <p class="mb-0 text-muted" style="font-size:0.88rem;">{{ trim($relacionTransferencia->Observacion ?? 'N/A') }}</p>
+                                </div>
+                            @else
+                                {{-- Mostrar datos del Proveedor --}}
+                                <div class="col-6">
+                                    <p class="text-uppercase text-muted mb-1" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Proveedor</p>
+                                    <p class="mb-0 fw-semibold text-dark">{{ $recepcion->proveedor_nombre ?? 'N/A' }}</p>
+                                </div>
+                                <div class="col-6">
+                                    <p class="text-uppercase text-muted mb-1" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">RIF / Cédula</p>
+                                    <p class="mb-0 text-muted" style="font-size:0.88rem;">{{ $recepcion->proveedor_rif ?? 'N/A' }}</p>
+                                </div>
+                                <div class="col-6">
+                                    <p class="text-uppercase text-muted mb-1" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Sucursal Destino</p>
+                                    <p class="mb-0 fw-semibold text-dark">{{ $recepcion->sucursal_destino ?? 'N/A' }}</p>
+                                </div>
+                                <div class="col-6">
+                                    <p class="text-uppercase text-muted mb-1" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Factura</p>
+                                    <p class="mb-0 text-muted" style="font-size:0.88rem;">{{ $recepcion->factura_numero ?? 'N/A' }}</p>
+                                </div>
+                                @if(isset($recepcion->sucursal_origen))
+                                <div class="col-6">
+                                    <p class="text-uppercase text-muted mb-1" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Sucursal Origen</p>
+                                    <p class="mb-0 text-muted" style="font-size:0.88rem;">{{ $recepcion->sucursal_origen ?? 'N/A' }}</p>
+                                </div>
+                                @endif
                             @endif
                         </div>
                     </div>

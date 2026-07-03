@@ -677,6 +677,134 @@ class RecepcionesController extends Controller
                 ])
                 ->get();
             
+            // 3. Verificar si la recepción tiene una transferencia asociada
+            $relacionTransferencia = null;
+            
+            $relacion = DB::connection('sqlsrv')
+                ->table('RecepcionesTransferencias')
+                ->where('RecepcionId', $id)
+                ->first();
+            
+            if ($relacion) {
+                $relacionTransferencia = DB::connection('sqlsrv')
+                    ->table('Transferencias')
+                    ->where('TransferenciaId', $relacion->TransferenciaId)
+                    ->select('Numero', 'Observacion')
+                    ->first();
+            }
+            
+            // 4. Calcular totales
+            $totalRecepcion = 0;
+            foreach ($detalles as $detalle) {
+                $totalRecepcion += ($detalle->CantidadRecibida ?? 0) * ($detalle->CostoDivisa ?? 0);
+            }
+            
+            // 5. Estatus de la recepción
+            $estatusMap = [
+                0 => ['texto' => 'Anulada', 'clase' => 'badge bg-danger'],
+                1 => ['texto' => 'En Proceso', 'clase' => 'badge bg-warning'],
+                2 => ['texto' => 'Procesada', 'clase' => 'badge bg-info'],
+                4 => ['texto' => 'En Auditoría', 'clase' => 'badge bg-secondary'],
+                5 => ['texto' => 'Auditada', 'clase' => 'badge bg-success'],
+                6 => ['texto' => 'Finalizada', 'clase' => 'badge bg-primary'],
+                7 => ['texto' => 'Pagada', 'clase' => 'badge bg-success'],
+                8 => ['texto' => 'Finalizada-Pagada', 'clase' => 'badge bg-dark']
+            ];
+            
+            $estatus = $estatusMap[$recepcion->Estatus] ?? ['texto' => 'Desconocido', 'clase' => 'badge bg-secondary'];
+            
+            // 6. Tipo de recepción
+            $tipoMap = [
+                0 => 'De proveedor',
+                1 => 'Distribución de almacén',
+                2 => 'Transferencia'
+            ];
+            $tipoTexto = $tipoMap[$recepcion->Tipo] ?? 'Desconocido';
+            
+            // 7. Configurar menú activo según el estatus
+            if (in_array($recepcion->Estatus, [1, 4])) {
+                session([
+                    'menu_active' => 'Recepciones',
+                    'submenu_active' => 'Recibir de proveedor'
+                ]);
+            } else {
+                session([
+                    'menu_active' => 'Recepciones',
+                    'submenu_active' => 'Recepciones Finalizadas'
+                ]);
+            }
+            
+            return view('cpanel.recepciones.detalle', compact(
+                'recepcion',
+                'detalles',
+                'totalRecepcion',
+                'estatus',
+                'tipoTexto',
+                'relacionTransferencia'
+            ));
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en detalleRecepcion: ' . $e->getMessage());
+            return redirect()->route('cpanel.recepciones.proveedor')
+                ->with('error', 'Error al cargar el detalle de la recepción: ' . $e->getMessage());
+        }
+    }
+
+    public function pvpRecepcion($id)
+    {
+        try {
+            // 1. Buscar la recepción con más información
+            $recepcion = DB::connection('sqlsrv')
+                ->table('Recepciones as r')
+                ->leftJoin('Proveedores as p', 'r.ProveedorId', '=', 'p.ProveedorId')
+                ->leftJoin('Sucursales as sd', 'r.SucursalDestinoId', '=', 'sd.ID')
+                ->leftJoin('Sucursales as so', 'r.SucursalOrigenId', '=', 'so.ID')
+                ->leftJoin('RecepcionesFacturas as rf', 'r.RecepcionId', '=', 'rf.RecepcionId')
+                ->leftJoin('Facturas as f', 'rf.FacturaId', '=', 'f.ID')
+                ->where('r.RecepcionId', $id)
+                ->select([
+                    'r.*',
+                    'p.Nombre as proveedor_nombre',
+                    'p.Rif_Cedula as proveedor_rif',
+                    'p.TelefonoMovil as proveedor_telefono',
+                    'p.CorreoElectronico as proveedor_email',
+                    'sd.Nombre as sucursal_destino',
+                    'so.Nombre as sucursal_origen',
+                    'f.Numero as factura_numero',
+                    'f.MontoDivisa as factura_monto'
+                ])
+                ->first();
+
+                // dd($recepcion);
+            
+            if (!$recepcion) {
+                return redirect()->route('cpanel.recepciones.proveedor')
+                    ->with('error', 'Recepción no encontrada');
+            }
+            
+            // 2. Obtener los detalles de la recepción (productos) con su PvpDivisa actual
+            $detalles = DB::connection('sqlsrv')
+                ->table('RecepcionesDetalles as rd')
+                ->leftJoin('Productos as p', 'rd.ProductoId', '=', 'p.ID')
+                ->leftJoin('ProductoSucursal as ps', function($join) use ($recepcion) {
+                    $join->on('rd.ProductoId', '=', 'ps.ProductoId')
+                        ->where('ps.SucursalId', '=', $recepcion->SucursalDestinoId);
+                })
+                ->where('rd.RecepcionId', $id)
+                ->select([
+                    'rd.*',
+                    'p.Codigo',
+                    'p.Descripcion as producto_nombre',
+                    'p.Referencia',
+                    'p.UrlFoto',
+                    'ps.PvpDivisa',
+                    'ps.PvpBs',
+                    'ps.Existencia'
+                ])
+                ->get();
+
+                // dd($detalles);
+            
             // 3. Calcular totales
             $totalRecepcion = 0;
             foreach ($detalles as $detalle) {
@@ -718,7 +846,7 @@ class RecepcionesController extends Controller
                 ]);
             }
             
-            return view('cpanel.recepciones.detalle', compact(
+            return view('cpanel.recepciones.change', compact(
                 'recepcion',
                 'detalles',
                 'totalRecepcion',
@@ -2197,103 +2325,103 @@ class RecepcionesController extends Controller
     }
 
     public function procesarAuditoria($id)
-{
-    try {
-        \Log::info('=== INICIO procesarAuditoria ===', ['auditoria_id' => $id]);
-        
-        // 1. Obtener la auditoría
-        $auditoria = DB::connection('sqlsrv')
-            ->table('Auditorias as a')
-            ->leftJoin('Recepciones as r', 'a.RecepcionId', '=', 'r.RecepcionId')
-            ->leftJoin('RecepcionesFacturas as rf', 'r.RecepcionId', '=', 'rf.RecepcionId')
-            ->leftJoin('Proveedores as p', 'r.ProveedorId', '=', 'p.ProveedorId')
-            ->leftJoin('Sucursales as sd', 'r.SucursalDestinoId', '=', 'sd.ID')
-            ->where('a.AuditoriaId', $id)
-            ->select([
-                'a.*',
-                'r.Numero as recepcion_numero',
-                'r.FechaCreacion as recepcion_fecha',
-                'p.Nombre as proveedor_nombre',
-                'sd.Nombre as sucursal_destino',
-                'rf.FacturaId'
-            ])
-            ->first();
-        
-        if (!$auditoria) {
-            return redirect()->back()->with('error', 'Auditoría no encontrada');
-        }
-        
-        // 2. Obtener los detalles de la auditoría (solo productos con datos)
-        $detalles = DB::connection('sqlsrv')
-                    ->table('AuditoriaDetalles as ad')
-                    ->leftJoin('RecepcionesDetalles as rd', 'ad.RecepcionDetalleId', '=', 'rd.RecepcionesDetallesId')
-                    ->leftJoin('Productos as p', 'rd.ProductoId', '=', 'p.ID')
-                    ->leftJoin('FacturaDetalles as fd', function($join) use ($auditoria) {
-                        $join->on('fd.ProductoId', '=', 'rd.ProductoId')
-                            ->where('fd.FacturaId', '=', $auditoria->FacturaId);
-                    })
-                    ->where('ad.AuditoriaId', $id)
-                    ->whereNotNull('rd.CantidadRecibida')
-                    ->select([
-                        'ad.*',
-                        'rd.CantidadRecibida',
-                        'rd.CantidadPedida as recepcion_cantidad_pedida',
-                        'rd.CostoDivisa',
-                        'rd.CantidadPieSolo',
-                        'rd.CantidadPieInvertido',
-                        'rd.CantidadPiezaDanada',
-                        'rd.CantidadCajaVacia',
-                        'p.Codigo',
-                        'p.Descripcion as producto_nombre',
-                        'fd.CantidadEmitida as factura_cantidad_empaques',
-                        'fd.UxE as factura_uxe'
-                    ])
-                    ->get();
-        
-        // 3. Calcular la diferencia y filtrar solo los que tienen diferencia != 0
-        $detallesConDiferencia = [];
-        foreach ($detalles as $detalle) {
-            $uxe = $detalle->factura_uxe ?? 1;
-            $cantidadFacturaReal = ($detalle->factura_cantidad_empaques ?? 0) * $uxe;
-            $cantidadRecibida = $detalle->CantidadRecibida ?? 0;
+    {
+        try {
+            \Log::info('=== INICIO procesarAuditoria ===', ['auditoria_id' => $id]);
             
-            $detalle->cantidad_factura_real = $cantidadFacturaReal;
-            $detalle->diferencia_cantidad = $cantidadRecibida - $cantidadFacturaReal;
+            // 1. Obtener la auditoría
+            $auditoria = DB::connection('sqlsrv')
+                ->table('Auditorias as a')
+                ->leftJoin('Recepciones as r', 'a.RecepcionId', '=', 'r.RecepcionId')
+                ->leftJoin('RecepcionesFacturas as rf', 'r.RecepcionId', '=', 'rf.RecepcionId')
+                ->leftJoin('Proveedores as p', 'r.ProveedorId', '=', 'p.ProveedorId')
+                ->leftJoin('Sucursales as sd', 'r.SucursalDestinoId', '=', 'sd.ID')
+                ->where('a.AuditoriaId', $id)
+                ->select([
+                    'a.*',
+                    'r.Numero as recepcion_numero',
+                    'r.FechaCreacion as recepcion_fecha',
+                    'p.Nombre as proveedor_nombre',
+                    'sd.Nombre as sucursal_destino',
+                    'rf.FacturaId'
+                ])
+                ->first();
             
-            // ✅ Obtener diferencias en Pie Solo, Pie Inv., Dañado, Vacío
-            // (estos valores vienen de RecepcionesDetalles)
-            $detalle->diferencia_pie_solo = $detalle->CantidadPieSolo ?? 0;
-            $detalle->diferencia_pie_invertido = $detalle->CantidadPieInvertido ?? 0;
-            $detalle->diferencia_danado = $detalle->CantidadPiezaDanada ?? 0;
-            $detalle->diferencia_vacio = $detalle->CantidadCajaVacia ?? 0;
-            
-            // ✅ Calcular diferencia total (suma de todas las diferencias)
-            $detalle->diferencia_total = $detalle->diferencia_cantidad 
-                                    + $detalle->diferencia_pie_solo 
-                                    + $detalle->diferencia_pie_invertido 
-                                    + $detalle->diferencia_danado 
-                                    + $detalle->diferencia_vacio;
-            
-            // ✅ Mostrar si hay alguna diferencia
-            if ($detalle->diferencia_total != 0) {
-                $detallesConDiferencia[] = $detalle;
+            if (!$auditoria) {
+                return redirect()->back()->with('error', 'Auditoría no encontrada');
             }
+            
+            // 2. Obtener los detalles de la auditoría (solo productos con datos)
+            $detalles = DB::connection('sqlsrv')
+                        ->table('AuditoriaDetalles as ad')
+                        ->leftJoin('RecepcionesDetalles as rd', 'ad.RecepcionDetalleId', '=', 'rd.RecepcionesDetallesId')
+                        ->leftJoin('Productos as p', 'rd.ProductoId', '=', 'p.ID')
+                        ->leftJoin('FacturaDetalles as fd', function($join) use ($auditoria) {
+                            $join->on('fd.ProductoId', '=', 'rd.ProductoId')
+                                ->where('fd.FacturaId', '=', $auditoria->FacturaId);
+                        })
+                        ->where('ad.AuditoriaId', $id)
+                        ->whereNotNull('rd.CantidadRecibida')
+                        ->select([
+                            'ad.*',
+                            'rd.CantidadRecibida',
+                            'rd.CantidadPedida as recepcion_cantidad_pedida',
+                            'rd.CostoDivisa',
+                            'rd.CantidadPieSolo',
+                            'rd.CantidadPieInvertido',
+                            'rd.CantidadPiezaDanada',
+                            'rd.CantidadCajaVacia',
+                            'p.Codigo',
+                            'p.Descripcion as producto_nombre',
+                            'fd.CantidadEmitida as factura_cantidad_empaques',
+                            'fd.UxE as factura_uxe'
+                        ])
+                        ->get();
+            
+            // 3. Calcular la diferencia y filtrar solo los que tienen diferencia != 0
+            $detallesConDiferencia = [];
+            foreach ($detalles as $detalle) {
+                $uxe = $detalle->factura_uxe ?? 1;
+                $cantidadFacturaReal = ($detalle->factura_cantidad_empaques ?? 0) * $uxe;
+                $cantidadRecibida = $detalle->CantidadRecibida ?? 0;
+                
+                $detalle->cantidad_factura_real = $cantidadFacturaReal;
+                $detalle->diferencia_cantidad = $cantidadRecibida - $cantidadFacturaReal;
+                
+                // ✅ Obtener diferencias en Pie Solo, Pie Inv., Dañado, Vacío
+                // (estos valores vienen de RecepcionesDetalles)
+                $detalle->diferencia_pie_solo = $detalle->CantidadPieSolo ?? 0;
+                $detalle->diferencia_pie_invertido = $detalle->CantidadPieInvertido ?? 0;
+                $detalle->diferencia_danado = $detalle->CantidadPiezaDanada ?? 0;
+                $detalle->diferencia_vacio = $detalle->CantidadCajaVacia ?? 0;
+                
+                // ✅ Calcular diferencia total (suma de todas las diferencias)
+                $detalle->diferencia_total = $detalle->diferencia_cantidad 
+                                        + $detalle->diferencia_pie_solo 
+                                        + $detalle->diferencia_pie_invertido 
+                                        + $detalle->diferencia_danado 
+                                        + $detalle->diferencia_vacio;
+                
+                // ✅ Mostrar si hay alguna diferencia
+                if ($detalle->diferencia_total != 0) {
+                    $detallesConDiferencia[] = $detalle;
+                }
+            }
+            
+            $estatusMap = [
+                0 => ['texto' => 'Nueva', 'clase' => 'badge bg-warning'],
+                1 => ['texto' => 'En Proceso', 'clase' => 'badge bg-info'],
+                2 => ['texto' => 'Finalizada', 'clase' => 'badge bg-success'],
+                3 => ['texto' => 'Anulada', 'clase' => 'badge bg-danger']
+            ];
+            
+            return view('cpanel.recepciones.procesar', compact('auditoria', 'detallesConDiferencia', 'estatusMap'));
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en procesarAuditoria: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Error al cargar la auditoría: ' . $e->getMessage());
         }
-        
-        $estatusMap = [
-            0 => ['texto' => 'Nueva', 'clase' => 'badge bg-warning'],
-            1 => ['texto' => 'En Proceso', 'clase' => 'badge bg-info'],
-            2 => ['texto' => 'Finalizada', 'clase' => 'badge bg-success'],
-            3 => ['texto' => 'Anulada', 'clase' => 'badge bg-danger']
-        ];
-        
-        return view('cpanel.recepciones.procesar', compact('auditoria', 'detallesConDiferencia', 'estatusMap'));
-        
-    } catch (\Exception $e) {
-        \Log::error('Error en procesarAuditoria: ' . $e->getMessage());
-        return redirect()->back()->with('error', 'Error al cargar la auditoría: ' . $e->getMessage());
     }
-}
 
     // ============================================
     // APROBAR TODA LA AUDITORÍA
@@ -4258,6 +4386,306 @@ class RecepcionesController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al cancelar la recepción: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function actualizarPrecios(Request $request, $recepcionId)
+    {
+        try {
+
+            // 1. Validar los datos
+            $request->validate([
+                'precios' => 'required|array',
+                'precios.*' => 'numeric|min:0',
+                'sucursal_id' => 'required|integer'
+            ]);
+
+            $sucursalId = $request->input('sucursal_id');
+            $precios = $request->input('precios');
+
+            // 3. Filtrar solo precios > 0
+            $preciosFiltrados = array_filter($precios, function($valor) {
+                return $valor > 0;
+            });
+
+            if (empty($preciosFiltrados)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No hay precios válidos para guardar'
+                ], 400);
+            }
+
+            // 4. Iniciar transacción
+            DB::connection('sqlsrv')->beginTransaction();
+
+            $actualizados = 0;
+            $errores = [];
+            $productosIds = array_keys($preciosFiltrados);
+
+            // 5. Obtener todos los productos existentes en ProductoSucursal en una sola consulta
+            $existentes = DB::connection('sqlsrv')
+                ->table('ProductoSucursal')
+                ->where('SucursalId', $sucursalId)
+                ->whereIn('ProductoId', $productosIds)
+                ->get()
+                ->keyBy('ProductoId');
+
+            // 6. Preparar datos para actualización (con historial)
+            $actualizarData = [];
+
+            foreach ($preciosFiltrados as $productoId => $nuevoPvp) {
+                // ✅ Producto existe - Actualizar con historial
+                // Guarda el PvpDivisa actual en PvpAnterior y el nuevo en NuevoPvp
+                $actualizarData[] = [
+                    'SucursalId' => $sucursalId,
+                    'ProductoId' => $productoId,
+                    'PvpDivisa' => $nuevoPvp,
+                    'PvpAnterior' => $existentes[$productoId]->PvpDivisa,
+                    'NuevoPvp' => $nuevoPvp,
+                    'FechaNuevoPrecio' => now(),
+                    'Tipo' => 0, // 0 = Cambio manual de precio
+                ];
+            }
+
+            // 7. Ejecutar actualizaciones (con historial)
+            foreach ($actualizarData as $data) {
+                DB::connection('sqlsrv')
+                    ->table('ProductoSucursal')
+                    ->where('SucursalId', $data['SucursalId'])
+                    ->where('ProductoId', $data['ProductoId'])
+                    ->update([
+                        'PvpDivisa' => $data['PvpDivisa'],
+                        'PvpAnterior' => $data['PvpAnterior'],
+                        'NuevoPvp' => $data['NuevoPvp'],
+                        'FechaNuevoPrecio' => $data['FechaNuevoPrecio'],
+                        'Tipo' => $data['Tipo'],
+                    ]);
+                $actualizados++;
+                
+                Log::info('Precio actualizado con historial', [
+                    'producto_id' => $data['ProductoId'],
+                    'sucursal_id' => $data['SucursalId'],
+                    'pvp_anterior' => $data['PvpAnterior'],
+                    'pvp_nuevo' => $data['PvpDivisa']
+                ]);
+            }
+
+            DB::connection('sqlsrv')->commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => "Se actualizaron {$actualizados} precios correctamente",
+                'actualizados' => $actualizados,
+                'con_historial' => count($actualizarData),
+            ]);
+
+        } catch (\Exception $e) {
+            DB::connection('sqlsrv')->rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar los precios: ' . $e->getMessage()
+            ], 500);
+        }
+    }    
+
+    // Vista para cargar productos con cambio de precios masivos
+    public function mostrarCargaProductos()
+    {
+        // Configurar menú activo
+        session([
+            'menu_active' => 'Productos',
+            'submenu_active' => 'Gestión de Precios'
+        ]);
+    
+        return view('cpanel.recepciones.masivo_change');
+    }
+
+    public function guardarPreciosManual(Request $request)
+    {
+        try {
+            // ⭐ LOG 1: Ver qué datos llegan
+            Log::info('📥 Datos recibidos en guardarPreciosManual', [
+                'sucursal_id' => $request->input('sucursal_id'),
+                'productos' => $request->input('productos')
+            ]);
+
+            // 1. Validar los datos
+            $request->validate([
+                'sucursal_id' => 'required|integer|min:1',
+                'productos' => 'required|array',
+                'productos.*.codigo' => 'required|string',
+                'productos.*.nuevo_pvp' => 'required|numeric|min:0',
+                'productos.*.costo_divisa' => 'nullable|numeric|min:0'
+            ]);
+
+            $sucursalId = $request->input('sucursal_id');
+            $productos = $request->input('productos');
+
+            Log::info('✅ Validación exitosa', [
+                'sucursal_id' => $sucursalId,
+                'total_productos' => count($productos)
+            ]);
+
+            // 2. Filtrar solo productos con nuevo_pvp > 0
+            $productosFiltrados = array_filter($productos, function($producto) {
+                return $producto['nuevo_pvp'] > 0;
+            });
+
+            if (empty($productosFiltrados)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No hay productos con precio válido para guardar'
+                ], 400);
+            }
+
+            // 3. Extraer los códigos para buscar los productos
+            $codigos = array_column($productosFiltrados, 'codigo');
+
+            // 4. Buscar los productos en la base de datos
+            $productosDB = DB::connection('sqlsrv')
+                ->table('Productos')
+                ->whereIn('Codigo', $codigos)
+                ->select('Id', 'Codigo')
+                ->get()
+                ->keyBy('Codigo');
+
+            // 5. Verificar que todos los códigos existen
+            $codigosNoEncontrados = array_diff($codigos, $productosDB->keys()->toArray());
+            if (!empty($codigosNoEncontrados)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Los siguientes códigos no existen en el sistema: ' . implode(', ', $codigosNoEncontrados)
+                ], 400);
+            }
+
+            // 6. Preparar datos para actualización
+            $productosIds = [];
+            foreach ($productosFiltrados as $producto) {
+                $productoId = $productosDB[$producto['codigo']]->Id;
+                $productosIds[$productoId] = $producto['nuevo_pvp'];
+            }
+
+            // 7. Iniciar transacción
+            DB::connection('sqlsrv')->beginTransaction();
+
+            // 8. Obtener los registros existentes en ProductoSucursal
+            $existentes = DB::connection('sqlsrv')
+                ->table('ProductoSucursal')
+                ->where('SucursalId', $sucursalId)
+                ->whereIn('ProductoId', array_keys($productosIds))
+                ->get()
+                ->keyBy('ProductoId');
+
+            $actualizados = 0;
+            $noEncontrados = 0;
+            $errores = [];
+
+            // 9. Actualizar cada producto
+            foreach ($productosIds as $productoId => $nuevoPvp) {
+                if (isset($existentes[$productoId])) {
+                    // Actualizar con historial
+                    DB::connection('sqlsrv')
+                        ->table('ProductoSucursal')
+                        ->where('SucursalId', $sucursalId)
+                        ->where('ProductoId', $productoId)
+                        ->update([
+                            'PvpDivisa' => $nuevoPvp,
+                            'PvpAnterior' => $existentes[$productoId]->PvpDivisa,
+                            'NuevoPvp' => $nuevoPvp,
+                            'FechaNuevoPrecio' => now(),
+                            'Tipo' => 0, // 0 = Cambio manual de precio
+                        ]);
+                    $actualizados++;
+
+                    Log::info('Precio actualizado masivamente', [
+                        'producto_id' => $productoId,
+                        'sucursal_id' => $sucursalId,
+                        'pvp_anterior' => $existentes[$productoId]->PvpDivisa,
+                        'pvp_nuevo' => $nuevoPvp,
+                        'usuario' => auth()->id()
+                    ]);
+                } else {
+                    // El producto no tiene registro en ProductoSucursal
+                    $noEncontrados++;
+                    $errores[] = "Producto ID {$productoId} no encontrado en la sucursal";
+                    
+                    Log::warning('Producto no encontrado en ProductoSucursal', [
+                        'producto_id' => $productoId,
+                        'sucursal_id' => $sucursalId
+                    ]);
+                }
+            }
+
+            // 10. Commit de la transacción
+            DB::connection('sqlsrv')->commit();
+
+            // 11. Preparar mensaje de respuesta
+            $mensaje = "✅ {$actualizados} producto(s) actualizado(s) correctamente";
+            if ($noEncontrados > 0) {
+                $mensaje .= " ⚠️ {$noEncontrados} producto(s) no encontrado(s) en esta sucursal";
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => $mensaje,
+                'actualizados' => $actualizados,
+                'no_encontrados' => $noEncontrados,
+                'errores' => $errores,
+                'total_procesados' => count($productosFiltrados)
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error de validación: ' . $e->getMessage(),
+                'errors' => $e->errors()
+            ], 422);
+
+        } catch (\Exception $e) {
+            DB::connection('sqlsrv')->rollBack();
+
+            Log::error('Error al guardar precios manuales', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar los precios: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Buscar productos por códigos (para validación previa)
+     */
+    public function buscarProductosPorCodigos(Request $request)
+    {
+        try {
+            $request->validate([
+                'codigos' => 'required|array',
+                'codigos.*' => 'required|string'
+            ]);
+
+            $codigos = $request->input('codigos');
+
+            $productos = DB::connection('sqlsrv')
+                ->table('Productos')
+                ->whereIn('Codigo', $codigos)
+                ->select('Id', 'Codigo', 'Nombre', 'Referencia')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'productos' => $productos
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al buscar productos: ' . $e->getMessage()
             ], 500);
         }
     }
