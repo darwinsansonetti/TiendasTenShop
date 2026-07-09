@@ -2625,6 +2625,20 @@ class ProveedoresController extends Controller
     public function eliminar($id)
     {
         try {
+            // 1. Verificar si la factura tiene recepciones asociadas
+            $tieneRecepcion = DB::connection('sqlsrv')
+                ->table('RecepcionesFacturas')
+                ->where('FacturaId', $id)
+                ->exists();
+            
+            if ($tieneRecepcion) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La factura tiene recepciones asociadas, no se puede eliminar'
+                ], 400);
+            }
+            
+            // 2. Buscar la factura
             $factura = DB::connection('sqlsrv')
                 ->table('Facturas')
                 ->where('ID', $id)
@@ -2637,39 +2651,22 @@ class ProveedoresController extends Controller
                 ], 404);
             }
             
-            // Validar si se puede eliminar
-            if ($factura->Estatus != 1 && $factura->saldo_pendiente > 0) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No se puede eliminar esta factura porque tiene pagos asociados o no está en estado "En Proceso"'
-                ], 400);
-            }
-            
-            // Verificar si tiene pagos asociados
-            $tienePagos = DB::connection('sqlsrv')
-                ->table('PagosFacturas')
+            // 3. Eliminar los detalles de la factura
+            DB::connection('sqlsrv')
+                ->table('FacturaDetalles')
                 ->where('FacturaId', $id)
-                ->exists();
+                ->delete();
             
-            if ($tienePagos) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No se puede eliminar la factura porque tiene pagos registrados'
-                ], 400);
-            }
-            
-            // Realizar eliminación lógica (actualizar estatus)
-            DB::connection('sqlsrv')->table('Facturas')
+            // 4. Eliminar la factura
+            DB::connection('sqlsrv')
+                ->table('Facturas')
                 ->where('ID', $id)
-                ->update([
-                    'Estatus' => 0, 
-                    'FechaEliminacion' => now(),
-                    'EliminadoPor' => auth()->user()->id ?? null
-                ]);
+                ->delete();
             
-            Log::info('Factura eliminada', [
-                'factura_id' => $id, 
-                'factura_numero' => $factura->Numero,
+            // 5. Log de la operación
+            \Log::info('Factura eliminada', [
+                'factura_id' => $id,
+                'factura_numero' => $factura->Numero ?? 'N/A',
                 'usuario' => auth()->user()->id ?? null
             ]);
             
@@ -2679,10 +2676,10 @@ class ProveedoresController extends Controller
             ]);
             
         } catch (\Exception $e) {
-            Log::error('Error al eliminar factura: ' . $e->getMessage());
+            \Log::error('Error al eliminar factura: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error al eliminar la factura: ' . $e->getMessage()
+                'message' => 'No se pudo eliminar la factura: ' . $e->getMessage()
             ], 500);
         }
     }

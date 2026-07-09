@@ -543,13 +543,6 @@
                                                    title="Imprimir recibo" target="_blank" data-bs-toggle="tooltip">
                                                     <i class="bi bi-printer" style="font-size:0.8rem;"></i>
                                                 </a>
-                                                <button type="button"
-                                                        class="btn btn-sm rounded-2 d-flex align-items-center justify-content-center"
-                                                        style="width:30px;height:30px;background:rgba(239,68,68,0.1);color:#dc2626;border:1px solid rgba(239,68,68,0.25);"
-                                                        onclick="eliminarPago({{ $transaccion->TransaccionId }}, '{{ $transaccion->NumeroOperacion }}')"
-                                                        title="Eliminar pago" data-bs-toggle="tooltip">
-                                                    <i class="bi bi-trash" style="font-size:0.8rem;"></i>
-                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -891,7 +884,6 @@
     // ============================================
     // FUNCIÓN PARA ELIMINAR FACTURA
     // ============================================
-
     function eliminarFactura(facturaId, facturaNumero) {
         Swal.fire({
             title: '¿Eliminar factura?',
@@ -904,7 +896,6 @@
             cancelButtonText: 'Cancelar'
         }).then((result) => {
             if (result.isConfirmed) {
-                // Mostrar loading
                 Swal.fire({
                     title: 'Eliminando...',
                     text: 'Procesando solicitud',
@@ -914,13 +905,13 @@
                     }
                 });
 
-                // Llamada AJAX para eliminar
-                fetch(`/cpanel/facturas/${facturaId}`, {
+                // ✅ CORREGIDO: Usar url() de Laravel
+                fetch(`{{ url('cpanel/facturas') }}/${facturaId}`, {
                     method: 'DELETE',
                     headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
                         'X-Requested-With': 'XMLHttpRequest',
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                        'Content-Type': 'application/json'
                     }
                 })
                 .then(response => response.json())
@@ -933,7 +924,6 @@
                             timer: 2000,
                             showConfirmButton: false
                         }).then(() => {
-                            // Recargar la página para actualizar la lista
                             location.reload();
                         });
                     } else {
@@ -947,7 +937,6 @@
             }
         });
     }
-
     // Modal para mostrar detalle de factura (opcional)
     function mostrarModalDetalleFactura(factura) {
         // Puedes implementar un modal bonito con Bootstrap
@@ -979,62 +968,6 @@
             case 4: return 'Recibida';
             default: return 'Desconocido';
         }
-    }
-
-    // ============================================
-    // FUNCIÓN PARA ELIMINAR PAGO
-    // ============================================
-    function eliminarPago(pagoId, numeroOperacion) {
-        Swal.fire({
-            title: '¿Eliminar pago?',
-            html: `Estás a punto de eliminar el pago <strong>${numeroOperacion}</strong><br><span style="color: red;">Esta acción no se puede deshacer.</span>`,
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Sí, eliminar',
-            cancelButtonText: 'Cancelar'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                Swal.fire({
-                    title: 'Eliminando...',
-                    text: 'Procesando solicitud',
-                    allowOutsideClick: false,
-                    didOpen: () => {
-                        Swal.showLoading();
-                    }
-                });
-
-                fetch(`/cpanel/pagos/${pagoId}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Content-Type': 'application/json'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        Swal.fire({
-                            title: '¡Eliminado!',
-                            text: 'El pago ha sido eliminado correctamente',
-                            icon: 'success',
-                            timer: 2000,
-                            showConfirmButton: false
-                        }).then(() => {
-                            location.reload();
-                        });
-                    } else {
-                        Swal.fire('Error', data.message || 'Error al eliminar el pago', 'error');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    Swal.fire('Error', 'Error de conexión al servidor', 'error');
-                });
-            }
-        });
     }
 </script>
 @endsection

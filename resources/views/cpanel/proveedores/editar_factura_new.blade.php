@@ -1207,13 +1207,42 @@
     }
 
     function descargarFormatoExcel() {
-        const url = '{{ asset("formato_excel/EntradaFactura.xlsx") }}';
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'EntradaFactura.xlsx';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // Crear el libro de trabajo
+        const wb = XLSX.utils.book_new();
+        
+        // Datos exactos del Excel que mostraste
+        const data = [
+            ['Entrada de Factura'],
+            ['ENTRADA DE FACTURA'],
+            [],
+            ['Empresa', 'Tiendas TenShop'],
+            [],
+            ['Fecha', ''],
+            [],
+            ['Proveedor', '', 'Nombre', ''],
+            [],
+            ['Productos'],
+            ['Codigo', 'Referencia', 'Descripcion', 'Cantidad', 'UxE', 'Costo']
+        ];
+        
+        // Crear la hoja de trabajo
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        
+        // Ajustar ancho de columnas
+        ws['!cols'] = [
+            { wch: 15 }, // Codigo
+            { wch: 15 }, // Referencia
+            { wch: 35 }, // Descripcion
+            { wch: 12 }, // Cantidad
+            { wch: 10 }, // UxE
+            { wch: 15 }  // Costo
+        ];
+        
+        // Agregar la hoja al libro
+        XLSX.utils.book_append_sheet(wb, ws, 'Hoja1');
+        
+        // Descargar el archivo
+        XLSX.writeFile(wb, 'EntradaFactura.xlsx');
     }
 
     function calcularTotalModal() {
