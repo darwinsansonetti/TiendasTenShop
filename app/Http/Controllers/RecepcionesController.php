@@ -2499,14 +2499,50 @@ class RecepcionesController extends Controller
                 ->where('RecepcionId', $auditoria->RecepcionId)
                 ->first();
             
+            // // 3. Obtener los detalles de auditoría
+            // $detallesAuditoria = DB::connection('sqlsrv')
+            //     ->table('AuditoriaDetalles as ad')
+            //     ->leftJoin('RecepcionesDetalles as rd', 'ad.RecepcionDetalleId', '=', 'rd.RecepcionesDetallesId')
+            //     ->leftJoin('FacturaDetalles as fd', function($join) use ($auditoria) {
+            //         $join->on('fd.ProductoId', '=', 'rd.ProductoId')
+            //             ->where('fd.FacturaId', '=', $auditoria->FacturaId);
+            //     })
+            //     ->where('ad.AuditoriaId', $id)
+            //     ->select([
+            //         'ad.*',
+            //         'rd.ProductoId',
+            //         'rd.CantidadRecibida as recepcion_cantidad_recibida',
+            //         'rd.CantidadPedida as recepcion_cantidad_pedida',
+            //         'rd.RecepcionesDetallesId',
+            //         'fd.CantidadEmitida as factura_cantidad_empaques',
+            //         'fd.UxE as factura_uxe'
+            //     ])
+            //     ->get();
+
+            // 3. Obtener el FacturaId desde RecepcionesFacturas
+            $recepcionFactura = DB::connection('sqlsrv')
+                ->table('RecepcionesFacturas')
+                ->where('RecepcionId', $auditoria->RecepcionId)
+                ->first();
+
+            if (!$recepcionFactura) {
+                \Log::warning('Factura no encontrada para la recepción', [
+                    'recepcion_id' => $auditoria->RecepcionId
+                ]);
+                return response()->json(['success' => false, 'message' => 'Factura no encontrada para esta recepción']);
+            }
+
+            $facturaId = $recepcionFactura->FacturaId;
+
             // 3. Obtener los detalles de auditoría
             $detallesAuditoria = DB::connection('sqlsrv')
                 ->table('AuditoriaDetalles as ad')
                 ->leftJoin('RecepcionesDetalles as rd', 'ad.RecepcionDetalleId', '=', 'rd.RecepcionesDetallesId')
-                ->leftJoin('FacturaDetalles as fd', function($join) use ($auditoria) {
+                ->leftJoin('FacturaDetalles as fd', function($join) use ($facturaId) {
                     $join->on('fd.ProductoId', '=', 'rd.ProductoId')
-                        ->where('fd.FacturaId', '=', $auditoria->FacturaId);
+                        ->where('fd.FacturaId', '=', $facturaId);
                 })
+                ->leftJoin('Productos as p', 'rd.ProductoId', '=', 'p.ID')
                 ->where('ad.AuditoriaId', $id)
                 ->select([
                     'ad.*',
@@ -2515,7 +2551,8 @@ class RecepcionesController extends Controller
                     'rd.CantidadPedida as recepcion_cantidad_pedida',
                     'rd.RecepcionesDetallesId',
                     'fd.CantidadEmitida as factura_cantidad_empaques',
-                    'fd.UxE as factura_uxe'
+                    'fd.UxE as factura_uxe',
+                    'p.Codigo'
                 ])
                 ->get();
             
@@ -2523,6 +2560,7 @@ class RecepcionesController extends Controller
             foreach ($detallesAuditoria as $detalle) {
                 $uxe = $detalle->factura_uxe ?? 1;
                 $cantidadFacturaReal = ($detalle->factura_cantidad_empaques ?? 0) * $uxe;
+                $cantidadRecibida = $detalle->recepcion_cantidad_recibida ?? 0;
                 
                 // Corregir la cantidad en RecepcionesDetalles
                 DB::connection('sqlsrv')
@@ -2532,6 +2570,35 @@ class RecepcionesController extends Controller
                         'CantidadRecibida' => $cantidadFacturaReal,
                         'CantidadPedida' => $cantidadFacturaReal
                     ]);
+
+                // ✅ ACTUALIZAR STOCK EN ProductoSucursal
+                if ($detalle->ProductoId && $recepcion->SucursalDestinoId) {
+                    // Buscar ProductoSucursal
+                    $productoSucursal = DB::connection('sqlsrv')
+                        ->table('ProductoSucursal')
+                        ->where('ProductoId', $detalle->ProductoId)
+                        ->where('SucursalId', $recepcion->SucursalDestinoId)
+                        ->first();
+
+                    if ($productoSucursal) {
+                        $stockActual = $productoSucursal->Existencia ?? 0;
+                        $nuevoStock = $stockActual - $cantidadRecibida + $cantidadFacturaReal;
+                        
+                        // ✅ Evitar stock negativo
+                        if ($nuevoStock < 0) {
+                            $nuevoStock = 0;
+                        }
+                        
+                        // ✅ Actualizar Existencia en ProductoSucursal
+                        DB::connection('sqlsrv')
+                            ->table('ProductoSucursal')
+                            ->where('ProductoId', $productoSucursal->ProductoId)
+                            ->where('SucursalId', $productoSucursal->SucursalId)
+                            ->update([
+                                'Existencia' => $nuevoStock
+                            ]);
+                    }
+                }
                 
                 // Actualizar Acción = 2 (Rechazado) con el detalle en texto
                 DB::connection('sqlsrv')
@@ -2572,10 +2639,13 @@ class RecepcionesController extends Controller
     // ============================================
     // APROBAR PRODUCTO INDIVIDUAL
     // ============================================
-    public function aprobarProducto($id)
+    public function aprobarProducto($id, Request $request)
     {
         try {
             DB::connection('sqlsrv')->beginTransaction();
+
+            // Recibir el código del producto desde el request
+            $codigoProducto = $request->input('codigo');
             
             // 1. Obtener el detalle de auditoría
             $detalle = DB::connection('sqlsrv')
@@ -2586,6 +2656,17 @@ class RecepcionesController extends Controller
             if (!$detalle) {
                 return response()->json(['success' => false, 'message' => 'Detalle no encontrado']);
             }
+
+            // // Buscar el producto por código
+            // $producto = DB::connection('sqlsrv')
+            //     ->table('Productos')
+            //     ->where('Codigo', $codigoProducto)
+            //     ->where('Estatus', 1)
+            //     ->first();
+            
+            // if (!$producto) {
+            //     return response()->json(['success' => false, 'message' => 'Producto no encontrado']);
+            // }
             
             // 2. Actualizar Acción = 1 (Aprobado)
             DB::connection('sqlsrv')
@@ -2605,6 +2686,7 @@ class RecepcionesController extends Controller
             
             // 4. Si no hay pendientes, actualizar estatus de auditoría y recepción
             if ($pendientes == 0) {
+
                 // Cambiar estatus de auditoría a Finalizada (2)
                 DB::connection('sqlsrv')
                     ->table('Auditorias')
@@ -2616,6 +2698,29 @@ class RecepcionesController extends Controller
                     ->table('Auditorias')
                     ->where('AuditoriaId', $detalle->AuditoriaId)
                     ->first();
+
+                // // Obtener la recepción y sus datos
+                // $recepcion = DB::connection('sqlsrv')
+                //     ->table('Recepciones')
+                //     ->where('RecepcionId', $auditoria->RecepcionId)
+                //     ->first();
+
+                // // Buscar ProductoSucursal
+                // $productoSucursal = DB::connection('sqlsrv')
+                //     ->table('ProductoSucursal')
+                //     ->where('ProductoId', $producto->ID)
+                //     ->where('SucursalId', $recepcion->SucursalDestinoId)
+                //     ->first();
+
+                // if ($productoSucursal) {
+                //     // // ✅ Existe el registro, actualizar stock
+                //     // DB::connection('sqlsrv')
+                //     //     ->table('ProductoSucursal')
+                //     //     ->where('ProductoSucursalId', $productoSucursal->ProductoSucursalId)
+                //     //     ->update([
+                //     //         'Existencia' => ($productoSucursal->Stock ?? 0) + $cantidadRecibida
+                //     //     ]);
+                // }
                 
                 DB::connection('sqlsrv')
                     ->table('Recepciones')
@@ -2640,10 +2745,13 @@ class RecepcionesController extends Controller
     // ============================================
     // RECHAZAR PRODUCTO INDIVIDUAL
     // ============================================
-    public function rechazarProducto($id)
+    public function rechazarProducto($id, Request $request)
     {
         try {
             DB::connection('sqlsrv')->beginTransaction();
+
+            // Recibir el código del producto desde el request
+            $codigoProducto = $request->input('codigo');
             
             // 1. Obtener el detalle de auditoría
             $detalle = DB::connection('sqlsrv')
@@ -2653,6 +2761,17 @@ class RecepcionesController extends Controller
             
             if (!$detalle) {
                 return response()->json(['success' => false, 'message' => 'Detalle no encontrado']);
+            }
+
+            // Buscar el producto por código
+            $producto = DB::connection('sqlsrv')
+                ->table('Productos')
+                ->where('Codigo', $codigoProducto)
+                ->where('Estatus', 1)
+                ->first();
+            
+            if (!$producto) {
+                return response()->json(['success' => false, 'message' => 'Producto no encontrado']);
             }
             
             // 2. Obtener la auditoría
@@ -2694,9 +2813,27 @@ class RecepcionesController extends Controller
                 ])
                 ->first();
             
+            // 4. Obtener información del producto con el FacturaId
+            $infoProducto = DB::connection('sqlsrv')
+                ->table('RecepcionesDetalles as rd')
+                ->leftJoin('FacturaDetalles as fd', function($join) use ($facturaId) {
+                    $join->on('fd.ProductoId', '=', 'rd.ProductoId')
+                        ->where('fd.FacturaId', '=', $facturaId);
+                })
+                ->where('rd.RecepcionesDetallesId', $detalle->RecepcionDetalleId)
+                ->select([
+                    'rd.RecepcionesDetallesId',
+                    'rd.CantidadRecibida',
+                    'rd.CantidadPedida',
+                    'fd.CantidadEmitida as factura_cantidad_empaques',
+                    'fd.UxE as factura_uxe'
+                ])
+                ->first();
+            
             if ($infoProducto) {
                 $uxe = $infoProducto->factura_uxe ?? 1;
                 $cantidadFacturaReal = ($infoProducto->factura_cantidad_empaques ?? 0) * $uxe;
+                $cantidadRecibida = $infoProducto->CantidadRecibida ?? 0;
                 
                 // Corregir la cantidad en RecepcionesDetalles
                 DB::connection('sqlsrv')
@@ -2706,6 +2843,39 @@ class RecepcionesController extends Controller
                         'CantidadRecibida' => $cantidadFacturaReal,
                         'CantidadPedida' => $cantidadFacturaReal
                     ]);
+
+                // Obtener la recepción y sus datos
+                $recepcion = DB::connection('sqlsrv')
+                    ->table('Recepciones')
+                    ->where('RecepcionId', $auditoria->RecepcionId)
+                    ->first();
+
+                // Buscar ProductoSucursal
+                $productoSucursal = DB::connection('sqlsrv')
+                    ->table('ProductoSucursal')
+                    ->where('ProductoId', $producto->ID)
+                    ->where('SucursalId', $recepcion->SucursalDestinoId)
+                    ->first();
+
+                if ($productoSucursal) {
+                    // ✅ Calcular el nuevo stock
+                    $stockActual = $productoSucursal->Existencia ?? 0;
+                    $nuevoStock = $stockActual - $cantidadRecibida + $cantidadFacturaReal;
+                    
+                    // ✅ Evitar stock negativo
+                    if ($nuevoStock < 0) {
+                        $nuevoStock = 0;
+                    }
+                    
+                    // ✅ Actualizar Existencia en ProductoSucursal
+                    DB::connection('sqlsrv')
+                        ->table('ProductoSucursal')
+                        ->where('ProductoId', $productoSucursal->ProductoId)
+                        ->where('SucursalId', $recepcion->SucursalDestinoId)
+                        ->update([
+                            'Existencia' => $nuevoStock
+                        ]);
+                }
             }
             
             // 5. Actualizar Acción = 2 (Rechazado)
@@ -2747,6 +2917,93 @@ class RecepcionesController extends Controller
         } catch (\Exception $e) {
             DB::connection('sqlsrv')->rollBack();
             \Log::error('Error al rechazar producto: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    // ============================================
+    // EDITAR CANTIDAD RECIBIDA
+    // ============================================
+    public function editarRecibido($id, Request $request)
+    {
+        try {
+            DB::connection('sqlsrv')->beginTransaction();
+
+            $codigoProducto = $request->input('codigo');
+            $cantidadNueva = $request->input('cantidad_nueva');
+            
+            // 1. Obtener el detalle de auditoría
+            $detalle = DB::connection('sqlsrv')
+                ->table('AuditoriaDetalles')
+                ->where('AuditoriaDetalleId', $id)
+                ->first();
+            
+            if (!$detalle) {
+                return response()->json(['success' => false, 'message' => 'Detalle no encontrado']);
+            }
+
+            // 2. Obtener la auditoría
+            $auditoria = DB::connection('sqlsrv')
+                ->table('Auditorias')
+                ->where('AuditoriaId', $detalle->AuditoriaId)
+                ->first();
+            
+            if (!$auditoria) {
+                return response()->json(['success' => false, 'message' => 'Auditoría no encontrada']);
+            }
+
+            // 3. Obtener la recepción
+            $recepcion = DB::connection('sqlsrv')
+                ->table('Recepciones')
+                ->where('RecepcionId', $auditoria->RecepcionId)
+                ->first();
+
+            // 4. Actualizar la cantidad en RecepcionesDetalles
+            DB::connection('sqlsrv')
+                ->table('RecepcionesDetalles')
+                ->where('RecepcionesDetallesId', $detalle->RecepcionDetalleId)
+                ->update([
+                    'CantidadRecibida' => $cantidadNueva,
+                    'CantidadPedida' => $cantidadNueva
+
+                ]);
+
+            // 6. Actualizar el stock en ProductoSucursal
+            $producto = DB::connection('sqlsrv')
+                ->table('Productos')
+                ->where('Codigo', $codigoProducto)
+                ->first();
+
+            if ($producto && $recepcion->SucursalDestinoId) {
+                $productoSucursal = DB::connection('sqlsrv')
+                    ->table('ProductoSucursal')
+                    ->where('ProductoId', $producto->ID)
+                    ->where('SucursalId', $recepcion->SucursalDestinoId)
+                    ->first();
+
+                if ($productoSucursal) {
+                    // Obtener la cantidad anterior de RecepcionesDetalles (necesitas calcularla)
+                    // Esto es un ejemplo, ajusta según tu lógica
+                    DB::connection('sqlsrv')
+                        ->table('ProductoSucursal')
+                        ->where('ProductoId', $productoSucursal->ProductoId)
+                        ->where('SucursalId', $recepcion->SucursalDestinoId)
+                        ->update([
+                            'Existencia' => $cantidadNueva // Ajusta la lógica
+                        ]);
+                }
+            }
+
+            DB::connection('sqlsrv')->commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Cantidad actualizada exitosamente'
+            ]);
+
+        } catch (\Exception $e) {
+            DB::connection('sqlsrv')->rollBack();
+            \Log::error('Error al editar cantidad recibida: ' . $e->getMessage());
             return response()->json(['success' => false, 'message' => $e->getMessage()]);
         }
     }

@@ -239,25 +239,102 @@ class GeneralHelper
         }
     }
     
+    // public static function ObtenerRankingVendedores(ParametrosFiltroFecha $filtroFecha, $usuarioId = null, $sucursalId = null): Collection
+    // {
+    //     // Obtener totales de ventas por usuario y sucursal
+    //     $ranking = VentaVendedoresTotalizada::query()
+    //         ->selectRaw('UsuarioId, SucursalId, SUM(Cantidad) as total_unidades, SUM(TotalDivisa) as total_ventas')
+    //         ->whereBetween('Fecha', [$filtroFecha->fechaInicio, $filtroFecha->fechaFin])
+    //         ->when($usuarioId, fn($q) => $q->where('UsuarioId', $usuarioId))
+    //         ->when($sucursalId, fn($q) => $q->where('SucursalId', $sucursalId))
+    //         ->groupBy('UsuarioId', 'SucursalId')
+    //         ->orderByDesc('total_unidades')
+    //         ->get();
+
+    //     // Cargar información de Usuario y Sucursal
+    //     $ranking->transform(function ($item, $index) {
+    //         // Datos del usuario activo
+    //         $usuario = Usuario::where('UsuarioId', $item->UsuarioId)
+    //             ->where('EsActivo', 1)
+    //             ->first();
+
+    //         $item->Vendedor = $usuario ? [
+    //             'UsuarioId' => $usuario->UsuarioId,
+    //             'NombreCompleto' => $usuario->NombreCompleto,
+    //             'VendedorId' => $usuario->VendedorId,
+    //             'SucursalId' => $usuario->SucursalId,
+    //             'FotoPerfil' => $usuario->FotoPerfil
+    //         ] : null;
+
+    //         // Nombre de la sucursal
+    //         if ($item->SucursalId) {
+    //             $sucursal = Sucursal::find($item->SucursalId);
+    //             $item->SucursalNombre = $sucursal ? $sucursal->Nombre : null;
+    //         }
+
+    //         // Ranking numérico
+    //         $item->ranking = $index + 1;
+
+    //         return $item;
+    //     });
+
+    //     return $ranking;
+    // }
+
     public static function ObtenerRankingVendedores(ParametrosFiltroFecha $filtroFecha, $usuarioId = null, $sucursalId = null): Collection
     {
-        // Obtener totales de ventas por usuario y sucursal
-        $ranking = VentaVendedoresTotalizada::query()
-            ->selectRaw('UsuarioId, SucursalId, SUM(Cantidad) as total_unidades, SUM(TotalDivisa) as total_ventas')
-            ->whereBetween('Fecha', [$filtroFecha->fechaInicio, $filtroFecha->fechaFin])
-            ->when($usuarioId, fn($q) => $q->where('UsuarioId', $usuarioId))
-            ->when($sucursalId, fn($q) => $q->where('SucursalId', $sucursalId))
-            ->groupBy('UsuarioId', 'SucursalId')
-            ->orderByDesc('total_unidades')
+        // ============================================
+        // 1. OBTENER TOTALES CORRECTOS DESDE VentaVendedoresView
+        // ============================================
+        $ranking = DB::connection('sqlsrv')
+            ->table('VentaVendedoresView as vv')
+            ->select([
+                'vv.UsuarioId',
+                'vv.SucursalId',
+                // ✅ Total de unidades: SUM(Cantidad)
+                DB::raw('SUM(vv.Cantidad) as total_unidades'),
+                // ✅ Total de ventas en USD: SUM(MontoDivisa / Cantidad)
+                DB::raw('SUM(vv.MontoDivisa / CAST(vv.Cantidad AS DECIMAL(18,2))) as total_ventas'),
+                // ✅ Total de ventas en Bs: SUM(PrecioVenta / Cantidad) - opcional
+                DB::raw('SUM(vv.PrecioVenta / CAST(vv.Cantidad AS DECIMAL(18,2))) as total_ventas_bs')
+            ])
+            ->whereBetween('vv.Fecha', [$filtroFecha->fechaInicio, $filtroFecha->fechaFin])
+            ->when($usuarioId, function($q) use ($usuarioId) {
+                return $q->where('vv.UsuarioId', $usuarioId);
+            })
+            ->when($sucursalId, function($q) use ($sucursalId) {
+                return $q->where('vv.SucursalId', $sucursalId);
+            })
+            ->groupBy('vv.UsuarioId', 'vv.SucursalId')
+            ->orderByDesc('total_ventas')
             ->get();
 
-        // Cargar información de Usuario y Sucursal
-        $ranking->transform(function ($item, $index) {
-            // Datos del usuario activo
-            $usuario = Usuario::where('UsuarioId', $item->UsuarioId)
-                ->where('EsActivo', 1)
-                ->first();
+        // ============================================
+        // 2. CARGAR INFORMACIÓN DE USUARIOS Y SUCURSALES
+        // ============================================
+        // Obtener todos los UsuarioIds únicos
+        $usuarioIds = $ranking->pluck('UsuarioId')->unique()->toArray();
+        
+        // Cargar todos los usuarios activos de una sola vez
+        $usuariosMap = Usuario::whereIn('UsuarioId', $usuarioIds)
+            ->where('EsActivo', 1)
+            ->get()
+            ->keyBy('UsuarioId');
 
+        // Obtener todas las SucursalIds únicas
+        $sucursalIds = $ranking->pluck('SucursalId')->unique()->toArray();
+        
+        // Cargar todas las sucursales de una sola vez
+        $sucursalesMap = Sucursal::whereIn('ID', $sucursalIds)
+            ->get()
+            ->keyBy('ID');
+
+        // ============================================
+        // 3. TRANSFORMAR RESULTADOS
+        // ============================================
+        $ranking->transform(function ($item, $index) use ($usuariosMap, $sucursalesMap) {
+            $usuario = $usuariosMap->get($item->UsuarioId);
+            
             $item->Vendedor = $usuario ? [
                 'UsuarioId' => $usuario->UsuarioId,
                 'NombreCompleto' => $usuario->NombreCompleto,
@@ -267,45 +344,141 @@ class GeneralHelper
             ] : null;
 
             // Nombre de la sucursal
-            if ($item->SucursalId) {
-                $sucursal = Sucursal::find($item->SucursalId);
-                $item->SucursalNombre = $sucursal ? $sucursal->Nombre : null;
-            }
+            $sucursal = $sucursalesMap->get($item->SucursalId);
+            $item->SucursalNombre = $sucursal ? $sucursal->Nombre : null;
 
             // Ranking numérico
             $item->ranking = $index + 1;
 
+            // Limpiar campos temporales si es necesario
+            unset($item->total_ventas_bs);
+
             return $item;
         });
 
+        // ============================================
+        // 4. LOG PARA DEPURACIÓN
+        // ============================================
+        \Log::info('=== RANKING VENDEDORES CORREGIDO ===');
+        \Log::info('Total vendedores: ' . $ranking->count());
+        if ($ranking->isNotEmpty()) {
+            $primero = $ranking->first();
+            \Log::info('Primer vendedor - UsuarioId: ' . $primero->UsuarioId);
+            \Log::info('  - total_unidades: ' . $primero->total_unidades);
+            \Log::info('  - total_ventas: ' . $primero->total_ventas);
+            \Log::info('  - SucursalNombre: ' . $primero->SucursalNombre);
+        }
+
         return $ranking;
     }
+
+    // public static function ObtenerRankingVendedoresSinAgrupar(ParametrosFiltroFecha $filtroFecha, $usuarioId = null, $sucursalId = null): Collection
+    // {
+    //     $sucursalId = $sucursalId ?: null;
+        
+    //     // Una SOLA consulta con joins (CORREGIDA)
+    //     $ranking = DB::connection('sqlsrv')->table('VentaVendedoresTotalizada as vt')
+    //         ->select([
+    //             'vt.*',
+    //             'u.NombreCompleto as vendedor_nombre',
+    //             'u.VendedorId',
+    //             'u.FotoPerfil',
+    //             's.Nombre as sucursal_nombre'
+    //         ])
+    //         ->leftJoin('Usuarios as u', function($join) {  // 👈 Cambiado a 'Usuarios'
+    //             $join->on('vt.UsuarioId', '=', 'u.UsuarioId')
+    //                 ->where('u.EsActivo', 1);
+    //         })
+    //         ->leftJoin('Sucursales as s', 'vt.SucursalId', '=', 's.ID')  // 👈 Cambiado a 'Sucursales' y 'ID'
+    //         ->whereBetween('vt.Fecha', [$filtroFecha->fechaInicio, $filtroFecha->fechaFin])
+    //         ->when($sucursalId, fn($q) => $q->where('vt.SucursalId', $sucursalId))
+    //         ->orderBy('vt.Fecha', 'desc')
+    //         ->get();
+
+    //     // Transformar al formato deseado
+    //     $ranking->transform(function ($item, $index) {
+    //         $item->Vendedor = $item->vendedor_nombre ? [
+    //             'UsuarioId' => $item->UsuarioId,
+    //             'NombreCompleto' => $item->vendedor_nombre,
+    //             'VendedorId' => $item->VendedorId,
+    //             'SucursalId' => $item->SucursalId,
+    //             'FotoPerfil' => $item->FotoPerfil
+    //         ] : null;
+
+    //         $item->SucursalNombre = $item->sucursal_nombre;
+    //         $item->ranking = $index + 1;
+
+    //         // Limpiar campos temporales
+    //         unset($item->vendedor_nombre, $item->VendedorId, $item->FotoPerfil, $item->sucursal_nombre);
+
+    //         return $item;
+    //     });
+
+    //     return $ranking;
+    // }
 
     public static function ObtenerRankingVendedoresSinAgrupar(ParametrosFiltroFecha $filtroFecha, $usuarioId = null, $sucursalId = null): Collection
     {
         $sucursalId = $sucursalId ?: null;
         
-        // Una SOLA consulta con joins (CORREGIDA)
-        $ranking = DB::connection('sqlsrv')->table('VentaVendedoresTotalizada as vt')
+        // Consulta usando VentaVendedoresView para TotalBs correcto
+        $ranking = DB::connection('sqlsrv')->table('VentaVendedoresView as vv')
             ->select([
-                'vt.*',
+                // Datos desde la vista totalizada
+                'vtv.ID',
+                DB::raw('MAX(vtv.Fecha) as Fecha'),
+                'vv.SucursalId',
+                DB::raw('MAX(vtv.TasaDeCambio) as TasaDeCambio'),
+                'vv.UsuarioId',
+                
+                // ✅ AGREGADO: Cantidad total
+                DB::raw('SUM(vv.Cantidad) as Cantidad'),
+                
+                // TotalBs calculado desde VentaVendedoresView (CORRECTO)
+                DB::raw('SUM(vv.PrecioVenta / vv.Cantidad) as TotalBs'),
+                
+                // TotalDivisa calculado: TotalBs / Tasa_Real_Usada
+                DB::raw('(SUM(vv.PrecioVenta / vv.Cantidad) / (MAX(vtv.TotalBs) / NULLIF(MAX(vtv.TotalDivisa), 0))) as TotalDivisa'),
+                
+                // CostoDivisa desde la vista detallada
+                DB::raw('SUM(vv.CostoDivisa) as CostoDivisa'),
+                DB::raw('0 as Estatus'),
+                
+                // Datos del vendedor
                 'u.NombreCompleto as vendedor_nombre',
                 'u.VendedorId',
                 'u.FotoPerfil',
+                
+                // Nombre de sucursal
                 's.Nombre as sucursal_nombre'
             ])
-            ->leftJoin('Usuarios as u', function($join) {  // 👈 Cambiado a 'Usuarios'
-                $join->on('vt.UsuarioId', '=', 'u.UsuarioId')
+            ->leftJoin('Usuarios as u', function($join) {
+                $join->on('vv.UsuarioId', '=', 'u.UsuarioId')
                     ->where('u.EsActivo', 1);
             })
-            ->leftJoin('Sucursales as s', 'vt.SucursalId', '=', 's.ID')  // 👈 Cambiado a 'Sucursales' y 'ID'
-            ->whereBetween('vt.Fecha', [$filtroFecha->fechaInicio, $filtroFecha->fechaFin])
-            ->when($sucursalId, fn($q) => $q->where('vt.SucursalId', $sucursalId))
-            ->orderBy('vt.Fecha', 'desc')
+            ->leftJoin('Sucursales as s', 'vv.SucursalId', '=', 's.ID')
+            ->leftJoin('VentaVendedoresTotalizada as vtv', function($join) {
+                $join->on('vv.UsuarioId', '=', 'vtv.UsuarioId')
+                    ->on(DB::raw('CONVERT(DATE, vv.Fecha)'), '=', DB::raw('CONVERT(DATE, vtv.Fecha)'));
+            })
+            ->whereBetween('vv.Fecha', [$filtroFecha->fechaInicio, $filtroFecha->fechaFin])
+            ->when($sucursalId, fn($q) => $q->where('vv.SucursalId', $sucursalId))
+            ->when($usuarioId, fn($q) => $q->where('vv.UsuarioId', $usuarioId))
+            ->groupBy(
+                'vtv.ID',
+                'vv.SucursalId',
+                'vv.UsuarioId',
+                'u.NombreCompleto',
+                'u.VendedorId',
+                'u.FotoPerfil',
+                's.Nombre'
+            )
+            ->orderBy('Fecha', 'desc')
             ->get();
 
         // Transformar al formato deseado
         $ranking->transform(function ($item, $index) {
+            // Construir el objeto Vendedor
             $item->Vendedor = $item->vendedor_nombre ? [
                 'UsuarioId' => $item->UsuarioId,
                 'NombreCompleto' => $item->vendedor_nombre,
@@ -317,9 +490,21 @@ class GeneralHelper
             $item->SucursalNombre = $item->sucursal_nombre;
             $item->ranking = $index + 1;
 
-            // Limpiar campos temporales
-            unset($item->vendedor_nombre, $item->VendedorId, $item->FotoPerfil, $item->sucursal_nombre);
+            // ✅ Limpiar SOLO los campos temporales, mantener Cantidad
+            unset(
+                $item->vendedor_nombre,
+                $item->VendedorId,
+                $item->FotoPerfil,
+                $item->sucursal_nombre
+            );
 
+            return $item;
+        });
+
+        // Reordenar por TotalBs descendente y recalcular ranking
+        $ranking = $ranking->sortByDesc('TotalBs')->values();
+        $ranking->transform(function ($item, $index) {
+            $item->ranking = $index + 1;
             return $item;
         });
 

@@ -830,6 +830,21 @@
                 </ul>
               </li>
 
+              <li class="nav-item {{ session('menu_active') == 'Inventario' ? 'menu-open' : '' }}">
+                <a href="#" class="nav-link">
+                  <i class="nav-icon bi bi-clipboard-data"></i>
+                  <p>Inventario <i class="nav-arrow bi bi-chevron-right"></i></p>
+                </a>
+                <ul class="nav nav-treeview">
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.inventario.cargar.excel') }}"
+                       class="nav-link {{ session('submenu_active') == 'Cargar Inventario' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-table"></i><p>Cargar Inventario</p>
+                    </a>
+                  </li>
+                </ul>
+              </li>
+
               <li class="nav-item {{ session('menu_active') == 'Recepciones' ? 'menu-open' : '' }}">
                 <a href="#" class="nav-link">
                   <i class="nav-icon bi bi-box-seam"></i>

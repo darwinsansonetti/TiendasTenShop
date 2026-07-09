@@ -17,6 +17,7 @@ use App\Http\Controllers\EmpleadosController;
 use App\Http\Controllers\ProveedoresController;
 use App\Http\Controllers\RecepcionesController;
 use App\Http\Controllers\DistribucionController;
+use App\Http\Controllers\InventarioController;
 
 /*
 |--------------------------------------------------------------------------
@@ -445,6 +446,10 @@ Route::middleware('auth')->group(function() {
     Route::post('/cpanel/auditorias/producto/{id}/aprobar', [RecepcionesController::class, 'aprobarProducto'])->name('aprobar.producto');
     Route::post('/cpanel/auditorias/producto/{id}/rechazar', [RecepcionesController::class, 'rechazarProducto'])->name('rechazar.producto');
 
+    // routes/web.php
+    Route::post('/cpanel/auditorias/producto/{id}/editar-recibido', [RecepcionesController::class, 'editarRecibido'])
+        ->name('auditorias.producto.editar-recibido');
+
     // Listado de Recepciones Finalizadas
     Route::get('/cpanel/recepciones/finalizadas/listado', [RecepcionesController::class, 'listado_recepciones_finalizadas'])->name('cpanel.recepciones.finalizadas');
 
@@ -553,6 +558,14 @@ Route::middleware('auth')->group(function() {
     // Guardar precios masivos de productos
     Route::post('/cpanel/precios/guardar-manual', [RecepcionesController::class, 'guardarPreciosManual'])
     ->name('cpanel.precios.guardar-manual');
+
+    // Llamado a la vista para cargar excel de inventario
+    Route::get('/cpanel/inventtario/cargar/excel', [InventarioController::class, 'mostrarCargaInventarios'])
+        ->name('cpanel.inventario.cargar.excel');
+
+    // Cargar Excel del Inventario
+    Route::post('/cpanel/inventario/cargar-excel', [InventarioController::class, 'cargarExcel'])
+    ->name('cpanel.inventario.cargar-excel');
 });
 
 

@@ -161,6 +161,18 @@ class EmpleadosController extends Controller
             // Enriquecer detalles con TODOS los datos del producto
             $detallesVenta->transform(function ($item) use ($productos) {
                 $producto = $productos->get($item->ProductoId);
+    
+                // ============================================
+                // CALCULAR PRECIO UNITARIO (PrecioVenta / Cantidad)
+                // ============================================
+                $precioUnitarioBs = $item->Cantidad > 0 ? $item->PrecioVenta / $item->Cantidad : 0;
+                $precioUnitarioDivisa = $item->Cantidad > 0 ? $item->MontoDivisa / $item->Cantidad : 0;
+                
+                // ============================================
+                // ASIGNAR NUEVO VALOR A PrecioVenta (unitario en Bs)
+                // ============================================
+                $item->PrecioVenta = $precioUnitarioBs;
+                $item->MontoDivisa = $precioUnitarioDivisa;
                 
                 if ($producto) {
                     // Asignar TODOS los campos del producto
@@ -175,7 +187,8 @@ class EmpleadosController extends Controller
                     $item->ProductoEstatus = $producto->Estatus ?? 1;
                     $item->ProductoFechaRegistro = $producto->FechaRegistro ?? null;
                     $item->ProductoPrecioCompra = $producto->PrecioCompra ?? 0;
-                    $item->ProductoPrecioVenta = $producto->PrecioVenta ?? 0;
+                    // $item->ProductoPrecioVenta = $producto->PrecioVenta ?? 0;
+                    $item->ProductoPrecioVenta = $precioUnitarioBs;
                     $item->ProductoStock = $producto->Stock ?? 0;
                     $item->ProductoStockMinimo = $producto->StockMinimo ?? 0;
                     $item->ProductoUbicacion = $producto->Ubicacion ?? '';
@@ -210,7 +223,7 @@ class EmpleadosController extends Controller
                 'totalCantidad' => $detallesVenta->sum('Cantidad'),
                 'totalDivisa' => $detallesVenta->sum('MontoDivisa'),
                 'totalBs' => $detallesVenta->sum(function ($item) {
-                    return $item->Cantidad * $item->PrecioVenta * ($item->TasaDeCambio ?? 1);
+                    return $item->PrecioVenta;
                 })
             ];
             
@@ -219,9 +232,12 @@ class EmpleadosController extends Controller
             if ($vendedor->SucursalId) {
                 $sucursal = Sucursal::find($vendedor->SucursalId);
             }
+
+            // $sumaPrecioVenta = $detallesVenta->sum('MontoDivisa');
             
             // Puedes hacer un dd para verificar que ahora tienes todos los campos
-            // dd($detallesVenta->first());
+            // dd($sumaPrecioVenta);
+            // dd($totales);
             
             return view('cpanel.empleados.detalles_venta', compact(
                 'vendedor',
@@ -2319,7 +2335,7 @@ class EmpleadosController extends Controller
             
             // CARGAR TODOS LOS PRODUCTOS DE TODAS LAS VENTAS DE UNA SOLA VEZ
             $todosLosProductos = DB::connection('sqlsrv')
-                ->table('VentaVendedoresView')
+                ->table('VentaVendedoresView') 
                 ->select([
                     'ID as VentaId',
                     'ProductoId',
@@ -2337,6 +2353,26 @@ class EmpleadosController extends Controller
                 })
                 ->orderBy('ProductoId')
                 ->get();
+
+            // dd($todosLosProductos);
+
+            // Enriquecer detalles con TODOS los datos del producto
+            $todosLosProductos->transform(function ($item) {
+    
+                // ============================================
+                // CALCULAR PRECIO UNITARIO (PrecioVenta / Cantidad)
+                // ============================================
+                $precioUnitarioBs = $item->Cantidad > 0 ? $item->PrecioVenta / $item->Cantidad : 0;
+                $precioUnitarioDivisa = $item->Cantidad > 0 ? $item->MontoDivisa / $item->Cantidad : 0;
+                
+                // ============================================
+                // ASIGNAR NUEVO VALOR A PrecioVenta (unitario en Bs)
+                // ============================================
+                $item->PrecioVenta = $precioUnitarioBs;
+                $item->MontoDivisa = $precioUnitarioDivisa;
+                
+                return $item;
+            });
 
             // dd($todosLosProductos);
             
@@ -2485,9 +2521,105 @@ class EmpleadosController extends Controller
         } else {
             \Log::warning('No hay ventas en el período');
         }
+
+        // dd($listaUsuarios);
         
         return $listaUsuarios;
     }
+
+    // private function obtenerVentasDiariasDeVendedor($filtroFecha, $sucursalId = null, $usuarioId = null)
+    // {
+        
+    //     $ventasDiariaPeriodo = new \stdClass();
+    //     $ventasDiariaPeriodo->FechaInicio = $filtroFecha->fechaInicio;
+    //     $ventasDiariaPeriodo->FechaFin = $filtroFecha->fechaFin;
+
+    //     $query = DB::connection('sqlsrv')
+    //         ->table('VentaVendedoresTotalizada as vt')
+    //         ->select([
+    //             'vt.ID',
+    //             'vt.Fecha',
+    //             'vt.SucursalId',
+    //             'vt.TasaDeCambio',
+    //             'vt.UsuarioId',
+    //             DB::raw('0.00 as Saldo'),
+    //             'vt.Cantidad',
+    //             'vt.TotalBs',
+    //             'vt.TotalDivisa',
+    //             'vt.CostoDivisa',
+    //             'vt.Estatus',
+    //             DB::raw('null as ProveedorId')
+    //         ])
+    //         ->whereBetween('vt.Fecha', [$filtroFecha->fechaInicio, $filtroFecha->fechaFin])
+    //         ->when($sucursalId, function($q) use ($sucursalId) {
+    //             return $q->where('vt.SucursalId', $sucursalId);
+    //         })
+    //         ->when($usuarioId, function($q) use ($usuarioId) {
+    //             return $q->where('vt.UsuarioId', $usuarioId);
+    //         })
+    //         ->orderBy('vt.UsuarioId', 'desc');
+
+    //     $listaVentas = $query->get();
+
+    //     // dd($listaVentas);
+
+    //     // OBTENER TODOS LOS IDs DE VENDEDORES ÚNICOS
+    //     $vendedorIds = $listaVentas->pluck('UsuarioId')->unique()->toArray();
+        
+    //     // CARGAR TODOS LOS VENDEDORES DE UNA SOLA VEZ
+    //     $vendedoresMap = [];
+        
+    //     // Buscar en Usuarios
+    //     $usuarios = Usuario::whereIn('UsuarioId', $vendedorIds)->get();
+
+    //     foreach ($usuarios as $usuario) {
+    //         $sucursal = null;
+    //         if ($usuario->SucursalId) {
+    //             $sucursal = Sucursal::where('ID', $usuario->SucursalId)->first();
+    //         }
+    //         $vendedoresMap[$usuario->UsuarioId] = $this->generarVendedorDTO($usuario, $sucursal);
+    //     }
+        
+    //     // Buscar en AspNetUsers los que no se encontraron en Usuarios
+    //     $idsNoEncontrados = array_diff($vendedorIds, array_keys($vendedoresMap));
+    //     if (!empty($idsNoEncontrados)) {
+    //         $empleados = AspNetUser::whereIn('Id', $idsNoEncontrados)->get();
+
+    //         foreach ($empleados as $empleado) {
+    //             $sucursal = null;
+    //             if ($empleado->SucursalId) {
+    //                 $sucursal = Sucursal::where('ID', $empleado->SucursalId)->first();
+    //             }
+    //             $vendedoresMap[$empleado->Id] = $this->generarVendedorDTO($empleado, $sucursal);
+    //         }
+    //     }
+        
+    //     $listaDetalleDTO = collect();
+
+    //     foreach ($listaVentas as $ventaDiaria) {
+    //         $ventaDiariaDTO = new \stdClass();
+    //         $ventaDiariaDTO->ID = $ventaDiaria->ID;
+    //         $ventaDiariaDTO->Fecha = $ventaDiaria->Fecha;
+    //         $ventaDiariaDTO->SucursalId = $ventaDiaria->SucursalId;
+    //         $ventaDiariaDTO->TasaDeCambio = $ventaDiaria->TasaDeCambio;
+    //         $ventaDiariaDTO->UsuarioId = $ventaDiaria->UsuarioId;
+    //         $ventaDiariaDTO->Saldo = 0.00;
+    //         $ventaDiariaDTO->Cantidad = $ventaDiaria->Cantidad;
+    //         $ventaDiariaDTO->TotalBs = $ventaDiaria->TotalBs;
+    //         $ventaDiariaDTO->TotalDivisa = $ventaDiaria->TotalDivisa;
+    //         $ventaDiariaDTO->CostoDivisa = $ventaDiaria->CostoDivisa;
+    //         $ventaDiariaDTO->Estatus = $ventaDiaria->Estatus;
+    //         $ventaDiariaDTO->ProveedorId = null;
+            
+    //         $ventaDiariaDTO->Usuario = $vendedoresMap[$ventaDiaria->UsuarioId] ?? null;
+
+    //         $listaDetalleDTO->push($ventaDiariaDTO);
+    //     }
+
+    //     $ventasDiariaPeriodo->ListaVentasDiarias = $listaDetalleDTO;
+
+    //     return $ventasDiariaPeriodo;
+    // }
 
     private function obtenerVentasDiariasDeVendedor($filtroFecha, $sucursalId = null, $usuarioId = null)
     {
@@ -2522,6 +2654,59 @@ class EmpleadosController extends Controller
             ->orderBy('vt.UsuarioId', 'desc');
 
         $listaVentas = $query->get();
+
+        // ============================================
+        // RECORRER CADA VENTA Y CALCULAR TotalBs Y TotalDivisa CORRECTOS
+        // ============================================
+        foreach ($listaVentas as $venta) {
+            
+            // 2. Buscar en VentaVendedoresView
+            $detalles = DB::connection('sqlsrv')
+                ->table('VentaVendedoresView')
+                ->select([
+                    'Cantidad',
+                    'PrecioVenta',
+                    'MontoDivisa'  // ✅ AGREGAMOS MontoDivisa para calcular TotalDivisa
+                ])
+                ->where('VentaId', $venta->ID)
+                ->where('UsuarioId', $venta->UsuarioId)
+                ->get();
+            
+            // 4. Mostrar los primeros 5 registros para verificar
+            if ($detalles->count() > 0) {
+                $limite = min(5, $detalles->count());
+                for ($i = 0; $i < $limite; $i++) {
+                    $detalle = $detalles->get($i);
+                    $precioUnitario = floatval($detalle->Cantidad) > 0 ? floatval($detalle->PrecioVenta) / floatval($detalle->Cantidad) : 0;
+                    $montoDivisaUnitario = floatval($detalle->Cantidad) > 0 ? floatval($detalle->MontoDivisa) / floatval($detalle->Cantidad) : 0;
+                }
+            }
+            
+            // 5. Calcular las sumas
+            $totalBsReal = 0;
+            $totalDivisaReal = 0;
+            $sumaCantidadReal = 0;
+            
+            foreach ($detalles as $detalle) {
+                $cantidad = floatval($detalle->Cantidad);
+                $sumaCantidadReal += $cantidad;
+                if ($cantidad > 0) {
+                    // TotalBs: PrecioVenta / Cantidad
+                    $totalBsReal += floatval($detalle->PrecioVenta) / $cantidad;
+                    
+                    // TotalDivisa: MontoDivisa / Cantidad
+                    $totalDivisaReal += floatval($detalle->MontoDivisa) / $cantidad;
+                }
+            }
+            
+            // ✅ Reemplazar TotalBs con el valor correcto
+            $venta->TotalBs = $totalBsReal;
+            
+            // ✅ Reemplazar TotalDivisa con el valor correcto (desde MontoDivisa)
+            $venta->TotalDivisa = $totalDivisaReal;
+        }
+
+        // dd($listaVentas);
 
         // OBTENER TODOS LOS IDs DE VENDEDORES ÚNICOS
         $vendedorIds = $listaVentas->pluck('UsuarioId')->unique()->toArray();
