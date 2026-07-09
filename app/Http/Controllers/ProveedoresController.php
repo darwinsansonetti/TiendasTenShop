@@ -512,10 +512,10 @@ class ProveedoresController extends Controller
         try {
             $facturas = collect();
             
-            // 1. Facturas EN PROCESO (Estatus = 1)
-            $enProceso = $this->buscarListadoFacturas($proveedorId, 1);
-            if ($enProceso && $enProceso->count() > 0) {
-                $facturas = $facturas->concat($enProceso);
+            // 3. Facturas RECIBIDA (Estatus = 4)
+            $recibida = $this->buscarListadoFacturas($proveedorId, 4);
+            if ($recibida && $recibida->count() > 0) {
+                $facturas = $facturas->concat($recibida);
             }
             
             // 2. Facturas RECIBIENDO (Estatus = 2)
@@ -524,10 +524,10 @@ class ProveedoresController extends Controller
                 $facturas = $facturas->concat($recibiendo);
             }
             
-            // 3. Facturas RECIBIDA (Estatus = 4)
-            $recibida = $this->buscarListadoFacturas($proveedorId, 4);
-            if ($recibida && $recibida->count() > 0) {
-                $facturas = $facturas->concat($recibida);
+            // 1. Facturas EN PROCESO (Estatus = 1)
+            $enProceso = $this->buscarListadoFacturas($proveedorId, 1);
+            if ($enProceso && $enProceso->count() > 0) {
+                $facturas = $facturas->concat($enProceso);
             }
             
             return $facturas;
