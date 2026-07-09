@@ -2687,6 +2687,89 @@ class ProveedoresController extends Controller
         }
     }
 
+    // public function store(Request $request)
+    // {
+    //     try {
+    //         // Validación directa
+    //         $validated = $request->validate([
+    //             'proveedor_id' => 'required|exists:Proveedores,ProveedorId',
+    //             'fecha' => 'required|date',
+    //             'descripcion' => 'required|string|max:500',
+    //             'tasa_cambio' => 'required|numeric|min:0',
+    //             'monto_divisa' => 'required|numeric|min:0.01',
+    //             'monto_bs' => 'required|numeric|min:0',
+    //             'forma_pago' => 'required|integer',
+    //             'numero_operacion' => 'nullable|string|max:100',
+    //             'estatus' => 'required|integer',
+    //             'tipo_transaccion' => 'required|integer',
+    //             'sucursal_id' => 'required|integer',
+    //             'comprobante' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120'
+    //         ]);
+            
+    //         DB::connection('sqlsrv')->beginTransaction();
+
+    //         $proveedor = $this->buscarDatosTransaccionProveedor($request->proveedor_id);
+            
+    //         if (!$proveedor) {
+    //             return response()->json(['success' => false, 'message' => 'Proveedor no encontrado'], 404);
+    //         }
+            
+    //         // 2. Crear objeto Pago con los datos del formulario
+    //         $pago = $proveedor->pago;
+    //         $pago->Descripcion = $request->descripcion;
+    //         $pago->MontoDivisaAbonado = $request->monto_divisa;
+    //         $pago->MontoAbonado = $request->monto_bs;
+    //         $pago->FormaDePago = $request->forma_pago;
+    //         $pago->Fecha = $request->fecha;
+    //         $pago->TasaDeCambio = $request->tasa_cambio;
+    //         $pago->SucursalId = $request->sucursal_id;
+            
+    //         // Subir comprobante si existe
+    //         if ($request->hasFile('comprobante')) {
+    //             $comprobante = $request->file('comprobante');
+    //             $extension = $comprobante->getClientOriginalExtension();
+                
+    //             // Generar nombre como en .NET: PAG{yyyyMMddhhmm}-{proveedorId}.extensión
+    //             $fileName = 'PAG' . date('YmdHi') . '-' . $request->proveedor_id . '.' . $extension;
+                
+    //             // Guardar en storage/app/public/images/comprobantes/
+    //             $path = $comprobante->storeAs('images/comprobantes', $fileName, 'public');
+                
+    //             // Guardar SOLO el nombre del archivo (como en .NET)
+    //             $pago->UrlComprobante = $fileName;
+    //         }
+            
+    //         // 3. Asignar Tipo y Estatus
+    //         $pago->Tipo = 0;     // PagoMercancia
+    //         $pago->Estatus = 2;  // Pagada
+            
+    //         // 4. Guardar transacción (como GuardarTransaccionDeProveedor)
+    //         $pagoGuardado = $this->guardarTransaccionDeProveedor($pago, $request->proveedor_id);
+            
+    //         // 5. Si es proveedor de mercancía, refrescar facturas vigentes
+    //         if ($proveedor->Tipo == 0) { // 0 = Mercancía
+    //             $facturasVigentes = $this->buscarFacturasActivas($request->proveedor_id);
+    //         }
+            
+    //         DB::connection('sqlsrv')->commit();
+            
+    //         return response()->json([
+    //             'success' => true,
+    //             'message' => 'La transacción se guardó con éxito',
+    //             'transaccion_id' => $pagoGuardado->Id,
+    //             'numero_operacion' => $pagoGuardado->NumeroOperacion
+    //         ]);
+            
+    //     } catch (\Exception $e) {
+    //         DB::connection('sqlsrv')->rollBack();
+            
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => $e->getMessage()
+    //         ], 500);
+    //     }
+    // }
+
     public function store(Request $request)
     {
         try {
@@ -2732,10 +2815,35 @@ class ProveedoresController extends Controller
                 // Generar nombre como en .NET: PAG{yyyyMMddhhmm}-{proveedorId}.extensión
                 $fileName = 'PAG' . date('YmdHi') . '-' . $request->proveedor_id . '.' . $extension;
                 
-                // Guardar en storage/app/public/images/comprobantes/
-                $path = $comprobante->storeAs('images/comprobantes', $fileName, 'public');
+                // ✅ DETECTAR ENTORNO (como en guardarFotoVendedor)
+                $environment = app()->environment();
                 
-                // Guardar SOLO el nombre del archivo (como en .NET)
+                if ($environment === 'production') {
+                    // ✅ LÓGICA PARA SMARTERASP (PRODUCCIÓN)
+                    $folder = 'images/comprobantes/';
+                    $physicalPath = base_path('public/' . $folder);
+                    
+                    if (!is_dir($physicalPath)) {
+                        mkdir($physicalPath, 0777, true);
+                    }
+                    
+                    // Mover archivo directamente a public/
+                    $comprobante->move($physicalPath, $fileName);
+                    
+                } else {
+                    // ✅ LÓGICA PARA LOCAL (USANDO STORAGE)
+                    $folder = 'images/comprobantes/';
+                    $storagePath = 'public/' . $folder;
+                    
+                    if (!Storage::exists($storagePath)) {
+                        Storage::makeDirectory($storagePath, 0755, true);
+                    }
+                    
+                    // Guardar en storage
+                    Storage::putFileAs($storagePath, $comprobante, $fileName);
+                }
+                
+                // Guardar SOLO el nombre del archivo
                 $pago->UrlComprobante = $fileName;
             }
             
@@ -3052,6 +3160,159 @@ class ProveedoresController extends Controller
     /**
      * Actualizar pago (solo comprobante)
      */
+    // public function actualizarPago(Request $request, $id)
+    // {
+    //     try {
+    //         DB::connection('sqlsrv')->beginTransaction();
+            
+    //         // Validar datos
+    //         $request->validate([
+    //             'monto_divisa' => 'required|numeric|min:0.01',
+    //             'tasa_cambio' => 'required|numeric|min:0',
+    //             'fecha' => 'required|date',
+    //             'descripcion' => 'nullable|string|max:500',
+    //             'numero_operacion' => 'nullable|string|max:100',
+    //             'comprobante' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120'
+    //         ]);
+            
+    //         // 1. Buscar el pago original
+    //         $pagoOriginal = DB::connection('sqlsrv')
+    //             ->table('Transacciones')
+    //             ->where('ID', $id)
+    //             ->first();
+            
+    //         if (!$pagoOriginal) {
+    //             throw new \Exception('Pago no encontrado');
+    //         }
+            
+    //         // 2. Buscar la relación original
+    //         $relacionOriginal = DB::connection('sqlsrv')
+    //             ->table('TransaccionesProveedor')
+    //             ->where('TransaccionId', $id)
+    //             ->first();
+            
+    //         if (!$relacionOriginal) {
+    //             throw new \Exception('Relación del pago no encontrada');
+    //         }
+            
+    //         $proveedorId = $relacionOriginal->ProveedorId;
+            
+    //         // 3. ELIMINAR la transacción original y su relación (para recrearla)
+    //         DB::connection('sqlsrv')->table('TransaccionesProveedor')
+    //             ->where('TransaccionId', $id)
+    //             ->delete();
+            
+    //         DB::connection('sqlsrv')->table('Transacciones')
+    //             ->where('ID', $id)
+    //             ->delete();
+            
+    //         // 4. Subir nuevo comprobante si existe, si no conservar el anterior
+    //         $urlComprobante = null;
+    //         if ($request->hasFile('comprobante')) {
+    //             $comprobante = $request->file('comprobante');
+    //             $extension = $comprobante->getClientOriginalExtension();
+    //             $fileName = 'PAG' . date('YmdHi') . '-' . $proveedorId . '.' . $extension;
+    //             $comprobante->storeAs('images/comprobantes', $fileName, 'public');
+    //             $urlComprobante = $fileName;
+    //         } else {
+    //             $urlComprobante = $pagoOriginal->UrlComprobante;
+    //         }
+            
+    //         // 5. Calcular el nuevo monto en Bs
+    //         $montoBs = $request->monto_divisa * $request->tasa_cambio;
+            
+    //         // 6. Crear nuevo objeto pago con los datos actualizados
+    //         $pago = new \stdClass();
+    //         $pago->Id = 0;
+    //         $pago->Descripcion = $request->descripcion ?? $pagoOriginal->Descripcion;
+    //         $pago->MontoDivisaAbonado = $request->monto_divisa;
+    //         $pago->MontoAbonado = $montoBs;
+    //         $pago->NumeroOperacion = $request->numero_operacion ?? $pagoOriginal->NumeroOperacion;
+    //         $pago->TasaDeCambio = $request->tasa_cambio;
+    //         $pago->FormaDePago = $pagoOriginal->FormaDePago;
+    //         $pago->Fecha = $request->fecha;
+    //         $pago->Estatus = $pagoOriginal->Estatus;
+    //         $pago->Tipo = $pagoOriginal->Tipo;
+    //         $pago->UrlComprobante = $urlComprobante;
+            
+    //         // 7. Obtener facturas vigentes del proveedor
+    //         $facturasVigentes = $this->buscarFacturasActivas($proveedorId);
+            
+    //         // 8. Distribuir el nuevo monto entre las facturas
+    //         $montoRestante = $pago->MontoDivisaAbonado;
+    //         $transaccionCreada = null;
+    //         $facturasAfectadas = [];
+            
+    //         foreach ($facturasVigentes as $factura) {
+    //             if ($montoRestante <= 0) break;
+                
+    //             if ($factura->saldo_pendiente <= 0) continue;
+                
+    //             $montoAPagar = 0;
+    //             $cerrarFactura = false;
+                
+    //             if ($montoRestante >= $factura->saldo_pendiente) {
+    //                 $montoAPagar = $factura->saldo_pendiente;
+    //                 $montoRestante -= $montoAPagar;
+    //                 $cerrarFactura = true;
+    //             } else {
+    //                 $montoAPagar = $montoRestante;
+    //                 $montoRestante = 0;
+    //             }
+                
+    //             $descripcionAuto = 'Auto.' . ($pago->Descripcion ?? 'Pago registrado');
+    //             $sucursalId = $factura->SucursalId ?? 8;
+                
+    //             // Crear nueva transacción
+    //             $transaccionId = DB::connection('sqlsrv')->table('Transacciones')->insertGetId([
+    //                 'Descripcion' => $descripcionAuto,
+    //                 'MontoAbonado' => $montoAPagar * $pago->TasaDeCambio,
+    //                 'MontoDivisaAbonado' => $montoAPagar,
+    //                 'NumeroOperacion' => $pago->NumeroOperacion,
+    //                 'DivisaId' => null,
+    //                 'TasaDeCambio' => $pago->TasaDeCambio,
+    //                 'Tipo' => $pago->Tipo,
+    //                 'FormaDePago' => $pago->FormaDePago,
+    //                 'Estatus' => $pago->Estatus,
+    //                 'Fecha' => $pago->Fecha,
+    //                 'UrlComprobante' => $pago->UrlComprobante,
+    //                 'SucursalOrigenId' => $sucursalId,
+    //                 'SucursalId' => $sucursalId,
+    //                 'Observacion' => $descripcionAuto,
+    //                 'Nombre' => '',
+    //                 'Cedula' => '',
+    //                 'CategoriaId' => 0
+    //             ]);
+                
+    //             // Guardar relación
+    //             DB::connection('sqlsrv')->table('TransaccionesProveedor')->insert([
+    //                 'ProveedorId' => $proveedorId,
+    //                 'TransaccionId' => $transaccionId,
+    //                 'FacturaId' => $factura->ID
+    //             ]);
+                
+    //             $facturasAfectadas[] = [
+    //                 'factura_id' => $factura->ID,
+    //                 'factura_numero' => $factura->Numero,
+    //                 'monto_pagado' => $montoAPagar,
+    //                 'factura_cerrada' => $cerrarFactura
+    //             ];
+                
+    //             $transaccionCreada = $transaccionId;
+    //         }
+            
+    //         DB::connection('sqlsrv')->commit();
+            
+    //         return redirect()->route('cpanel.pagos.detalle', $transaccionCreada)
+    //             ->with('success', 'Pago actualizado correctamente. Se redistribuyó $' . number_format($request->monto_divisa, 2) . ' entre las facturas pendientes.');
+            
+    //     } catch (\Exception $e) {
+    //         DB::connection('sqlsrv')->rollBack();
+    //         Log::error('Error en actualizarPago: ' . $e->getMessage());
+    //         return redirect()->back()->with('error', 'Error al actualizar el pago: ' . $e->getMessage());
+    //     }
+    // }
+
     public function actualizarPago(Request $request, $id)
     {
         try {
@@ -3104,7 +3365,35 @@ class ProveedoresController extends Controller
                 $comprobante = $request->file('comprobante');
                 $extension = $comprobante->getClientOriginalExtension();
                 $fileName = 'PAG' . date('YmdHi') . '-' . $proveedorId . '.' . $extension;
-                $comprobante->storeAs('images/comprobantes', $fileName, 'public');
+                
+                // ✅ DETECTAR ENTORNO (como en guardarFotoVendedor)
+                $environment = app()->environment();
+                
+                if ($environment === 'production') {
+                    // ✅ LÓGICA PARA SMARTERASP (PRODUCCIÓN)
+                    $folder = 'images/comprobantes/';
+                    $physicalPath = base_path('public/' . $folder);
+                    
+                    if (!is_dir($physicalPath)) {
+                        mkdir($physicalPath, 0777, true);
+                    }
+                    
+                    // Mover archivo directamente a public/
+                    $comprobante->move($physicalPath, $fileName);
+                    
+                } else {
+                    // ✅ LÓGICA PARA LOCAL (USANDO STORAGE)
+                    $folder = 'images/comprobantes/';
+                    $storagePath = 'public/' . $folder;
+                    
+                    if (!Storage::exists($storagePath)) {
+                        Storage::makeDirectory($storagePath, 0755, true);
+                    }
+                    
+                    // Guardar en storage
+                    Storage::putFileAs($storagePath, $comprobante, $fileName);
+                }
+                
                 $urlComprobante = $fileName;
             } else {
                 $urlComprobante = $pagoOriginal->UrlComprobante;
