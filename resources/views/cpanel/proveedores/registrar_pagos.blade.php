@@ -136,6 +136,7 @@
                                     {{-- Logo con zoom --}}
                                     <td class="ps-4 py-3 text-center">
                                         <img src="{{ $imgSrc }}"
+                                             loading="lazy" 
                                              alt="{{ $nombre }}"
                                              class="img-zoomable"
                                              style="width:46px;height:46px;object-fit:cover;border-radius:50%;border:2px solid #e2e8f0;cursor:zoom-in;"

@@ -301,6 +301,7 @@
                                     <tr style="border-bottom:1px solid #f1f5f9;">
                                         <td class="ps-4 py-3 text-center">
                                             <img src="{{ $imgSrc }}"
+                                                 loading="lazy" 
                                                  alt="{{ $detalle->Codigo ?? 'producto' }}"
                                                  class="img-thumbnail img-zoomable"
                                                  style="width:50px;height:50px;object-fit:cover;cursor:pointer;"

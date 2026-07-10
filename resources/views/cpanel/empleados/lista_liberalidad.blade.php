@@ -208,6 +208,7 @@
                                 <tr style="border-bottom:1px solid #f1f5f9;">
                                     <td class="ps-3">
                                         <img src="{{ $imgSrc }}"
+                                             loading="lazy" 
                                              alt="{{ $nombre }}"
                                              class="rounded-circle img-zoomable"
                                              style="width:46px;height:46px;object-fit:cover;border:2px solid #e2e8f0;cursor:zoom-in;"
@@ -500,6 +501,7 @@
                                         <tr style="border-bottom:1px solid #f1f5f9;">
                                             <td class="ps-3">
                                                 <img src="{{ $imgSrc }}"
+                                                     loading="lazy" 
                                                      alt="{{ $nombre }}"
                                                      class="rounded-circle img-zoomable"
                                                      style="width:46px;height:46px;object-fit:cover;border:2px solid #e2e8f0;cursor:zoom-in;"

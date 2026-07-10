@@ -4647,6 +4647,106 @@ class RecepcionesController extends Controller
         }
     }
 
+    // public function actualizarPrecios(Request $request, $recepcionId)
+    // {
+    //     try {
+
+    //         // 1. Validar los datos
+    //         $request->validate([
+    //             'precios' => 'required|array',
+    //             'precios.*' => 'numeric|min:0',
+    //             'sucursal_id' => 'required|integer'
+    //         ]);
+
+    //         $sucursalId = $request->input('sucursal_id');
+    //         $precios = $request->input('precios');
+
+    //         // 3. Filtrar solo precios > 0
+    //         $preciosFiltrados = array_filter($precios, function($valor) {
+    //             return $valor > 0;
+    //         });
+
+    //         if (empty($preciosFiltrados)) {
+    //             return response()->json([
+    //                 'success' => false,
+    //                 'message' => 'No hay precios válidos para guardar'
+    //             ], 400);
+    //         }
+
+    //         // 4. Iniciar transacción
+    //         DB::connection('sqlsrv')->beginTransaction();
+
+    //         $actualizados = 0;
+    //         $errores = [];
+    //         $productosIds = array_keys($preciosFiltrados);
+
+    //         // 5. Obtener todos los productos existentes en ProductoSucursal en una sola consulta
+    //         $existentes = DB::connection('sqlsrv')
+    //             ->table('ProductoSucursal')
+    //             ->where('SucursalId', $sucursalId)
+    //             ->whereIn('ProductoId', $productosIds)
+    //             ->get()
+    //             ->keyBy('ProductoId');
+
+    //         // 6. Preparar datos para actualización (con historial)
+    //         $actualizarData = [];
+
+    //         foreach ($preciosFiltrados as $productoId => $nuevoPvp) {
+    //             // ✅ Producto existe - Actualizar con historial
+    //             // Guarda el PvpDivisa actual en PvpAnterior y el nuevo en NuevoPvp
+    //             $actualizarData[] = [
+    //                 'SucursalId' => $sucursalId,
+    //                 'ProductoId' => $productoId,
+    //                 'PvpDivisa' => $nuevoPvp,
+    //                 'PvpAnterior' => $existentes[$productoId]->PvpDivisa,
+    //                 'NuevoPvp' => $nuevoPvp,
+    //                 'FechaNuevoPrecio' => now(),
+    //                 'Tipo' => 0, // 0 = Cambio manual de precio
+    //             ];
+    //         }
+
+    //         // 7. Ejecutar actualizaciones (con historial)
+    //         foreach ($actualizarData as $data) {
+    //             DB::connection('sqlsrv')
+    //                 ->table('ProductoSucursal')
+    //                 ->where('SucursalId', $data['SucursalId'])
+    //                 ->where('ProductoId', $data['ProductoId'])
+    //                 ->update([
+    //                     'PvpDivisa' => $data['PvpDivisa'],
+    //                     'PvpAnterior' => $data['PvpAnterior'],
+    //                     'NuevoPvp' => $data['NuevoPvp'],
+    //                     'FechaNuevoPrecio' => $data['FechaNuevoPrecio'],
+    //                     'Tipo' => $data['Tipo'],
+    //                 ]);
+    //             $actualizados++;
+                
+    //             Log::info('Precio actualizado con historial', [
+    //                 'producto_id' => $data['ProductoId'],
+    //                 'sucursal_id' => $data['SucursalId'],
+    //                 'pvp_anterior' => $data['PvpAnterior'],
+    //                 'pvp_nuevo' => $data['PvpDivisa']
+    //             ]);
+    //         }
+
+    //         DB::connection('sqlsrv')->commit();
+
+    //         return response()->json([
+    //             'success' => true,
+    //             'message' => "Se actualizaron {$actualizados} precios correctamente",
+    //             'actualizados' => $actualizados,
+    //             'con_historial' => count($actualizarData),
+    //         ]);
+
+    //     } catch (\Exception $e) {
+    //         DB::connection('sqlsrv')->rollBack();
+
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Error al actualizar los precios: ' . $e->getMessage()
+    //         ], 500);
+    //     }
+    // }
+    
     public function actualizarPrecios(Request $request, $recepcionId)
     {
         try {
@@ -4688,20 +4788,39 @@ class RecepcionesController extends Controller
                 ->get()
                 ->keyBy('ProductoId');
 
+            // ✅ 5.1 Obtener datos de los productos para el reporte
+            $productosData = DB::connection('sqlsrv')
+                ->table('Productos')
+                ->whereIn('ID', $productosIds)
+                ->get()
+                ->keyBy('ID');
+
             // 6. Preparar datos para actualización (con historial)
             $actualizarData = [];
+            $productosModificados = []; // ✅ PARA EL REPORTE
 
             foreach ($preciosFiltrados as $productoId => $nuevoPvp) {
+                $pvpAnterior = $existentes[$productoId]->PvpDivisa ?? 0;
+                
+                // ✅ Guardar datos para el reporte
+                $producto = $productosData->get($productoId);
+                $productosModificados[] = [
+                    'codigo' => $producto->Codigo ?? 'N/A',
+                    'referencia' => $producto->Referencia ?? 'N/A',
+                    'nombre' => $producto->Descripcion ?? 'N/A',
+                    'pvp_anterior' => $pvpAnterior,
+                    'nuevo_pvp' => $nuevoPvp
+                ];
+
                 // ✅ Producto existe - Actualizar con historial
-                // Guarda el PvpDivisa actual en PvpAnterior y el nuevo en NuevoPvp
                 $actualizarData[] = [
                     'SucursalId' => $sucursalId,
                     'ProductoId' => $productoId,
                     'PvpDivisa' => $nuevoPvp,
-                    'PvpAnterior' => $existentes[$productoId]->PvpDivisa,
+                    'PvpAnterior' => $pvpAnterior,
                     'NuevoPvp' => $nuevoPvp,
                     'FechaNuevoPrecio' => now(),
-                    'Tipo' => 0, // 0 = Cambio manual de precio
+                    'Tipo' => 0,
                 ];
             }
 
@@ -4735,6 +4854,7 @@ class RecepcionesController extends Controller
                 'message' => "Se actualizaron {$actualizados} precios correctamente",
                 'actualizados' => $actualizados,
                 'con_historial' => count($actualizarData),
+                'productos_modificados' => $productosModificados // ✅ NUEVO: para el reporte
             ]);
 
         } catch (\Exception $e) {
@@ -4745,7 +4865,7 @@ class RecepcionesController extends Controller
                 'message' => 'Error al actualizar los precios: ' . $e->getMessage()
             ], 500);
         }
-    }    
+    }
 
     // Vista para cargar productos con cambio de precios masivos
     public function mostrarCargaProductos()

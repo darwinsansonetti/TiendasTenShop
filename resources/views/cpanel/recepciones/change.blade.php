@@ -234,6 +234,7 @@
                                 <tr style="border-bottom:1px solid #f1f5f9;">
                                     <td class="ps-4 text-center">
                                         <img src="{{ $imgSrc }}" 
+                                            loading="lazy" 
                                             alt="{{ $detalle->Codigo ?? 'Producto' }}"
                                             class="img-thumbnail img-zoomable"
                                             style="width: 40px; height: 40px; object-fit: cover; cursor: pointer;"
@@ -350,7 +351,44 @@
             }
         });
     }
-    
+
+    // ==========================
+    // CALCULAR PORCENTAJE DE INCREMENTO (FUNCIÓN GLOBAL)
+    // ==========================
+    function calcularPorcentaje(input) {
+        const tr = input.closest('tr');
+        const porcentajeLabel = tr.querySelector('.porcentaje-label');
+        
+        if (!porcentajeLabel) return;
+        
+        const costo = parseFloat(input.getAttribute('data-costo')) || 0;
+        const nuevoPvp = parseFloat(input.value) || 0;
+        
+        if (costo <= 0 || nuevoPvp <= 0) {
+            porcentajeLabel.textContent = '0%';
+            porcentajeLabel.style.color = '#6b7280';
+            return;
+        }
+        
+        const incremento = ((nuevoPvp - costo) / costo) * 100;
+        const incrementoRedondeado = Math.round(incremento * 100) / 100;
+        
+        porcentajeLabel.textContent = `${incrementoRedondeado > 0 ? '+' : ''}${incrementoRedondeado}%`;
+        
+        // Cambiar color según el porcentaje
+        if (incrementoRedondeado > 20) {
+            porcentajeLabel.style.color = '#dc2626';
+        } else if (incrementoRedondeado > 10) {
+            porcentajeLabel.style.color = '#d97706';
+        } else if (incrementoRedondeado > 0) {
+            porcentajeLabel.style.color = '#059669';
+        } else if (incrementoRedondeado < 0) {
+            porcentajeLabel.style.color = '#dc2626';
+        } else {
+            porcentajeLabel.style.color = '#6b7280';
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
 
         const tabla = document.getElementById('tablaProductos');
@@ -491,7 +529,6 @@
         // GUARDAR PRECIOS - SOLO VALORES > 0
         // ==========================
         document.getElementById('btnGuardarPrecios').addEventListener('click', function() {
-            // Recopilar todos los inputs con valor > 0
             const inputs = document.querySelectorAll('.precio-input');
             const precios = {};
             let productosConPrecio = 0;
@@ -503,14 +540,11 @@
                 const costo = parseFloat(input.getAttribute('data-costo'));
                 const pvpActual = parseFloat(input.getAttribute('data-pvp-actual'));
                 
-                // Solo tomar valores mayores que 0
                 if (valor > 0) {
-                    // Validar que el precio no sea menor que el costo
                     if (valor < costo) {
                         errores.push(`⚠️ ${producto}: Precio ($${valor.toFixed(2)}) menor que costo ($${costo.toFixed(2)})`);
                     }
                     
-                    // Obtener el ID del producto desde el name
                     const name = input.getAttribute('name');
                     const match = name.match(/\[(\d+)\]/);
                     if (match) {
@@ -521,7 +555,6 @@
                 }
             });
 
-            // Verificar si hay productos para guardar
             if (productosConPrecio === 0) {
                 Swal.fire({
                     icon: 'warning',
@@ -532,7 +565,6 @@
                 return;
             }
 
-            // Mostrar confirmación con advertencias si hay errores
             let mensaje = `Se guardarán ${productosConPrecio} productos`;
             if (errores.length > 0) {
                 mensaje += '\n\n⚠️ Advertencias:\n' + errores.join('\n');
@@ -558,7 +590,6 @@
         // FUNCIÓN PARA GUARDAR PRECIOS
         // ==========================
         function guardarPrecios(precios) {
-            // Mostrar loading
             Swal.fire({
                 title: 'Guardando...',
                 text: 'Por favor espera',
@@ -592,12 +623,19 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
+                    // ✅ Generar Excel con los productos modificados
+                    const productosModificados = data.productos_modificados || [];
+
                     Swal.fire({
                         icon: 'success',
                         title: '¡Éxito!',
                         text: data.message || 'Precios actualizados correctamente',
                         confirmButtonColor: '#10b981'
                     }).then(() => {
+                        // ✅ Descargar Excel si hay productos modificados
+                        if (productosModificados.length > 0) {
+                            descargarReportePrecios(productosModificados);
+                        }
                         location.reload();
                     });
                 } else {
@@ -620,291 +658,323 @@
             });
         }
 
-        renderPage();
-    });
-
-    // ==========================
-    // DESCARGAR EXCEL - CON INFORMACIÓN DE RECEPCIÓN
-    // ==========================
-    document.getElementById('btnDescargarExcel').addEventListener('click', function() {
-        try {
-            // Obtener datos de la recepción desde la vista
-            const numeroRecepcion = '{{ $recepcion->Numero ?? "N/A" }}';
-            const fechaRecepcion = '{{ isset($recepcion->FechaRecepcion) ? \Carbon\Carbon::parse($recepcion->FechaRecepcion)->format("d/m/Y H:i") : "N/A" }}';
-            const fechaCreacion = '{{ isset($recepcion->FechaCreacion) ? \Carbon\Carbon::parse($recepcion->FechaCreacion)->format("d/m/Y H:i") : "N/A" }}';
-            const sucursalDestino = '{{ $recepcion->sucursal_destino ?? "N/A" }}';
-            const proveedor = '{{ $recepcion->proveedor_nombre ?? "N/A" }}';
-            const factura = '{{ $recepcion->factura_numero ?? "N/A" }}';
-            const estatus = '{{ $estatus["texto"] ?? "N/A" }}';
-            
-            // Crear estructura de datos
-            const data = [];
-            
-            // ==========================================
-            // INFORMACIÓN DE LA RECEPCIÓN
-            // ==========================================
-            data.push(['INFORMACIÓN DE LA RECEPCIÓN']);
-            data.push([]); // Fila en blanco
-            data.push(['N° Recepción', numeroRecepcion]);
-            data.push(['Fecha Creación', fechaCreacion]);
-            data.push(['Fecha Recepción', fechaRecepcion]);
-            data.push(['Sucursal Destino', sucursalDestino]);
-            data.push(['Proveedor', proveedor]);
-            data.push(['Factura', factura]);
-            data.push(['Estatus', estatus]);
-            data.push([]); // Fila en blanco
-            
-            // ==========================================
-            // LISTA DE PRODUCTOS
-            // ==========================================
-            data.push(['LISTA DE PRODUCTOS']);
-            data.push([]); // Fila en blanco
-            
-            // Encabezados de productos
-            data.push(['CÓDIGO', 'REFERENCIA', 'PRODUCTO', 'COSTO DIVISA', 'NUEVO PVP (USD)']);
-            
-            // Obtener TODAS las filas de la tabla
-            const rows = document.querySelectorAll('#tablaProductos tbody tr');
-            let contadorProductos = 0;
-            
-            rows.forEach(row => {
-                const cells = row.querySelectorAll('td');
-                if (cells.length < 6) return;
+        // ==========================
+        // FUNCIÓN PARA DESCARGAR REPORTE DE PRECIOS MODIFICADOS
+        // ==========================
+        function descargarReportePrecios(productos) {
+            try {
+                const data = [];
                 
-                const codigo = cells[1]?.textContent?.trim() || '';
-                const referencia = cells[2]?.textContent?.trim() || '';
-                const producto = cells[3]?.textContent?.trim() || '';
-                const costoDivisa = cells[4]?.textContent?.trim().replace('$', '') || '0';
+                data.push(['REPORTE DE ACTUALIZACIÓN DE PRECIOS']);
+                data.push([]);
+                data.push(['Fecha', new Date().toLocaleString('es-ES')]);
+                data.push(['Recepción', '{{ $recepcion->Numero ?? "N/A" }}']);
+                data.push(['Sucursal', '{{ $recepcion->sucursal_destino ?? "N/A" }}']);
+                data.push(['Proveedor', '{{ $recepcion->proveedor_nombre ?? "N/A" }}']);
+                data.push([]);
                 
-                const input = cells[5]?.querySelector('.precio-input');
-                const nuevoPvp = input ? input.value : '0.00';
+                data.push(['PRODUCTOS MODIFICADOS']);
+                data.push([]);
                 
-                if (codigo) {
-                    data.push([codigo, referencia, producto, costoDivisa, nuevoPvp]);
-                    contadorProductos++;
-                }
-            });
-            
-            // ❌ ELIMINADO: Ya no se muestra la fila de TOTAL PRODUCTOS
-            
-            // Verificar que hay datos
-            if (data.length <= 12) {
+                data.push([
+                    'CÓDIGO', 
+                    'REFERENCIA', 
+                    'PRODUCTO', 
+                    'PVP ANTERIOR (USD)', 
+                    'NUEVO PVP (USD)', 
+                    'INCREMENTO (%)'
+                ]);
+                
+                let totalIncremento = 0;
+                let totalProductos = 0;
+                
+                productos.forEach(producto => {
+                    const incremento = producto.nuevo_pvp - producto.pvp_anterior;
+                    const porcentaje = producto.pvp_anterior > 0 
+                        ? ((incremento / producto.pvp_anterior) * 100) 
+                        : 0;
+                    
+                    data.push([
+                        producto.codigo || 'N/A',
+                        producto.referencia || 'N/A',
+                        producto.nombre || 'N/A',
+                        parseFloat(producto.pvp_anterior || 0).toFixed(2),
+                        parseFloat(producto.nuevo_pvp || 0).toFixed(2),
+                        porcentaje.toFixed(2) + '%'
+                    ]);
+                    
+                    totalIncremento += incremento;
+                    totalProductos++;
+                });
+                
+                data.push([]);
+                data.push(['RESUMEN']);
+                data.push(['Total Productos Modificados', totalProductos]);
+                data.push(['Incremento Total (USD)', totalIncremento.toFixed(2)]);
+                
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.aoa_to_sheet(data);
+                
+                ws['!cols'] = [
+                    { wch: 20 },
+                    { wch: 20 },
+                    { wch: 35 },
+                    { wch: 18 },
+                    { wch: 18 },
+                    { wch: 18 }
+                ];
+                
+                XLSX.utils.book_append_sheet(wb, ws, 'Reporte Precios');
+                
+                const fecha = new Date().toISOString().slice(0,10);
+                const nombreArchivo = `reporte_precios_${fecha}.xlsx`;
+                XLSX.writeFile(wb, nombreArchivo);
+                
+            } catch (error) {
+                console.error('Error al generar reporte Excel:', error);
                 Swal.fire({
                     icon: 'warning',
-                    title: 'Sin datos',
-                    text: 'No hay productos para exportar',
+                    title: 'Reporte no generado',
+                    text: 'Los precios se guardaron pero no se pudo generar el reporte Excel.',
                     confirmButtonColor: '#d97706'
                 });
-                return;
             }
-            
-            // Crear libro de Excel
-            const wb = XLSX.utils.book_new();
-            const ws = XLSX.utils.aoa_to_sheet(data);
-            
-            // Ajustar ancho de columnas
-            ws['!cols'] = [
-                { wch: 20 },  // Etiquetas / CÓDIGO
-                { wch: 30 },  // Valores / REFERENCIA
-                { wch: 35 },  // PRODUCTO
-                { wch: 15 },  // COSTO DIVISA
-                { wch: 18 }   // NUEVO PVP (USD)
-            ];
-            
-            XLSX.utils.book_append_sheet(wb, ws, 'Actualización Precios');
-            
-            // Descargar
-            const nombreArchivo = `actualizacion_precios_${numeroRecepcion}_${new Date().toISOString().slice(0,10)}.xlsx`;
-            XLSX.writeFile(wb, nombreArchivo);
-            
-            Swal.fire({
-                icon: 'success',
-                title: 'Excel descargado',
-                text: `Se exportaron ${contadorProductos} productos de la recepción #${numeroRecepcion}`,
-                timer: 3000,
-                showConfirmButton: false
-            });
-            
-        } catch (error) {
-            console.error('Error al descargar Excel:', error);
-            Swal.fire({
-                icon: 'error',
-                title: 'Error',
-                text: 'Error al generar el Excel: ' + error.message,
-                confirmButtonColor: '#dc2626'
-            });
         }
-    });
 
-    // ==========================
-    // CARGAR EXCEL
-    // ==========================
-    document.getElementById('btnCargarExcel').addEventListener('click', function() {
-        document.getElementById('excelFileInput').click();
-    });
-
-    document.getElementById('excelFileInput').addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        document.getElementById('archivoCargado').textContent = `📄 ${file.name}`;
-        
-        const reader = new FileReader();
-        reader.onload = function(event) {
+        // ==========================
+        // DESCARGAR EXCEL - CON INFORMACIÓN DE RECEPCIÓN
+        // ==========================
+        document.getElementById('btnDescargarExcel').addEventListener('click', function() {
             try {
-                const data = new Uint8Array(event.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+                const numeroRecepcion = '{{ $recepcion->Numero ?? "N/A" }}';
+                const fechaRecepcion = '{{ isset($recepcion->FechaRecepcion) ? \Carbon\Carbon::parse($recepcion->FechaRecepcion)->format("d/m/Y H:i") : "N/A" }}';
+                const fechaCreacion = '{{ isset($recepcion->FechaCreacion) ? \Carbon\Carbon::parse($recepcion->FechaCreacion)->format("d/m/Y H:i") : "N/A" }}';
+                const sucursalDestino = '{{ $recepcion->sucursal_destino ?? "N/A" }}';
+                const proveedor = '{{ $recepcion->proveedor_nombre ?? "N/A" }}';
+                const factura = '{{ $recepcion->factura_numero ?? "N/A" }}';
+                const estatus = '{{ $estatus["texto"] ?? "N/A" }}';
                 
-                const inputs = document.querySelectorAll('.precio-input');
+                const data = [];
                 
-                let actualizados = 0;
+                data.push(['INFORMACIÓN DE LA RECEPCIÓN']);
+                data.push([]);
+                data.push(['N° Recepción', numeroRecepcion]);
+                data.push(['Fecha Creación', fechaCreacion]);
+                data.push(['Fecha Recepción', fechaRecepcion]);
+                data.push(['Sucursal Destino', sucursalDestino]);
+                data.push(['Proveedor', proveedor]);
+                data.push(['Factura', factura]);
+                data.push(['Estatus', estatus]);
+                data.push([]);
                 
-                function limpiarCodigo(codigo) {
-                    return String(codigo).trim().toUpperCase();
-                }
+                data.push(['LISTA DE PRODUCTOS']);
+                data.push([]);
                 
-                function esCodigoProducto(texto) {
-                    if (!texto || typeof texto !== 'string') return false;
-                    const trimmed = texto.trim();
-                    return /^[A-Z]{2,3}\d+/.test(trimmed);
-                }
+                data.push(['CÓDIGO', 'REFERENCIA', 'PRODUCTO', 'COSTO DIVISA', 'NUEVO PVP (USD)']);
                 
-                jsonData.forEach(row => {
-                    let codigo = null;
-                    let nuevoPvp = null;
+                const rows = document.querySelectorAll('#tablaProductos tbody tr');
+                let contadorProductos = 0;
+                
+                rows.forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length < 6) return;
                     
-                    const keys = Object.keys(row);
+                    const codigo = cells[1]?.textContent?.trim() || '';
+                    const referencia = cells[2]?.textContent?.trim() || '';
+                    const producto = cells[3]?.textContent?.trim() || '';
+                    const costoDivisa = cells[4]?.textContent?.trim().replace('$', '') || '0';
                     
-                    for (const key of keys) {
-                        const value = row[key];
-                        if (value && typeof value === 'string' && value.trim() !== '') {
-                            const trimmed = value.trim();
-                            if (esCodigoProducto(trimmed)) {
-                                codigo = trimmed;
-                                break;
-                            }
-                        }
+                    const input = cells[5]?.querySelector('.precio-input');
+                    const nuevoPvp = input ? input.value : '0.00';
+                    
+                    if (codigo) {
+                        data.push([codigo, referencia, producto, costoDivisa, nuevoPvp]);
+                        contadorProductos++;
                     }
-                    
-                    if (!codigo) {
-                        const primeraColumna = row['INFORMACIÓN DE LA RECEPCIÓN'];
-                        if (primeraColumna && typeof primeraColumna === 'string') {
-                            const trimmed = primeraColumna.trim();
-                            if (esCodigoProducto(trimmed)) {
-                                codigo = trimmed;
-                            }
-                        }
-                    }
-                    
-                    if (!codigo) return;
-                    
-                    for (const key of keys) {
-                        if (key.includes('EMPTY') && key !== '__EMPTY' && key !== '__EMPTY_1' && key !== '__EMPTY_2') {
-                            const value = row[key];
-                            if (value !== undefined && value !== null && value !== '') {
-                                const num = parseFloat(value);
-                                if (!isNaN(num)) {
-                                    nuevoPvp = num;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    
-                    if (nuevoPvp === null) {
-                        for (const key of keys) {
-                            const value = row[key];
-                            if (value !== undefined && value !== null && value !== '' && typeof value === 'number') {
-                                if (key !== '__rowNum__') {
-                                    nuevoPvp = value;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    
-                    if (isNaN(nuevoPvp)) return;
-                    
-                    const codigoLimpio = limpiarCodigo(codigo);
-                    
-                    inputs.forEach(input => {
-                        const producto = input.getAttribute('data-producto');
-                        if (producto && limpiarCodigo(producto) === codigoLimpio) {
-                            input.value = nuevoPvp.toFixed(2);
-                            // ✅ Calcular porcentaje automáticamente
-                            calcularPorcentaje(input);
-                            actualizados++;
-                        }
-                    });
                 });
                 
-                let mensaje = `✅ Excel cargado correctamente`;
-                if (actualizados > 0) {
-                    mensaje += `\n📦 ${actualizados} productos actualizados`;
+                if (data.length <= 12) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Sin datos',
+                        text: 'No hay productos para exportar',
+                        confirmButtonColor: '#d97706'
+                    });
+                    return;
                 }
+                
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.aoa_to_sheet(data);
+                
+                ws['!cols'] = [
+                    { wch: 20 },
+                    { wch: 30 },
+                    { wch: 35 },
+                    { wch: 15 },
+                    { wch: 18 }
+                ];
+                
+                XLSX.utils.book_append_sheet(wb, ws, 'Actualización Precios');
+                
+                const nombreArchivo = `actualizacion_precios_${numeroRecepcion}_${new Date().toISOString().slice(0,10)}.xlsx`;
+                XLSX.writeFile(wb, nombreArchivo);
                 
                 Swal.fire({
                     icon: 'success',
-                    title: 'Excel procesado',
-                    text: mensaje,
-                    confirmButtonColor: '#d97706'
+                    title: 'Excel descargado',
+                    text: `Se exportaron ${contadorProductos} productos de la recepción #${numeroRecepcion}`,
+                    timer: 3000,
+                    showConfirmButton: false
                 });
                 
-                e.target.value = '';
-                
             } catch (error) {
-                console.error('Error al leer el Excel:', error);
+                console.error('Error al descargar Excel:', error);
                 Swal.fire({
                     icon: 'error',
-                    title: 'Error al leer el Excel',
-                    text: 'Verifica que el archivo tenga el formato correcto',
+                    title: 'Error',
+                    text: 'Error al generar el Excel: ' + error.message,
                     confirmButtonColor: '#dc2626'
                 });
             }
-        };
-        
-        reader.readAsArrayBuffer(file);
-    });
+        });
 
-    // ==========================
-    // CALCULAR PORCENTAJE DE INCREMENTO
-    // ==========================
-    function calcularPorcentaje(input) {
-        const tr = input.closest('tr');
-        const porcentajeLabel = tr.querySelector('.porcentaje-label');
-        
-        if (!porcentajeLabel) return;
-        
-        const costo = parseFloat(input.getAttribute('data-costo')) || 0;
-        const nuevoPvp = parseFloat(input.value) || 0;
-        
-        if (costo <= 0 || nuevoPvp <= 0) {
-            porcentajeLabel.textContent = '0%';
-            porcentajeLabel.style.color = '#6b7280';
-            return;
-        }
-        
-        const incremento = ((nuevoPvp - costo) / costo) * 100;
-        const incrementoRedondeado = Math.round(incremento * 100) / 100;
-        
-        porcentajeLabel.textContent = `${incrementoRedondeado > 0 ? '+' : ''}${incrementoRedondeado}%`;
-        
-        // Cambiar color según el porcentaje
-        if (incrementoRedondeado > 20) {
-            porcentajeLabel.style.color = '#dc2626'; // Rojo - incremento alto
-        } else if (incrementoRedondeado > 10) {
-            porcentajeLabel.style.color = '#d97706'; // Naranja - incremento medio
-        } else if (incrementoRedondeado > 0) {
-            porcentajeLabel.style.color = '#059669'; // Verde - incremento bajo
-        } else if (incrementoRedondeado < 0) {
-            porcentajeLabel.style.color = '#dc2626'; // Rojo - precio menor que costo
-        } else {
-            porcentajeLabel.style.color = '#6b7280'; // Gris - sin incremento
-        }
-    }
+        // ==========================
+        // CARGAR EXCEL
+        // ==========================
+        document.getElementById('btnCargarExcel').addEventListener('click', function() {
+            document.getElementById('excelFileInput').click();
+        });
 
+        document.getElementById('excelFileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            document.getElementById('archivoCargado').textContent = `📄 ${file.name}`;
+            
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const data = new Uint8Array(event.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+                    
+                    const inputs = document.querySelectorAll('.precio-input');
+                    
+                    let actualizados = 0;
+                    
+                    function limpiarCodigo(codigo) {
+                        return String(codigo).trim().toUpperCase();
+                    }
+                    
+                    function esCodigoProducto(texto) {
+                        if (!texto || typeof texto !== 'string') return false;
+                        const trimmed = texto.trim();
+                        return /^[A-Z]{2,3}\d+/.test(trimmed);
+                    }
+                    
+                    jsonData.forEach(row => {
+                        let codigo = null;
+                        let nuevoPvp = null;
+                        
+                        const keys = Object.keys(row);
+                        
+                        for (const key of keys) {
+                            const value = row[key];
+                            if (value && typeof value === 'string' && value.trim() !== '') {
+                                const trimmed = value.trim();
+                                if (esCodigoProducto(trimmed)) {
+                                    codigo = trimmed;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (!codigo) {
+                            const primeraColumna = row['INFORMACIÓN DE LA RECEPCIÓN'];
+                            if (primeraColumna && typeof primeraColumna === 'string') {
+                                const trimmed = primeraColumna.trim();
+                                if (esCodigoProducto(trimmed)) {
+                                    codigo = trimmed;
+                                }
+                            }
+                        }
+                        
+                        if (!codigo) return;
+                        
+                        for (const key of keys) {
+                            if (key.includes('EMPTY') && key !== '__EMPTY' && key !== '__EMPTY_1' && key !== '__EMPTY_2') {
+                                const value = row[key];
+                                if (value !== undefined && value !== null && value !== '') {
+                                    const num = parseFloat(value);
+                                    if (!isNaN(num)) {
+                                        nuevoPvp = num;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if (nuevoPvp === null) {
+                            for (const key of keys) {
+                                const value = row[key];
+                                if (value !== undefined && value !== null && value !== '' && typeof value === 'number') {
+                                    if (key !== '__rowNum__') {
+                                        nuevoPvp = value;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if (isNaN(nuevoPvp)) return;
+                        
+                        const codigoLimpio = limpiarCodigo(codigo);
+                        
+                        inputs.forEach(input => {
+                            const producto = input.getAttribute('data-producto');
+                            if (producto && limpiarCodigo(producto) === codigoLimpio) {
+                                input.value = nuevoPvp.toFixed(2);
+                                calcularPorcentaje(input);
+                                actualizados++;
+                            }
+                        });
+                    });
+                    
+                    let mensaje = `✅ Excel cargado correctamente`;
+                    if (actualizados > 0) {
+                        mensaje += `\n📦 ${actualizados} productos actualizados`;
+                    }
+                    
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Excel procesado',
+                        text: mensaje,
+                        confirmButtonColor: '#d97706'
+                    });
+                    
+                    e.target.value = '';
+                    
+                } catch (error) {
+                    console.error('Error al leer el Excel:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error al leer el Excel',
+                        text: 'Verifica que el archivo tenga el formato correcto',
+                        confirmButtonColor: '#dc2626'
+                    });
+                }
+            };
+            
+            reader.readAsArrayBuffer(file);
+        });
+
+        // ==========================
+        // RENDERIZAR PÁGINA
+        // ==========================
+        renderPage();
+
+    }); // FIN DEL DOMContentLoaded
 </script>
 @endsection
 

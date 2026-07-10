@@ -416,6 +416,7 @@
                                     <tr style="border-bottom:1px solid #f1f5f9;">
                                         <td class="ps-3">
                                             <img src="{{ $imgSrc }}"
+                                                 loading="lazy" 
                                                  alt="{{ $detalle->Codigo ?? 'producto' }}"
                                                  class="rounded img-zoomable"
                                                  style="width:46px;height:46px;object-fit:cover;border:1px solid #e2e8f0;cursor:zoom-in;"

@@ -122,6 +122,7 @@
                                     <td class="text-center">
                                         @if($venta->Vendedor && $venta->Vendedor['FotoPerfil'])
                                             <img src="{{ $imgSrc }}" 
+                                                loading="lazy" 
                                                 alt="{{ $venta->Vendedor['NombreCompleto'] ?? 'N/A' }}"
                                                 class="rounded-circle border border-success" 
                                                 style="width: 80px; height: 80px; object-fit: cover;">

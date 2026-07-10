@@ -162,7 +162,8 @@
                                 <tr class="align-middle" data-origen="{{ $origen }}" data-vendedor-id="{{ $vendedorId }}">
                                     <!-- Foto -->
                                     <td class="text-center">
-                                        <img src="{{ $imgSrc }}" 
+                                        <img src="{{ $imgSrc }}"
+                                            loading="lazy"  
                                             alt="{{ $nombre }}"
                                             class="rounded-circle border border-success img-zoomable" 
                                             style="width: 60px; height: 60px; object-fit: cover; cursor: zoom-in;"

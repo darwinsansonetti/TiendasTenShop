@@ -300,6 +300,7 @@
                                             <tr data-producto-id="{{ $detalle->ProductoId }}">
                                                 <td class="text-center">
                                                     <img src="{{ $imgSrc }}" 
+                                                        loading="lazy"
                                                         alt="{{ $detalle->Codigo ?? 'Producto' }}"
                                                         class="img-thumbnail img-zoomable"
                                                         style="width: 40px; height: 40px; object-fit: cover; cursor: pointer;"

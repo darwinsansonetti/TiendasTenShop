@@ -188,6 +188,12 @@ class VentasController extends Controller
             $respuesta = $detalles->map(function ($d) use ($productos, $sucursalId) {
                 // Obtener ProductoId del detalle (puede ser ProductoId o ProductoID)
                 $productoId = $d->ProductoId ?? $d->ProductoID ?? $d->productoId ?? null;
+
+                $productoEnSucursal = DB::table('ProductoSucursal')
+                    ->where('SucursalId', $sucursalId)
+                    ->where('ProductoId', $productoId)
+                    ->where('Estatus', 1)
+                    ->first();
                 
                 if (!$productoId) {
                     $producto = null;
@@ -218,7 +224,8 @@ class VentasController extends Controller
                     $prodCodigo = $producto->Codigo ?? $producto->codigo ?? '';
                     $prodUrlFoto = $producto->UrlFoto ?? '';
                     // $fechaActualizacion = $producto->FechaActualizacion ?? $producto->FechaCreacion;
-                    $fechaActualizacion = $producto->FechaCreacion;
+                    // $fechaActualizacion = $producto->FechaCreacion;
+                    $fechaActualizacion = $productoEnSucursal->FechaIngreso ?? $producto->FechaActualizacion ?? $producto->FechaCreacion;
 
                     // Calcular días desde FechaActualizacion hasta hoy
                     if ($fechaActualizacion) {
@@ -283,29 +290,7 @@ class VentasController extends Controller
                 }
                 
                 return $item;
-            });            
-
-            // Agregar log para debug
-            \Log::info('Debug detalleVenta - sucursal: ' . $sucursalId, [
-                'total_items' => $respuesta->count(),
-                'items_sin_producto' => $respuesta->filter(function($item) {
-                    return is_null($item['producto']);
-                })->count()
-            ]);
-
-            // Verificar items que podrían causar problema
-            $respuesta->each(function($item, $index) {
-                if (is_null($item['producto'])) {
-                    \Log::warning("Item {$index} no tiene producto", [
-                        'producto_id' => $item['producto_id'] ?? 'null'
-                    ]);
-                }
             });
-
-            // return response()->json([
-            //     'ok' => true,
-            //     'data' => $respuesta
-            // ]);
 
             $totalItems = $respuesta->count();
 

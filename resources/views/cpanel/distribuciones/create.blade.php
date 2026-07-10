@@ -281,6 +281,7 @@
                                                     <tr>
                                                         <td class="text-center">
                                                             <img src="{{ $imgSrc }}" 
+                                                                loading="lazy" 
                                                                 alt="{{ $producto->Codigo }}"
                                                                 class="img-thumbnail img-zoomable"
                                                                 style="width: 40px; height: 40px; object-fit: cover; cursor: pointer;"

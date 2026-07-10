@@ -157,6 +157,7 @@
                                     <!-- Foto -->
                                     <td class="text-center">
                                         <img src="{{ $imgSrc }}" 
+                                            loading="lazy" 
                                             alt="{{ $nombre }}"
                                             class="rounded-circle border border-success img-zoomable" 
                                             style="width: 50px; height: 50px; object-fit: cover; cursor: zoom-in;"

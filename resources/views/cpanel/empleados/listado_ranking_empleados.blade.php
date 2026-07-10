@@ -170,6 +170,7 @@
                                     <!-- Foto -->
                                     <td class="text-center">
                                         <img src="{{ $imgSrc }}" 
+                                            loading="lazy" 
                                             alt="{{ $vendedor->Vendedor['NombreCompleto'] ?? 'N/A' }}"
                                             class="rounded-circle border border-success img-zoomable" 
                                             style="width: 60px; height: 60px; object-fit: cover; cursor: zoom-in;"

@@ -114,6 +114,7 @@
                             <tr style="border-bottom:1px solid #f1f5f9;">
                                 <td class="ps-4 text-center">
                                     <img src="{{ $imgSrc }}" 
+                                         loading="lazy"
                                          alt="{{ $detalle->Codigo }}"
                                          class="img-thumbnail img-zoomable"
                                          style="width: 40px; height: 40px; object-fit: cover; cursor: pointer;"

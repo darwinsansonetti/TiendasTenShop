@@ -134,6 +134,7 @@
                                     {{-- Logo --}}
                                     <td class="ps-4 text-center">
                                         <img src="{{ $imgSrc }}"
+                                             loading="lazy" 
                                              alt="{{ $proveedor->Nombre }}"
                                              class="rounded-circle img-zoomable"
                                              style="width:46px;height:46px;object-fit:cover;border:2px solid #e2e8f0;cursor:zoom-in;"

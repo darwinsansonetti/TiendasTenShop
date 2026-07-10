@@ -100,6 +100,7 @@
                                 <td class="text-center">
                                     <img src="{{ $imgSrc }}" 
                                         alt="{{ $detalle->Codigo }}"
+                                        loading="lazy"
                                         class="img-thumbnail img-zoomable"
                                         style="width: 40px; height: 40px; object-fit: cover; cursor: pointer;"
                                         data-full-image="{{ $imgSrc }}"

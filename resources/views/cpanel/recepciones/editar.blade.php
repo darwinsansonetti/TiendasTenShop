@@ -282,6 +282,7 @@
                                                             <tr>
                                                                 <td class="text-center">
                                                                     <img src="{{ $imgSrc }}" 
+                                                                        loading="lazy" 
                                                                         alt="{{ $codigo }}"
                                                                         class="img-thumbnail"
                                                                         style="width: 40px; height: 40px; object-fit: cover;"
