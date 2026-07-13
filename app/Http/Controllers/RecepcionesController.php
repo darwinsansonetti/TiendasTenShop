@@ -3642,6 +3642,116 @@ class RecepcionesController extends Controller
                 ->withInput();
         }
     }
+    
+    public function cancelarRecepcion($id)
+    {
+        try {
+            DB::connection('sqlsrv')->beginTransaction();
+
+            // ==========================================
+            // 1. RECEPCIONES TRANSFERENCIAS
+            // ==========================================
+            $recepcionTransferencia = DB::connection('sqlsrv')
+                ->table('RecepcionesTransferencias')
+                ->where('RecepcionId', $id)
+                ->first();
+
+            if ($recepcionTransferencia) {
+                // Eliminar la relación
+                DB::connection('sqlsrv')
+                    ->table('RecepcionesTransferencias')
+                    ->where('RecepcionId', $id)
+                    ->delete();
+
+                // Actualizar estatus de la transferencia a "Registrada" (3)
+                DB::connection('sqlsrv')
+                    ->table('Transferencias')
+                    ->where('TransferenciaId', $recepcionTransferencia->TransferenciaId)
+                    ->update([
+                        'Estatus' => 3
+                    ]);
+            }
+
+            // ==========================================
+            // 2. RECEPCIONES FACTURAS
+            // ==========================================
+            $recepcionFactura = DB::connection('sqlsrv')
+                ->table('RecepcionesFacturas')
+                ->where('RecepcionId', $id)
+                ->first();
+
+            if ($recepcionFactura) {
+                // Eliminar la relación
+                DB::connection('sqlsrv')
+                    ->table('RecepcionesFacturas')
+                    ->where('RecepcionId', $id)
+                    ->delete();
+
+                // Actualizar estatus de la factura a "En Proceso" (1)
+                DB::connection('sqlsrv')
+                    ->table('Facturas')
+                    ->where('ID', $recepcionFactura->FacturaId)
+                    ->update([
+                        'Estatus' => 1
+                    ]);
+            }
+
+            // ==========================================
+            // 3. AUDITORIAS
+            // ==========================================
+            $auditoria = DB::connection('sqlsrv')
+                ->table('Auditorias')
+                ->where('RecepcionId', $id)
+                ->first();
+
+            if ($auditoria) {
+                // Eliminar detalles de auditoría
+                DB::connection('sqlsrv')
+                    ->table('AuditoriaDetalles')
+                    ->where('AuditoriaId', $auditoria->AuditoriaId)
+                    ->delete();
+
+                // Eliminar la auditoría
+                DB::connection('sqlsrv')
+                    ->table('Auditorias')
+                    ->where('AuditoriaId', $auditoria->AuditoriaId)
+                    ->delete();
+            }
+
+            // ==========================================
+            // 4. RECEPCIONES DETALLES
+            // ==========================================
+            DB::connection('sqlsrv')
+                ->table('RecepcionesDetalles')
+                ->where('RecepcionId', $id)
+                ->delete();
+
+            // ==========================================
+            // 5. RECEPCIONES
+            // ==========================================
+            DB::connection('sqlsrv')
+                ->table('Recepciones')
+                ->where('RecepcionId', $id)
+                ->delete();
+
+            DB::connection('sqlsrv')->commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Recepción cancelada correctamente'
+            ]);
+
+        } catch (\Exception $e) {
+            DB::connection('sqlsrv')->rollBack();
+
+            \Log::error('Error al cancelar recepción: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cancelar la recepción: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 
     public function downloadTemplateRecepcion($id)
     {

@@ -247,6 +247,13 @@
                                                             </tr>
                                                         </thead>
                                                         <tbody>
+                                                        <tbody>
+                                                            @php
+
+                                                                $total_corregido = 0;
+
+                                                            @endphp
+
                                                             @forelse($detalles as $detalle)
                                                             @php
                                                                 // Obtener la URL de la foto del producto
@@ -277,6 +284,8 @@
                                                                 
                                                                 // ✅ Costo total = unidades totales × costo por unidad
                                                                 $costoTotal = $totalUnidades * ($detalle->factura_costo_divisa ?? 0);
+
+                                                                $total_corregido += $total;
                                                             @endphp
 
                                                             <tr>
@@ -369,7 +378,7 @@
                                                             <tr>
                                                                 <td><strong>Subtotal:</strong></td>
                                                                 <td class="text-end">
-                                                                    ${{ number_format($subtotalRecepcion ?? 0, 2) }}
+                                                                    ${{ number_format($total_corregido ?? 0, 2) }}
                                                                 </td>
                                                             </tr>
                                                             @if($recepcion->EsConFactura == 1 && isset($facturaDTO))
@@ -395,7 +404,7 @@
                                                             <tr class="table-success">
                                                                 <td><strong>Total recepción divisas:</strong></td>
                                                                 <td class="text-end fw-bold">
-                                                                    ${{ number_format($totalRecepcion ?? 0, 2) }}
+                                                                    ${{ number_format($total_corregido ?? 0, 2) }}
                                                                 </td>
                                                             </tr>
                                                         </table>
@@ -495,8 +504,50 @@
                 cancelButtonText: 'No'
             }).then((result) => {
                 if (result.isConfirmed) {
+                    // ✅ Usar la ruta con nombre de Laravel
                     var recepcionId = document.getElementById('recepcion_id')?.value || '{{ $recepcion->RecepcionId ?? '' }}';
-                    window.location.href = '/cpanel/recepciones/' + recepcionId + '/cancelar';
+                    var url = '{{ route("cpanel.recepciones.cancelar", ["id" => "RECEPCION_ID"]) }}'.replace('RECEPCION_ID', recepcionId);
+                    
+                    Swal.fire({
+                        title: 'Cancelando...',
+                        text: 'Procesando solicitud',
+                        allowOutsideClick: false,
+                        didOpen: () => {
+                            Swal.showLoading();
+                        }
+                    });
+                    
+                    // ✅ Hacer la petición AJAX (en lugar de redirección directa)
+                    fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({})
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: '¡Cancelada!',
+                                text: data.message,
+                                timer: 3000,
+                                showConfirmButton: false
+                            }).then(() => {
+                                window.location.href = '{{ route("cpanel.recepciones.proveedor") }}';
+                            });
+                        } else {
+                            Swal.fire('Error', data.message, 'error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        Swal.fire('Error', 'Error al cancelar la recepción', 'error');
+                    });
                 }
             });
         });

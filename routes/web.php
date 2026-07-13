@@ -435,6 +435,10 @@ Route::middleware('auth')->group(function() {
     // Listado de Auditorias de Recepciones de Proveedor
     Route::get('/cpanel/recepciones/auditorias/listado', [RecepcionesController::class, 'listado_recepciones_auditoria'])->name('cpanel.recepciones.auditorias');
 
+    // Cancelar Recepcion
+    Route::post('/cpanel/recepciones/{id}/cancelar', [RecepcionesController::class, 'cancelarRecepcion'])
+    ->name('cpanel.recepciones.cancelar');
+
     // Obtener la Auditoria
     Route::get('/cpanel/auditorias/{id}/procesar', [RecepcionesController::class, 'procesarAuditoria'])->name('cpanel.auditorias.procesar');
 
