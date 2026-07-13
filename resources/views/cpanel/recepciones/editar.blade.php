@@ -236,7 +236,7 @@
                                                                 <th style="width: 60px;">Foto</th>
                                                                 <th>Código</th>
                                                                 <th>Producto</th>
-                                                                <th class="text-end">Costo Unitario</th>
+                                                                <th class="text-end">Costo</th>
                                                                 <th class="text-end">Disponible</th>
                                                                 <th class="text-end">Recibido</th>
                                                                 <th class="text-end">Pie Solo</th>
@@ -270,7 +270,7 @@
                                                                 
                                                                 // Total = (Recibido - (PieSolo+PieInvertido+Danado+Vacio)) * CostoUnitario
                                                                 // O según tu lógica de negocio
-                                                                $total = $detalle->factura_costo_divisa * $detalle->factura_uxe;
+                                                                $total = $detalle->CostoDivisa * $cantidadPedida;
 
                                                                 // ✅ Calcular unidades totales
                                                                 $totalUnidades = ($cantidadPedida ?? 0) * ($detalle->factura_uxe ?? 1);
@@ -334,14 +334,6 @@
                                                             </tr>
                                                             @endforelse
                                                         </tbody>
-                                                        <tfoot class="table-secondary">
-                                                            <tr>
-                                                                <td colspan="10" class="text-end fw-bold">TOTAL RECEPCIÓN:</td>
-                                                                <td class="text-end fw-bold text-success" id="totalRecepcion">
-                                                                    ${{ number_format($totalRecepcion ?? 0, 2) }}
-                                                                </td>
-                                                            </tr>
-                                                        </tfoot>
                                                     </table>
                                                 </div>
                                             </div>
