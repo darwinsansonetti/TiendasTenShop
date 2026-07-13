@@ -3393,7 +3393,9 @@ class RecepcionesController extends Controller
             // 5. ✅ Si no existe en BD, buscar en sesión
             if (!$existeRecepcion) {
                 $sessionData = session('recepcion_activa');
-                if ($sessionData && $sessionData['transferencia_id'] == $id) {
+                // if ($sessionData && $sessionData['transferencia_id'] == $id) {
+
+                if ($sessionData && isset($sessionData->transferencia_id) && $sessionData->transferencia_id == $id) {
                     // Validar que la sesión no sea de una recepción ya finalizada
                     $recepcionEnBD = DB::connection('sqlsrv')
                         ->table('Recepciones')
