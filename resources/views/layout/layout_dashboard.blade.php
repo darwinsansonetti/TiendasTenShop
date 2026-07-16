@@ -842,6 +842,12 @@
                       <i class="nav-icon bi bi-table"></i><p>Cargar Inventario</p>
                     </a>
                   </li>
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.inventario.auditoria.listado') }}"
+                       class="nav-link {{ session('submenu_active') == 'Auditar Inventario' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-inbox-fill"></i><p>Auditar Inventario</p>
+                    </a>
+                  </li>
                 </ul>
               </li>
 
@@ -919,6 +925,13 @@
                   <p>Productos <i class="nav-arrow bi bi-chevron-right"></i></p>
                 </a>
                 <ul class="nav nav-treeview">
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.listado.productos.sucursal') }}"
+                       class="nav-link {{ session('submenu_active') == 'Listado por sucursal' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-list-ul"></i><p>Listado por sucursal</p>
+                    </a>
+                  </li>
+
                   <li class="nav-item">
                     <a href="{{ route('cpanel.productos.cambiar.pvp') }}"
                        class="nav-link {{ session('submenu_active') == 'Gestión de Precios' ? 'active' : '' }}">

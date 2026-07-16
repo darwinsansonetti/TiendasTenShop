@@ -559,6 +559,10 @@ Route::middleware('auth')->group(function() {
     Route::get('/cpanel/productos/cambios/masivos', [RecepcionesController::class, 'mostrarCargaProductos'])
         ->name('cpanel.productos.cambiar.pvp');
 
+    // Llamado a la vista para mostrar los productos por sucursal
+    Route::get('/cpanel/productos/lista/sucursal', [ProductoController::class, 'mostrarListaProductos'])
+        ->name('cpanel.listado.productos.sucursal');
+
     // Guardar precios masivos de productos
     Route::post('/cpanel/precios/guardar-manual', [RecepcionesController::class, 'guardarPreciosManual'])
     ->name('cpanel.precios.guardar-manual');
@@ -570,6 +574,19 @@ Route::middleware('auth')->group(function() {
     // Cargar Excel del Inventario
     Route::post('/cpanel/inventario/cargar-excel', [InventarioController::class, 'cargarExcel'])
     ->name('cpanel.inventario.cargar-excel');
+
+    // Listando las auditorias de inventarios
+    Route::get('/cpanel/inventario/auditoria', [InventarioController::class, 'listadoInventarioAuditoria'])
+    ->name('cpanel.inventario.auditoria.listado');
+
+    Route::get('/cpanel/inventario/auditoria/{id}', [InventarioController::class, 'detalleAuditoriaInventario'])
+    ->name('cpanel.inventario.auditoria.detalle');
+
+    Route::post('/cpanel/inventario/auditoria/{id}/producto/{detalleId}/aceptar', [InventarioController::class, 'aceptarProductoAuditoria'])
+        ->name('cpanel.inventario.auditoria.aceptar');
+
+    Route::post('/cpanel/inventario/auditoria/{id}/producto/{detalleId}/rechazar', [InventarioController::class, 'rechazarProductoAuditoria'])
+        ->name('cpanel.inventario.auditoria.rechazar');
 });
 
 

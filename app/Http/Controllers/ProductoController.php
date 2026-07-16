@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Storage;
 use App\Helpers\GeneralHelper;
 
+use App\Helpers\FileHelper;
+
 use Illuminate\Support\Facades\DB;
 
 
@@ -113,4 +115,75 @@ class ProductoController extends Controller
         return view('cpanel.productos.detalle', compact('producto', 'productoSucursal'));
     }
 
+    // Vista para cargar productos por sucursal
+    public function mostrarListaProductos()
+    {
+        // Configurar menú activo
+        session([
+            'menu_active' => 'Productos',
+            'submenu_active' => 'Listado por sucursal'
+        ]);
+
+        // Obtener sucursal de la sesión
+        $sucursalId = session('sucursal_id');
+        $sucursalNombre = session('sucursal_nombre', 'Sin sucursal');
+
+        // Obtener lista de sucursales
+        $sucursales = DB::connection('sqlsrv')
+            ->table('Sucursales')
+            ->orderBy('Nombre')
+            ->get();
+
+        // Obtener productos solo si hay sucursal seleccionada
+        $productos = collect();
+
+        if ($sucursalId) {
+            $productos = DB::connection('sqlsrv')
+                ->table('ProductoSucursal as ps')
+                ->leftJoin('Productos as p', 'ps.ProductoId', '=', 'p.ID')
+                ->where('ps.SucursalId', $sucursalId)
+                ->where('ps.Estatus', 1)
+                ->where('ps.Existencia', '>', 0)  // ✅ SOLO productos con existencia > 0
+                ->select([
+                    'ps.ProductoId',
+                    'ps.SucursalId',
+                    'ps.PvpBs',
+                    'ps.PvpDivisa',
+                    'ps.Existencia',
+                    'ps.FechaIngreso',
+                    'ps.FechaUltimaVenta',
+                    'p.Codigo',
+                    'p.Referencia',
+                    'p.Descripcion as producto_nombre',
+                    'p.CostoDivisa',
+                    'p.CostoBs',
+                    'p.UrlFoto',
+                    'p.Estatus as producto_estatus'
+                ])
+                ->orderBy('p.Codigo')
+                ->get();
+
+            // Formatear datos
+            $productos->transform(function ($item) {
+                $item->UrlFoto = $item->UrlFoto 
+                    ? FileHelper::getOrDownloadFile('images/items/thumbs/', $item->UrlFoto, 'assets/img/adminlte/img/produc_default.jfif')
+                    : 'assets/img/adminlte/img/produc_default.jfif';
+                $item->estatus_texto = $item->producto_estatus == 1 ? 'Activo' : 'Inactivo';
+                $item->estatus_clase = $item->producto_estatus == 1 ? 'success' : 'danger';
+                
+                // Formatear fechas
+                $item->FechaIngreso = $item->FechaIngreso ? \Carbon\Carbon::parse($item->FechaIngreso)->format('d/m/Y') : 'N/A';
+                $item->FechaUltimaVenta = $item->FechaUltimaVenta ? \Carbon\Carbon::parse($item->FechaUltimaVenta)->format('d/m/Y') : 'N/A';
+                
+                // Usar FechaUltimaVenta como fecha de actualización
+                $item->FechaActualizacion = $item->FechaUltimaVenta && $item->FechaUltimaVenta != 'N/A' 
+                    ? $item->FechaUltimaVenta 
+                    : $item->FechaIngreso;
+                
+                return $item;
+            });
+        }
+
+        return view('cpanel.productos.listado_sucursal', compact('sucursales', 'productos', 'sucursalId', 'sucursalNombre'));
+    }
 }

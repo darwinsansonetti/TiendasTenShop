@@ -380,48 +380,158 @@
                 method: 'POST',
                 body: formData
             })
-            .then(response => response.json())
+            .then(response => {
+                console.log('📥 Response status:', response.status);
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('La respuesta no es JSON. Status: ' + response.status);
+                }
+                return response.json();
+            })
             .then(data => {
                 clearInterval(simulateProgress);
+                console.log('📦 Data recibida:', data);
+                
                 progressBar.style.width = '100%';
                 progressText.textContent = '100%';
                 progressMessage.textContent = 'Proceso completado';
                 progressBar.classList.remove('bg-info');
                 progressBar.classList.add('bg-success');
 
+                // ✅ Ocultar barra de progreso
+                setTimeout(() => {
+                    progressContainer.classList.add('d-none');
+                }, 500);
+
+                // ✅ Mostrar resultado en SweetAlert
                 if (data.success) {
-                    // Mostrar los datos del Excel
-                    let mensaje = `✅ ${data.message}\n\n`;
-                    mensaje += `📊 Total de filas: ${data.total_filas}\n`;
-                    mensaje += `📋 Encabezados: ${data.encabezados.join(', ')}\n\n`;
-                    mensaje += `📄 Datos:\n`;
+                    let mensaje = '';
+                    let icono = 'success';
+                    let titulo = '¡Procesado correctamente!';
                     
-                    // Mostrar primeras 5 filas como ejemplo
-                    const preview = data.datos.slice(0, 5);
-                    preview.forEach((fila, index) => {
-                        mensaje += `\nFila ${index + 1}: `;
-                        mensaje += Object.entries(fila)
-                            .map(([key, value]) => `${key}: ${value}`)
-                            .join(' | ');
-                    });
+                    // ==========================================
+                    // SECCIÓN 1: RESULTADOS POSITIVOS
+                    // ==========================================
+                    let resultadosPositivos = [];
                     
-                    if (data.datos.length > 5) {
-                        mensaje += `\n\n... y ${data.datos.length - 5} filas más`;
+                    if (data.total_filas > 0) {
+                        resultadosPositivos.push(`📊 <strong>${data.total_filas}</strong> filas procesadas`);
                     }
                     
-                    mostrarResultado('success', mensaje);
+                    if (data.actualizados > 0) {
+                        resultadosPositivos.push(`✅ <strong>${data.actualizados}</strong> productos actualizados`);
+                    }
                     
-                    // También puedes mostrar en consola para depuración
-                    console.log('Datos completos:', data.datos);
+                    if (data.productos_auditoria > 0) {
+                        resultadosPositivos.push(`📋 Auditoría <strong>#${data.auditoria_numero}</strong> creada con <strong>${data.productos_auditoria}</strong> productos pendientes`);
+                    }
                     
+                    if (resultadosPositivos.length > 0) {
+                        mensaje += `<div style="text-align:left; margin-bottom: 12px;">`;
+                        mensaje += resultadosPositivos.join('<br>');
+                        mensaje += `</div>`;
+                    }
+                    
+                    // ==========================================
+                    // SECCIÓN 2: ADVERTENCIAS Y ERRORES
+                    // ==========================================
+                    let advertencias = [];
+                    let tieneErrores = false;
+                    
+                    if (data.errores && data.errores.length > 0) {
+                        tieneErrores = true;
+                        icono = 'warning';
+                        titulo = '⚠️ Procesado con advertencias';
+                        
+                        // Mostrar solo los primeros 5 errores
+                        const erroresMostrar = data.errores.slice(0, 5);
+                        const erroresLista = erroresMostrar.map((err, index) => {
+                            return `<span style="color: #dc2626;">• ${err}</span>`;
+                        }).join('<br>');
+                        
+                        advertencias.push(`<div style="text-align:left; margin-top: 10px; padding: 10px; background: #fef2f2; border-radius: 6px; border-left: 4px solid #dc2626;">`);
+                        advertencias.push(`<strong style="color: #dc2626;">⚠️ ${data.errores.length} errores:</strong><br>`);
+                        advertencias.push(erroresLista);
+                        if (data.errores.length > 5) {
+                            advertencias.push(`<span style="color: #6b7280; font-size: 0.85rem;">... y ${data.errores.length - 5} errores más</span>`);
+                        }
+                        advertencias.push(`</div>`);
+                    }
+                    
+                    if (data.no_encontrados && data.no_encontrados.length > 0) {
+                        tieneErrores = true;
+                        icono = 'warning';
+                        titulo = '⚠️ Procesado con advertencias';
+                        
+                        const lista = data.no_encontrados.slice(0, 10).join(', ');
+                        advertencias.push(`<div style="text-align:left; margin-top: 10px; padding: 10px; background: #fffbeb; border-radius: 6px; border-left: 4px solid #f59e0b;">`);
+                        advertencias.push(`<strong style="color: #92400e;">❌ Productos no encontrados (${data.no_encontrados.length}):</strong><br>`);
+                        advertencias.push(`<span style="color: #78350f;">${lista}</span>`);
+                        if (data.no_encontrados.length > 10) {
+                            advertencias.push(`<br><span style="color: #6b7280; font-size: 0.85rem;">... y ${data.no_encontrados.length - 10} más</span>`);
+                        }
+                        advertencias.push(`</div>`);
+                    }
+                    
+                    if (advertencias.length > 0) {
+                        mensaje += advertencias.join('');
+                    }
+                    
+                    // ==========================================
+                    // SECCIÓN 3: RESUMEN FINAL
+                    // ==========================================
+                    if (data.actualizados === 0 && data.productos_auditoria === 0 && !tieneErrores) {
+                        mensaje = `<div style="text-align:center; padding: 10px;">
+                            <span style="font-size: 2rem;">📄</span>
+                            <p style="margin-top: 8px; color: #6b7280;">El archivo se procesó correctamente<br>sin cambios en el inventario</p>
+                        </div>`;
+                        titulo = '📄 Sin cambios';
+                        icono = 'info';
+                    }
+                    
+                    // ==========================================
+                    // MOSTRAR SWEETALERT
+                    // ==========================================
+                    Swal.fire({
+                        icon: icono,
+                        title: titulo,
+                        html: mensaje,
+                        confirmButtonColor: tieneErrores ? '#d97706' : '#10b981',
+                        confirmButtonText: 'Aceptar',
+                        width: 550,
+                        padding: '1.5rem',
+                        showCloseButton: true,
+                        customClass: {
+                            htmlContainer: 'text-start'
+                        }
+                    });
+                    
+                    console.log('✅ Procesamiento exitoso:', data);
                 } else {
-                    mostrarResultado('danger', data.message || 'Error al leer el archivo');
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: data.message || 'Error al leer el archivo',
+                        confirmButtonColor: '#dc2626'
+                    });
+                    console.error('❌ Error en el procesamiento:', data);
                 }
             })
             .catch(error => {
                 clearInterval(simulateProgress);
-                console.error('Error:', error);
-                mostrarResultado('danger', 'Error al enviar el archivo. Verifica la conexión.');
+                console.error('💥 Error en fetch:', error);
+                
+                // ✅ Ocultar barra de progreso
+                setTimeout(() => {
+                    progressContainer.classList.add('d-none');
+                }, 500);
+                
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Error al enviar el archivo: ' + (error.message || 'Verifica la conexión'),
+                    confirmButtonColor: '#dc2626'
+                });
             })
             .finally(() => {
                 btnGuardar.disabled = false;
