@@ -1,3 +1,5 @@
+{{-- resources/views/cpanel/inventario/cargar_excel_inventario.blade.php --}}
+
 @extends('layout.layout_dashboard')
 
 @section('title', 'Cargar Inventario desde Excel')
@@ -96,7 +98,72 @@
                     <input type="hidden" name="sucursal_id" value="{{ $sucursalId }}">
                     <input type="hidden" name="sucursal_nombre" value="{{ $sucursalNombre }}">
 
-                    <!-- Información del archivo -->
+                    {{-- ================================================ --}}
+                    {{-- NUEVO: SELECCIÓN DE TIPO DE INVENTARIO --}}
+                    {{-- ================================================ --}}
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">
+                            <i class="bi bi-archive me-1"></i> Tipo de Inventario
+                            <span class="text-danger">*</span>
+                        </label>
+                        <p class="text-muted small mb-2">Seleccione el tipo de inventario que desea cargar</p>
+                        
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" 
+                                           type="radio" 
+                                           name="tipo_inventario" 
+                                           id="tipo_sucursal" 
+                                           value="sucursal" 
+                                           checked>
+                                    <label class="form-check-label" for="tipo_sucursal">
+                                        <i class="bi bi-building text-primary me-1"></i>
+                                        <span class="fw-semibold">Inventario de Sucursal</span>
+                                        <br>
+                                        <small class="text-muted">Productos físicos en la sucursal</small>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" 
+                                           type="radio" 
+                                           name="tipo_inventario" 
+                                           id="tipo_almacen" 
+                                           value="almacen">
+                                    <label class="form-check-label" for="tipo_almacen">
+                                        <i class="bi bi-archive text-warning me-1"></i>
+                                        <span class="fw-semibold">Inventario de Almacén</span>
+                                        <br>
+                                        <small class="text-muted">Productos en bodega/almacén central</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- ================================================ --}}
+                    {{-- NUEVO: BOTÓN DE DESCARGA DE PLANTILLA --}}
+                    {{-- ================================================ --}}
+                    <div class="mb-4">
+                        <div class="d-flex align-items-center gap-3 flex-wrap">
+                            <button type="button" 
+                                    class="btn btn-outline-secondary" 
+                                    id="btnDescargarPlantilla"
+                                    disabled>
+                                <i class="bi bi-download me-1"></i> Descargar Plantilla Excel
+                            </button>
+                            <span id="plantillaInfo" class="text-muted small">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Seleccione "Inventario de Almacén" para descargar la plantilla
+                            </span>
+                        </div>
+                    </div>
+
+                    {{-- ================================================ --}}
+                    {{-- ARCHIVO EXCEL --}}
+                    {{-- ================================================ --}}
                     <div class="mb-4">
                         <label for="excelFile" class="form-label fw-semibold">
                             <i class="bi bi-file-earmark-excel me-1"></i> Archivo Excel
@@ -120,28 +187,45 @@
                         <div id="fileNameDisplay" class="mt-2 text-muted small"></div>
                     </div>
 
-                    <!-- Información adicional -->
+                    {{-- ================================================ --}}
+                    {{-- INFORMACIÓN ADICIONAL SEGÚN TIPO --}}
+                    {{-- ================================================ --}}
                     <div class="row mb-4">
                         <div class="col-12">
-                            <div class="alert alert-info d-flex align-items-center">
+                            <div id="infoSucursalDetalle" class="alert alert-info d-flex align-items-center">
                                 <i class="bi bi-info-circle me-2"></i>
                                 <div>
-                                    <strong>Formato requerido:</strong> El archivo debe contener las columnas: 
+                                    <strong>Inventario de Sucursal:</strong> El archivo debe contener las columnas: 
                                     <span class="fw-semibold">CÓDIGO</span>, 
                                     <span class="fw-semibold">CANTIDAD</span> (opcional: 
                                     <span class="fw-semibold">REFERENCIA</span>, 
                                     <span class="fw-semibold">PRODUCTO</span>)
                                 </div>
                             </div>
+                            <div id="infoAlmacenDetalle" class="alert alert-warning d-flex align-items-center d-none">
+                                <i class="bi bi-archive me-2"></i>
+                                <div>
+                                    <strong>Inventario de Almacén:</strong> El archivo debe contener las columnas: 
+                                    <span class="fw-semibold">CÓDIGO</span>, 
+                                    <span class="fw-semibold">CANTIDAD</span>, 
+                                    <span class="fw-semibold">UBICACIÓN</span> (opcional: 
+                                    <span class="fw-semibold">REFERENCIA</span>, 
+                                    <span class="fw-semibold">PRODUCTO</span>)
+                                    <br>
+                                    <small class="text-muted">La ubicación es obligatoria para inventario de almacén</small>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Botones de acción -->
+                    {{-- ================================================ --}}
+                    {{-- BOTONES DE ACCIÓN --}}
+                    {{-- ================================================ --}}
                     <div class="d-flex gap-2 justify-content-end">
                         <button type="button" class="btn btn-secondary" id="btnLimpiar">
                             <i class="bi bi-eraser me-1"></i> Limpiar
                         </button>
-                        <button type="submit" class="btn btn-success" id="btnGuardar" {{ $sucursalId <= 0 ? 'disabled' : '' }}>
+                        <button type="submit" class="btn btn-success" id="btnGuardar">
                             <i class="bi bi-cloud-arrow-up me-1"></i> Guardar
                         </button>
                     </div>
@@ -201,6 +285,7 @@
         const uploadForm = document.getElementById('uploadForm');
         const btnGuardar = document.getElementById('btnGuardar');
         const btnLimpiar = document.getElementById('btnLimpiar');
+        const btnDescargarPlantilla = document.getElementById('btnDescargarPlantilla');
         const progressContainer = document.getElementById('progressContainer');
         const progressBar = document.getElementById('progressBar');
         const progressText = document.getElementById('progressText');
@@ -209,23 +294,182 @@
         const resultAlert = document.getElementById('resultAlert');
         const resultMessage = document.getElementById('resultMessage');
         const excelError = document.getElementById('excelError');
+        
+        // Nuevos elementos
+        const tipoSucursal = document.getElementById('tipo_sucursal');
+        const tipoAlmacen = document.getElementById('tipo_almacen');
+        const infoSucursalDetalle = document.getElementById('infoSucursalDetalle');
+        const infoAlmacenDetalle = document.getElementById('infoAlmacenDetalle');
+        const plantillaInfo = document.getElementById('plantillaInfo');
 
         // ==========================================
-        // ACTUALIZAR ESTADO DEL BOTÓN
+        // ACTUALIZAR ESTADO DEL BOTÓN GUARDAR
         // ==========================================
         function actualizarEstadoBoton() {
-            if (SUCURSAL_ID <= 0) {
-                btnGuardar.disabled = true;
-                btnGuardar.style.opacity = '0.6';
-                btnGuardar.style.cursor = 'not-allowed';
-            } else {
+            const tieneSucursal = SUCURSAL_ID > 0;
+            const esAlmacen = tipoAlmacen.checked;
+            
+            // ✅ El botón se activa si: hay sucursal O está seleccionado Almacén
+            if (tieneSucursal || esAlmacen) {
                 btnGuardar.disabled = false;
                 btnGuardar.style.opacity = '1';
                 btnGuardar.style.cursor = 'pointer';
+            } else {
+                btnGuardar.disabled = true;
+                btnGuardar.style.opacity = '0.6';
+                btnGuardar.style.cursor = 'not-allowed';
             }
         }
 
-        actualizarEstadoBoton();
+        // ==========================================
+        // MANEJAR CAMBIO DE TIPO DE INVENTARIO
+        // ==========================================
+        function actualizarTipoInventario() {
+            // ✅ Limpiar el archivo seleccionado al cambiar de tipo
+            if (excelFile.files.length > 0) {
+                excelFile.value = '';
+                fileNameDisplay.innerHTML = '';
+                excelFile.classList.remove('is-invalid');
+                excelError.style.display = 'none';
+                
+                // Mostrar mensaje informativo (opcional)
+                // Descomentar si quieres mostrar el mensaje
+                /*
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Tipo de inventario cambiado',
+                    text: 'El archivo seleccionado ha sido limpiado. Seleccione el archivo correspondiente al nuevo tipo de inventario.',
+                    confirmButtonColor: '#10b981',
+                    timer: 3000,
+                    showConfirmButton: true
+                });
+                */
+            }
+
+            if (tipoAlmacen.checked) {
+                // ✅ Seleccionado Almacén
+                btnDescargarPlantilla.disabled = false;
+                btnDescargarPlantilla.classList.remove('btn-outline-secondary');
+                btnDescargarPlantilla.classList.add('btn-warning');
+                btnDescargarPlantilla.innerHTML = '<i class="bi bi-download me-1"></i> Descargar Plantilla Almacén';
+                
+                plantillaInfo.innerHTML = '<i class="bi bi-check-circle text-success me-1"></i> Plantilla disponible para descarga';
+                
+                infoSucursalDetalle.classList.add('d-none');
+                infoAlmacenDetalle.classList.remove('d-none');
+                
+                // Actualizar texto del botón guardar
+                btnGuardar.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i> Guardar Inventario de Almacén';
+                
+                // Actualizar el accept del input file para el tipo de archivo
+                excelFile.setAttribute('accept', '.xlsx, .xls');
+                
+            } else {
+                // ✅ Seleccionado Sucursal
+                btnDescargarPlantilla.disabled = true;
+                btnDescargarPlantilla.classList.remove('btn-warning');
+                btnDescargarPlantilla.classList.add('btn-outline-secondary');
+                btnDescargarPlantilla.innerHTML = '<i class="bi bi-download me-1"></i> Descargar Plantilla Excel';
+                
+                plantillaInfo.innerHTML = '<i class="bi bi-info-circle me-1"></i> Seleccione "Inventario de Almacén" para descargar la plantilla';
+                
+                infoSucursalDetalle.classList.remove('d-none');
+                infoAlmacenDetalle.classList.add('d-none');
+                
+                // Actualizar texto del botón guardar
+                btnGuardar.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i> Guardar Inventario de Sucursal';
+                
+                // Actualizar el accept del input file para el tipo de archivo
+                excelFile.setAttribute('accept', '.xlsx, .xls');
+            }
+            
+            // ✅ ACTUALIZAR EL ESTADO DEL BOTÓN GUARDAR
+            actualizarEstadoBoton();
+        }
+
+        // Eventos para los radios
+        tipoSucursal.addEventListener('change', actualizarTipoInventario);
+        tipoAlmacen.addEventListener('change', actualizarTipoInventario);
+
+        // Ejecutar al cargar para estado inicial
+        actualizarTipoInventario();
+
+        // ==========================================
+        // DESCARGAR PLANTILLA
+        // ==========================================
+        btnDescargarPlantilla.addEventListener('click', function() {
+            if (!tipoAlmacen.checked) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Seleccione Almacén',
+                    text: 'Debe seleccionar "Inventario de Almacén" para descargar la plantilla',
+                    confirmButtonColor: '#d97706'
+                });
+                return;
+            }
+
+            // Mostrar loading
+            Swal.fire({
+                title: 'Generando plantilla...',
+                text: 'Por favor espere',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            // 👇 Crear FormData en lugar de JSON
+            const formData = new FormData();
+            formData.append('tipo', 'almacen');
+            formData.append('sucursal_id', SUCURSAL_ID);
+            formData.append('_token', document.querySelector('input[name="_token"]').value);
+
+            // Descargar plantilla
+            fetch('{{ route("cpanel.inventario.descargar-plantilla") }}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                },
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Error al generar la plantilla');
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                // Crear link de descarga
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `plantilla_almacen_${SUCURSAL_NOMBRE || 'general'}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Plantilla descargada',
+                    text: 'La plantilla se ha descargado correctamente',
+                    confirmButtonColor: '#10b981',
+                    timer: 3000
+                });
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'No se pudo descargar la plantilla: ' + error.message,
+                    confirmButtonColor: '#dc2626'
+                });
+            });
+        });
 
         // ==========================================
         // MOSTRAR NOMBRE DEL ARCHIVO
@@ -272,8 +516,10 @@
             progressText.textContent = '0%';
             progressBar.classList.remove('bg-success');
             progressBar.classList.add('bg-info');
-            btnGuardar.disabled = false;
-            btnGuardar.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i> Guardar';
+            
+            // Resetear selección a Sucursal
+            tipoSucursal.checked = true;
+            actualizarTipoInventario();
         });
 
         // ==========================================
@@ -282,12 +528,27 @@
         uploadForm.addEventListener('submit', function(e) {
             e.preventDefault();
 
-            // Validar que haya sucursal
-            if (SUCURSAL_ID <= 0) {
+            // ✅ Validar que haya sucursal O sea inventario de almacén
+            const tieneSucursal = SUCURSAL_ID > 0;
+            const esAlmacen = tipoAlmacen.checked;
+            
+            if (!tieneSucursal && !esAlmacen) {
                 Swal.fire({
                     icon: 'warning',
-                    title: 'Sucursal no seleccionada',
-                    text: 'Debes seleccionar una sucursal para cargar el inventario',
+                    title: 'Seleccione una opción',
+                    text: 'Debe seleccionar una sucursal o activar "Inventario de Almacén"',
+                    confirmButtonColor: '#d97706'
+                });
+                return;
+            }
+
+            // Validar tipo de inventario seleccionado
+            const tipoInventario = document.querySelector('input[name="tipo_inventario"]:checked');
+            if (!tipoInventario) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Seleccione tipo de inventario',
+                    text: 'Debe seleccionar "Sucursal" o "Almacén"',
                     confirmButtonColor: '#d97706'
                 });
                 return;
@@ -316,11 +577,21 @@
                 return;
             }
 
+            const tipoTexto = tipoInventario.value === 'almacen' ? 'Almacén' : 'Sucursal';
+            
+            // ✅ Mostrar mensaje según el tipo
+            let mensajeConfirmacion;
+            if (esAlmacen) {
+                mensajeConfirmacion = `Se procesará el archivo "${excelFile.files[0].name}" como inventario de ${tipoTexto}`;
+            } else {
+                mensajeConfirmacion = `Se procesará el archivo "${excelFile.files[0].name}" como inventario de ${tipoTexto} en ${SUCURSAL_NOMBRE}`;
+            }
+
             // Mostrar confirmación
             Swal.fire({
                 icon: 'question',
                 title: '¿Guardar inventario?',
-                text: `Se procesará el archivo "${excelFile.files[0].name}" en la sucursal ${SUCURSAL_NOMBRE}`,
+                text: mensajeConfirmacion,
                 showCancelButton: true,
                 confirmButtonColor: '#10b981',
                 cancelButtonColor: '#6c757d',
@@ -328,7 +599,7 @@
                 cancelButtonText: 'Cancelar'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    enviarArchivo();
+                    enviarArchivo(tipoInventario.value);
                 }
             });
         });
@@ -336,7 +607,7 @@
         // ==========================================
         // ENVIAR ARCHIVO AL SERVIDOR
         // ==========================================
-        function enviarArchivo() {
+        function enviarArchivo(tipoInventario) {
             // Deshabilitar botón
             btnGuardar.disabled = true;
             btnGuardar.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Enviando...';
@@ -353,7 +624,17 @@
             // Crear FormData
             const formData = new FormData();
             formData.append('_token', document.querySelector('input[name="_token"]').value);
-            formData.append('sucursal_id', SUCURSAL_ID);
+            
+            // ✅ Si es almacén, enviar sucursal_id = 0
+            if (tipoInventario === 'almacen') {
+                formData.append('sucursal_id', 6);
+                formData.append('sucursal_nombre', 'ALMACEN');
+            } else {
+                formData.append('sucursal_id', SUCURSAL_ID);
+                formData.append('sucursal_nombre', SUCURSAL_NOMBRE);
+            }
+            
+            formData.append('tipo_inventario', tipoInventario);
             formData.append('excel_file', excelFile.files[0]);
 
             // Simular progreso
@@ -380,14 +661,7 @@
                 method: 'POST',
                 body: formData
             })
-            .then(response => {
-                console.log('📥 Response status:', response.status);
-                const contentType = response.headers.get('content-type');
-                if (!contentType || !contentType.includes('application/json')) {
-                    throw new Error('La respuesta no es JSON. Status: ' + response.status);
-                }
-                return response.json();
-            })
+            .then(response => response.json())
             .then(data => {
                 clearInterval(simulateProgress);
                 console.log('📦 Data recibida:', data);
@@ -398,112 +672,53 @@
                 progressBar.classList.remove('bg-info');
                 progressBar.classList.add('bg-success');
 
-                // ✅ Ocultar barra de progreso
                 setTimeout(() => {
                     progressContainer.classList.add('d-none');
                 }, 500);
 
-                // ✅ Mostrar resultado en SweetAlert
                 if (data.success) {
                     let mensaje = '';
                     let icono = 'success';
-                    let titulo = '¡Procesado correctamente!';
+                    let titulo = '✅ Proceso completado';
                     
-                    // ==========================================
-                    // SECCIÓN 1: RESULTADOS POSITIVOS
-                    // ==========================================
-                    let resultadosPositivos = [];
+                    mensaje += `<div style="text-align:left; font-size: 0.95rem; line-height: 1.8;">`;
+                    mensaje += `<strong>📊 Productos procesados:</strong> ${data.total_filas || 0}<br>`;
+                    mensaje += `<strong>✅ Productos actualizados:</strong> ${data.actualizados || 0}<br>`;
                     
-                    if (data.total_filas > 0) {
-                        resultadosPositivos.push(`📊 <strong>${data.total_filas}</strong> filas procesadas`);
-                    }
-                    
-                    if (data.actualizados > 0) {
-                        resultadosPositivos.push(`✅ <strong>${data.actualizados}</strong> productos actualizados`);
+                    if (data.productos_ingresados > 0) {
+                        mensaje += `<strong>🆕 Productos ingresados:</strong> ${data.productos_ingresados}<br>`;
                     }
                     
                     if (data.productos_auditoria > 0) {
-                        resultadosPositivos.push(`📋 Auditoría <strong>#${data.auditoria_numero}</strong> creada con <strong>${data.productos_auditoria}</strong> productos pendientes`);
-                    }
-                    
-                    if (resultadosPositivos.length > 0) {
-                        mensaje += `<div style="text-align:left; margin-bottom: 12px;">`;
-                        mensaje += resultadosPositivos.join('<br>');
-                        mensaje += `</div>`;
-                    }
-                    
-                    // ==========================================
-                    // SECCIÓN 2: ADVERTENCIAS Y ERRORES
-                    // ==========================================
-                    let advertencias = [];
-                    let tieneErrores = false;
-                    
-                    if (data.errores && data.errores.length > 0) {
-                        tieneErrores = true;
-                        icono = 'warning';
-                        titulo = '⚠️ Procesado con advertencias';
-                        
-                        // Mostrar solo los primeros 5 errores
-                        const erroresMostrar = data.errores.slice(0, 5);
-                        const erroresLista = erroresMostrar.map((err, index) => {
-                            return `<span style="color: #dc2626;">• ${err}</span>`;
-                        }).join('<br>');
-                        
-                        advertencias.push(`<div style="text-align:left; margin-top: 10px; padding: 10px; background: #fef2f2; border-radius: 6px; border-left: 4px solid #dc2626;">`);
-                        advertencias.push(`<strong style="color: #dc2626;">⚠️ ${data.errores.length} errores:</strong><br>`);
-                        advertencias.push(erroresLista);
-                        if (data.errores.length > 5) {
-                            advertencias.push(`<span style="color: #6b7280; font-size: 0.85rem;">... y ${data.errores.length - 5} errores más</span>`);
-                        }
-                        advertencias.push(`</div>`);
+                        mensaje += `<strong>📋 Productos en auditoría:</strong> ${data.productos_auditoria}<br>`;
                     }
                     
                     if (data.no_encontrados && data.no_encontrados.length > 0) {
-                        tieneErrores = true;
-                        icono = 'warning';
-                        titulo = '⚠️ Procesado con advertencias';
-                        
-                        const lista = data.no_encontrados.slice(0, 10).join(', ');
-                        advertencias.push(`<div style="text-align:left; margin-top: 10px; padding: 10px; background: #fffbeb; border-radius: 6px; border-left: 4px solid #f59e0b;">`);
-                        advertencias.push(`<strong style="color: #92400e;">❌ Productos no encontrados (${data.no_encontrados.length}):</strong><br>`);
-                        advertencias.push(`<span style="color: #78350f;">${lista}</span>`);
-                        if (data.no_encontrados.length > 10) {
-                            advertencias.push(`<br><span style="color: #6b7280; font-size: 0.85rem;">... y ${data.no_encontrados.length - 10} más</span>`);
+                        mensaje += `<strong>⚠️ Productos sin código:</strong> ${data.no_encontrados.length}<br>`;
+                    }
+                    
+                    if (data.errores && data.errores.length > 0) {
+                        mensaje += `<br><strong>❌ Errores:</strong> ${data.errores.length}`;
+                        const erroresMostrar = data.errores.slice(0, 3);
+                        erroresMostrar.forEach(err => {
+                            mensaje += `<br><span style="color: #dc2626; font-size: 0.85rem;">• ${err}</span>`;
+                        });
+                        if (data.errores.length > 3) {
+                            mensaje += `<br><span style="color: #6b7280; font-size: 0.85rem;">... y ${data.errores.length - 3} errores más</span>`;
                         }
-                        advertencias.push(`</div>`);
                     }
                     
-                    if (advertencias.length > 0) {
-                        mensaje += advertencias.join('');
-                    }
+                    mensaje += `</div>`;
                     
-                    // ==========================================
-                    // SECCIÓN 3: RESUMEN FINAL
-                    // ==========================================
-                    if (data.actualizados === 0 && data.productos_auditoria === 0 && !tieneErrores) {
-                        mensaje = `<div style="text-align:center; padding: 10px;">
-                            <span style="font-size: 2rem;">📄</span>
-                            <p style="margin-top: 8px; color: #6b7280;">El archivo se procesó correctamente<br>sin cambios en el inventario</p>
-                        </div>`;
-                        titulo = '📄 Sin cambios';
-                        icono = 'info';
-                    }
-                    
-                    // ==========================================
-                    // MOSTRAR SWEETALERT
-                    // ==========================================
                     Swal.fire({
                         icon: icono,
                         title: titulo,
                         html: mensaje,
-                        confirmButtonColor: tieneErrores ? '#d97706' : '#10b981',
+                        confirmButtonColor: '#10b981',
                         confirmButtonText: 'Aceptar',
-                        width: 550,
+                        width: 500,
                         padding: '1.5rem',
-                        showCloseButton: true,
-                        customClass: {
-                            htmlContainer: 'text-start'
-                        }
+                        showCloseButton: true
                     });
                     
                     console.log('✅ Procesamiento exitoso:', data);
@@ -521,7 +736,6 @@
                 clearInterval(simulateProgress);
                 console.error('💥 Error en fetch:', error);
                 
-                // ✅ Ocultar barra de progreso
                 setTimeout(() => {
                     progressContainer.classList.add('d-none');
                 }, 500);
@@ -537,18 +751,6 @@
                 btnGuardar.disabled = false;
                 btnGuardar.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i> Guardar';
             });
-        }
-
-        // ==========================================
-        // MOSTRAR RESULTADO
-        // ==========================================
-        function mostrarResultado(tipo, mensaje) {
-            resultContainer.classList.remove('d-none');
-            resultAlert.className = `alert alert-${tipo}`;
-            resultMessage.innerHTML = mensaje.replace(/\n/g, '<br>');
-            
-            // Scroll al resultado
-            resultContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
         // ==========================================
@@ -641,6 +843,31 @@
     
     .progress-bar {
         transition: width 0.3s ease-in-out;
+    }
+
+    .form-check-inline {
+        margin-right: 1.5rem;
+    }
+
+    .form-check-label {
+        cursor: pointer;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        transition: all 0.2s;
+    }
+
+    .form-check-label:hover {
+        background-color: #f8f9fa;
+    }
+
+    .form-check-input:checked + .form-check-label {
+        background-color: #e8f5e9;
+        border-radius: 0.5rem;
+    }
+
+    #btnDescargarPlantilla:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
     }
 </style>
 

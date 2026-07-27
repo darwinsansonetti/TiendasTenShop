@@ -226,6 +226,7 @@ class VentasController extends Controller
                     // $fechaActualizacion = $producto->FechaActualizacion ?? $producto->FechaCreacion;
                     // $fechaActualizacion = $producto->FechaCreacion;
                     $fechaActualizacion = $productoEnSucursal->FechaIngreso ?? $producto->FechaActualizacion ?? $producto->FechaCreacion;
+                    // $fechaActualizacion = $producto->FechaActualizacion ?? $productoEnSucursal->FechaIngreso ?? $producto->FechaCreacion;
 
                     // Calcular días desde FechaActualizacion hasta hoy
                     if ($fechaActualizacion) {

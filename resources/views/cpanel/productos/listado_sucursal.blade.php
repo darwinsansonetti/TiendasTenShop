@@ -45,6 +45,18 @@
                         <i class="bi bi-list-ul me-2"></i>Listado de Productos
                     </h6>
                     <div class="d-flex align-items-center gap-2">
+                        {{-- ✅ BUSCADOR --}}
+                        <div class="input-group input-group-sm" style="width: 220px;">
+                            <span class="input-group-text border-0" style="background:rgba(255,255,255,0.2);color:#fff;">
+                                <i class="bi bi-search" style="font-size:0.75rem;"></i>
+                            </span>
+                            <input type="text" 
+                                   id="buscadorProductos" 
+                                   class="form-control form-control-sm border-0" 
+                                   placeholder="Buscar por código..."
+                                   style="background:rgba(255,255,255,0.2);color:#fff;font-size:0.78rem;"
+                                   oninput="filtrarTabla()">
+                        </div>
                         @if($sucursalId > 0 && $productos->count() > 0)
                         <button type="button" class="btn btn-success btn-sm fw-semibold" onclick="exportarExcel()" style="font-size:0.78rem;">
                             <i class="bi bi-file-earmark-excel me-1"></i>Excel
@@ -55,7 +67,7 @@
                         @endif
                         <span class="badge rounded-pill"
                               style="background:rgba(255,255,255,0.25);color:#fff;font-size:0.78rem;">
-                            {{ $productos->count() }} productos
+                            <span id="totalProductosVisibles">{{ $productos->count() }}</span> / {{ $productos->count() }} productos
                         </span>
                     </div>
                 </div>
@@ -75,9 +87,9 @@
                                 <th class="py-3 text-center text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">ESTATUS</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="tablaBody">
                             @forelse($productos as $producto)
-                            <tr style="border-bottom:1px solid #f1f5f9;">
+                            <tr style="border-bottom:1px solid #f1f5f9;" data-codigo="{{ strtoupper($producto->Codigo ?? '') }}">
                                 <td class="ps-4 text-center">
                                     @php
                                         $imgSrc = $producto->UrlFoto ?? 'assets/img/adminlte/img/produc_default.jfif';
@@ -134,7 +146,7 @@
                  style="background:#f8fafc;border-top:1px solid #e2e8f0 !important;">
                 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
                     <small class="text-muted">
-                        Mostrando {{ $productos->count() }} productos
+                        Mostrando <span id="totalProductosVisiblesFooter">{{ $productos->count() }}</span> de {{ $productos->count() }} productos
                     </small>
                 </div>
             </div>
@@ -153,6 +165,40 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
+    // ============================================
+    // FILTRAR TABLA POR CÓDIGO
+    // ============================================
+    function filtrarTabla() {
+        const input = document.getElementById('buscadorProductos');
+        const filter = input.value.toUpperCase().trim();
+        const tbody = document.getElementById('tablaBody');
+        const rows = tbody.querySelectorAll('tr');
+        
+        // Excluir la fila de "No hay productos" si existe
+        const noDataRow = rows.length === 1 && rows[0].querySelector('td[colspan]');
+        if (noDataRow) {
+            return;
+        }
+        
+        let visibles = 0;
+        
+        rows.forEach(row => {
+            // Buscar en el data-codigo (atributo que agregamos)
+            const codigo = (row.getAttribute('data-codigo') || '').toUpperCase();
+            
+            if (filter === '' || codigo.includes(filter)) {
+                row.style.display = '';
+                visibles++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+        
+        // Actualizar contadores
+        document.getElementById('totalProductosVisibles').textContent = visibles;
+        document.getElementById('totalProductosVisiblesFooter').textContent = visibles;
+    }
+
     // ============================================
     // ZOOM DE IMAGEN
     // ============================================
@@ -179,8 +225,9 @@
     // ============================================
     function exportarExcel() {
         try {
-            const tabla = document.getElementById('tablaProductos');
-            const rows = tabla.querySelectorAll('tbody tr');
+            // ✅ Solo exportar filas visibles (filtradas)
+            const tbody = document.getElementById('tablaBody');
+            const rows = tbody.querySelectorAll('tr:not([style*="display: none"])');
             
             if (!rows.length) {
                 Swal.fire({
@@ -263,6 +310,20 @@
     // ============================================
     function exportarPDF() {
         try {
+            // ✅ Solo exportar filas visibles (filtradas)
+            const tbody = document.getElementById('tablaBody');
+            const rows = tbody.querySelectorAll('tr:not([style*="display: none"])');
+            
+            if (!rows.length) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Sin datos',
+                    text: 'No hay productos para exportar',
+                    confirmButtonColor: '#d97706'
+                });
+                return;
+            }
+
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('landscape', 'mm', 'a4');
 
@@ -274,19 +335,6 @@
             doc.text(titulo, 14, 15);
             doc.setFontSize(9);
             doc.text(`Fecha: ${fecha}`, 14, 22);
-
-            const tabla = document.getElementById('tablaProductos');
-            const rows = tabla.querySelectorAll('tbody tr');
-
-            if (!rows.length) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Sin datos',
-                    text: 'No hay productos para exportar',
-                    confirmButtonColor: '#d97706'
-                });
-                return;
-            }
 
             const headers = [
                 'CÓDIGO',
@@ -389,6 +437,18 @@
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         z-index: 10;
         position: relative;
+    }
+    
+    /* Estilo para el input de búsqueda */
+    #buscadorProductos::placeholder {
+        color: rgba(255,255,255,0.6);
+    }
+    
+    #buscadorProductos:focus {
+        background: rgba(255,255,255,0.3) !important;
+        color: #fff;
+        outline: none;
+        box-shadow: none;
     }
 </style>
 @endpush

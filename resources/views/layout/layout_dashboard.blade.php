@@ -907,6 +907,14 @@
                   </li>
 
                   <li class="nav-item">
+                      <a href="{{ route('cpanel.distribucion.transferencia') }}"
+                        class="nav-link {{ session('submenu_active') == 'Nueva Transferencia' ? 'active' : '' }}">
+                          <i class="nav-icon bi bi-plus-circle"></i>
+                          <p>Nueva Transferencia</p>
+                      </a>
+                  </li>
+
+                  <li class="nav-item">
                       <a href="{{ route('cpanel.distribucion.inventario') }}"
                         class="nav-link {{ session('submenu_active') == 'Inventario de almacen' ? 'active' : '' }}">
                           <i class="nav-icon bi bi-box-seam"></i>

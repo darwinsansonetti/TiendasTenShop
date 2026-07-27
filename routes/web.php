@@ -473,6 +473,50 @@ Route::middleware('auth')->group(function() {
     Route::get('/cpanel/distribucion/listado', [DistribucionController::class, 'distribuciones_listado'])
         ->name('cpanel.distribucion.distribuciones');
 
+    // Nueva Transferencia
+    Route::get('/cpanel/distribucion/listado/transferencias', [DistribucionController::class, 'transferencia_listado'])
+        ->name('cpanel.distribucion.transferencia');
+
+    // ✅ NUEVA: Formulario de creación
+    Route::get('/cpanel/transferencia/crear', [DistribucionController::class, 'transferencia_crear'])
+        ->name('cpanel.distribucion.transferencia-crear');
+
+    // Iniciar Transferencia
+    Route::post('/cpanel/transferencia/iniciar', [DistribucionController::class, 'transferencia_iniciar'])
+            ->name('cpanel.distribucion.transferencia-iniciar');
+
+    // Guardar detalle del producto en la transferencia
+    Route::post('/cpanel/distribucion/transferencia/detalle/guardar', [DistribucionController::class, 'guardarDetalleTransferencia'])
+    ->name('cpanel.distribucion.transferencia.detalle.guardar');
+
+    // Eliminar producto para transferir
+    Route::post('/cpanel/distribucion/transferencia/detalle/eliminar', [DistribucionController::class, 'eliminarDetalleTransferencia'])
+    ->name('cpanel.distribucion.transferencia.detalle.eliminar');
+
+    // Descargar Plantilla Transferencia
+    Route::get('/cpanel/distribucion/transferencia/{id}/descargar-plantilla', [DistribucionController::class, 'descargarPlantillaTransferencia'])
+    ->name('cpanel.distribucion.transferencia.descargar-plantilla');
+
+    // Subir plantilla a Transferir
+    Route::post('/cpanel/distribucion/transferencia/{id}/subir-plantilla', [DistribucionController::class, 'subirPlantillaTransferencia'])
+        ->name('cpanel.distribucion.transferencia.subir-plantilla');
+
+    // Finalizar Transferencia
+    Route::post('/cpanel/distribucion/transferencia/{id}/finalizar', [DistribucionController::class, 'transferencia_finalizar'])
+            ->name('cpanel.distribucion.transferencia.finalizar');
+
+    // Verificar si hay productos en la transferencia
+    Route::get('/cpanel/distribucion/transferencia/{id}/verificar-productos', [DistribucionController::class, 'verificarProductosTransferencia'])
+    ->name('cpanel.distribucion.transferencia.verificar-productos');
+    
+    // ✅ NUEVA: Guardar transferencia
+    Route::post('/cpanel/transferencia', [DistribucionController::class, 'transferencia_guardar'])
+        ->name('cpanel.distribucion.transferencia-guardar');
+
+    // Eliminar Transferencia
+    Route::delete('/cpanel/distribucion/transferencia/{id}/eliminar', [DistribucionController::class, 'transferencia_eliminar'])
+        ->name('cpanel.distribucion.transferencia.eliminar');
+
     Route::post('/cpanel/distribuciones/{id}/finalizar', [DistribucionController::class, 'finalizarDistribucion'])
         ->name('cpanel.distribuciones.finalizar');
 
@@ -587,6 +631,10 @@ Route::middleware('auth')->group(function() {
 
     Route::post('/cpanel/inventario/auditoria/{id}/producto/{detalleId}/rechazar', [InventarioController::class, 'rechazarProductoAuditoria'])
         ->name('cpanel.inventario.auditoria.rechazar');
+
+    // 📥 Descargar plantilla
+    Route::post('/cpanel/inventario/descargar-plantilla', [InventarioController::class, 'descargarPlantilla'])
+        ->name('cpanel.inventario.descargar-plantilla');
 });
 
 

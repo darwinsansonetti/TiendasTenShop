@@ -21,6 +21,8 @@ use App\Services\VentasService;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
+use Symfony\Component\HttpFoundation\StreamedResponse;
+
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xls;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
@@ -1956,6 +1958,54 @@ class DistribucionController extends Controller
      * Cerrar recepciones de una sucursal (abonar deudas)
      * Equivalente a CerrarRecepciones en .NET
      */
+    // private function cerrarRecepciones($sucursalId, $fecha)
+    // {
+    //     \Log::info('=== cerrarRecepciones INICIO ===', [
+    //         'sucursal_id' => $sucursalId,
+    //         'fecha' => $fecha
+    //     ]);
+        
+    //     try {
+    //         // 1. Buscar transferencias de la sucursal con saldo > 0
+    //         $transferencias = $this->buscarTransferenciasParaCerrar($sucursalId, $fecha);
+            
+    //         if ($transferencias->isEmpty()) {
+    //             \Log::info('No hay transferencias con saldo pendiente');
+    //         } else {
+    //             \Log::info('Transferencias con saldo pendiente', ['total' => $transferencias->count()]);
+                
+    //             foreach ($transferencias as $transferencia) {
+    //                 // 2. Abonar deuda con cada transferencia
+    //                 $this->abonarDeudaSucursal($sucursalId, $transferencia, $fecha);
+    //             }
+    //         }
+            
+    //         // 3. (Opcional) Buscar ventas diarias de la sucursal
+    //         // NOTA: La parte de ventas es opcional y puede implementarse después
+    //         //$ventas = $this->buscarVentasParaCerrar($sucursalId, $fecha);
+
+    //         $ventasService = new VentasService();
+
+    //         // ✅ Crear objeto con fechaFin para el servicio
+    //         $filtroFecha = (object) [
+    //             'fechaFin' => $fecha
+    //         ];
+
+    //         $ventas = $ventasService->obtenerListadoVentasDiariasParaCerrarSinTotalizar(
+    //             $filtroFecha, $sucursalId, true
+    //         );
+    //         foreach ($ventas as $venta) {
+    //             $this->abonarDeudaSucursal($sucursalId, $venta, $fecha);
+    //         }
+            
+    //         \Log::info('=== cerrarRecepciones FIN ===');
+            
+    //     } catch (\Exception $e) {
+    //         \Log::error('Error en cerrarRecepciones: ' . $e->getMessage());
+    //         throw $e;
+    //     }
+    // }
+
     private function cerrarRecepciones($sucursalId, $fecha)
     {
         \Log::info('=== cerrarRecepciones INICIO ===', [
@@ -1964,33 +2014,99 @@ class DistribucionController extends Controller
         ]);
         
         try {
-            // 1. Buscar transferencias de la sucursal con saldo > 0
+            // 1. Transferencias
             $transferencias = $this->buscarTransferenciasParaCerrar($sucursalId, $fecha);
             
-            if ($transferencias->isEmpty()) {
-                \Log::info('No hay transferencias con saldo pendiente');
-            } else {
+            if ($transferencias->isNotEmpty()) {
                 \Log::info('Transferencias con saldo pendiente', ['total' => $transferencias->count()]);
-                
                 foreach ($transferencias as $transferencia) {
-                    // 2. Abonar deuda con cada transferencia
                     $this->abonarDeudaSucursal($sucursalId, $transferencia, $fecha);
                 }
             }
             
-            // 3. (Opcional) Buscar ventas diarias de la sucursal
-            // NOTA: La parte de ventas es opcional y puede implementarse después
-            // $ventas = $this->buscarVentasParaCerrar($sucursalId, $fecha);
-            // foreach ($ventas as $venta) {
-            //     $this->abonarDeudaSucursal($sucursalId, $venta, $fecha);
-            // }
+            // 2. Ventas diarias
+            $filtroFecha = (object) ['fechaFin' => $fecha];
             
-            \Log::info('=== cerrarRecepciones FIN ===');
+            $ventasService = new VentasService();
+            $resultadoVentas = $ventasService->obtenerListadoVentasDiariasParaCerrarSinTotalizar(
+                $filtroFecha, $sucursalId, true
+            );
+            
+            // ✅ Normalizar ventas para que sean compatibles con abonarDeudaSucursal
+            if (isset($resultadoVentas['ListaVentasDiarias']) && !empty($resultadoVentas['ListaVentasDiarias'])) {
+                foreach ($resultadoVentas['ListaVentasDiarias'] as $ventaDTO) {
+                    // ✅ Crear objeto normalizado con las propiedades que espera abonarDeudaSucursal
+                    $ventaNormalizada = (object) [
+                        'TransferenciaId' => null,  // No es una transferencia
+                        'VentaDiariaId' => $ventaDTO->id ?? null,
+                        'Numero' => 'VENTA-' . ($ventaDTO->id ?? ''),
+                        'Fecha' => $ventaDTO->fecha ?? $fecha,
+                        'Saldo' => $ventaDTO->saldo ?? 0,
+                        'SucursalOrigenId' => $ventaDTO->sucursalId ?? $sucursalId,
+                        'SucursalDestinoId' => null,
+                        'Estatus' => $ventaDTO->estatus ?? null
+                    ];
+                    
+                    \Log::info('🔄 Procesando venta normalizada', [
+                        'venta_id' => $ventaNormalizada->VentaDiariaId,
+                        'saldo' => $ventaNormalizada->Saldo
+                    ]);
+                    
+                    $this->abonarDeudaSucursal($sucursalId, $ventaNormalizada, $fecha);
+                }
+            }
+            
+            \Log::info('=== cerrarRecepciones FIN ===', [
+                'transferencias_procesadas' => $transferencias->count(),
+                'ventas_procesadas' => isset($resultadoVentas['ListaVentasDiarias']) ? count($resultadoVentas['ListaVentasDiarias']) : 0
+            ]);
             
         } catch (\Exception $e) {
             \Log::error('Error en cerrarRecepciones: ' . $e->getMessage());
             throw $e;
         }
+    }
+
+    private function buscarVentasParaCerrar($sucursalId, $fechaFin)
+    {
+        \Log::info('=== buscarVentasParaCerrar ===', [
+            'sucursal_id' => $sucursalId,
+            'fecha_fin' => $fechaFin
+        ]);
+        
+        // Buscar ventas diarias que cumplan con las condiciones:
+        // - Sean de la sucursal
+        // - Sean del período de fecha
+        // - No estén cerradas aún
+        $ventas = DB::connection('sqlsrv')
+            ->table('VentasDiarias')
+            ->where('SucursalId', $sucursalId)
+            ->whereDate('Fecha', '<=', $fechaFin)
+            ->whereNull('FechaCierre') // No cerrada aún
+            ->where('Total', '>', 0) // Con saldo pendiente
+            ->select([
+                'VentaDiariaId as ID',
+                'Numero',
+                'Fecha',
+                'SucursalId',
+                'Total as Saldo',
+                'Estatus'
+            ])
+            ->orderBy('Fecha', 'asc')
+            ->get()
+            ->map(function($item) {
+                // Agregar propiedades necesarias para que funcione con abonarDeudaSucursal
+                $item->VentaDiariaId = $item->ID;
+                $item->Saldo = $item->Saldo ?? 0;
+                return $item;
+            });
+        
+        \Log::info('Ventas encontradas', [
+            'sucursal_id' => $sucursalId,
+            'total' => $ventas->count()
+        ]);
+        
+        return $ventas;
     }
 
     public function distribuciones_inventario(Request $request)
@@ -2019,6 +2135,1633 @@ class DistribucionController extends Controller
         } catch (\Exception $e) {
             \Log::error('Error en indexDistribuciones: ' . $e->getMessage());
             return back()->with('error', 'Error al cargar las distribuciones: ' . $e->getMessage());
+        }
+    }
+
+    public function transferencia_listado(Request $request)
+    {
+        try {
+            session([
+                'menu_active' => 'Distribuciones',
+                'submenu_active' => 'Nueva Transferencia'
+            ]);
+
+            // Obtener transferencias con estatus EnEdicion (2) y Tipo Transferencia (1)
+            $transferencias = DB::connection('sqlsrv')
+                ->table('TransferenciaTMPTotalizadaView')
+                ->where('Estatus', '<=', 2)  // ✅ EnEdicion (2)
+                ->where('Tipo', 1)      // Transferencia
+                ->select([
+                    'TransferenciaId',
+                    'Numero',
+                    'Fecha',
+                    'SucursalOrigenId',
+                    'Origen as sucursal_origen',
+                    'Estatus',
+                    'Tipo',
+                    'CantidadEmitida',
+                    'CantidadDisponible',
+                    'CantidadRecibida',
+                    'CantidadItems'
+                ])
+                ->orderBy('Fecha', 'desc')
+                ->get();
+
+            // Formatear datos
+            $transferencias->transform(function ($item) {
+                // Obtener sucursales destino
+                $sucursalesDestino = DB::connection('sqlsrv')
+                    ->table('TransferenciasSucursales as ts')
+                    ->leftJoin('Sucursales as s', 'ts.SucursalId', '=', 's.ID')
+                    ->where('ts.TransferenciaId', $item->TransferenciaId)
+                    ->pluck('s.Nombre')
+                    ->toArray();
+
+                $item->sucursales_destino = implode(', ', $sucursalesDestino);
+                $item->FechaFormateada = $item->Fecha ? \Carbon\Carbon::parse($item->Fecha)->format('d/m/Y H:i') : 'N/A';
+                $item->EstatusTexto = $this->getEstatusTransferencia($item->Estatus);
+                $item->EstatusClase = $this->getEstatusClase($item->Estatus);
+                $item->EstatusBadgeStyle = $this->getEstatusBadgeStyle($item->Estatus);
+                
+                return $item;
+            });
+
+            // dd($transferencias);
+
+            return view('cpanel.inventario.listado_transferencias', compact('transferencias'));
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en transferencia_listado: ' . $e->getMessage());
+            return back()->with('error', 'Error al listar las transferencias: ' . $e->getMessage());
+        }
+    }
+
+    private function getEstatusTransferencia($estatus)
+    {
+        $map = [
+            1 => 'Nueva',
+            2 => 'En Edición',
+            3 => 'Registrada',
+            4 => 'Recibiendo',
+            5 => 'Disponible',
+            6 => 'Procesada',
+            9 => 'Anulada',
+            10 => 'Todas'
+        ];
+        return $map[$estatus] ?? 'Desconocido';
+    }
+
+    private function getEstatusClase($estatus)
+    {
+        $map = [
+            1 => 'info',        // Nueva
+            2 => 'warning',     // En Edición
+            3 => 'primary',     // Registrada
+            4 => 'success',     // Recibiendo
+            5 => 'success',     // Disponible
+            6 => 'success',     // Procesada
+            9 => 'danger',      // Anulada
+            10 => 'secondary'   // Todas
+        ];
+        return $map[$estatus] ?? 'secondary';
+    }
+
+    private function getEstatusBadgeStyle($estatus)
+    {
+        $map = [
+            1 => 'background:rgba(6,182,212,0.1);color:#0c4a6e;border:1px solid rgba(6,182,212,0.25)',  // Nueva
+            2 => 'background:rgba(245,158,11,0.1);color:#92400e;border:1px solid rgba(245,158,11,0.25)', // En Edición
+            3 => 'background:rgba(59,130,246,0.1);color:#1d4ed8;border:1px solid rgba(59,130,246,0.25)',  // Registrada
+            4 => 'background:rgba(16,185,129,0.1);color:#059669;border:1px solid rgba(16,185,129,0.25)',  // Recibiendo
+            5 => 'background:rgba(16,185,129,0.1);color:#059669;border:1px solid rgba(16,185,129,0.25)',  // Disponible
+            6 => 'background:rgba(16,185,129,0.1);color:#059669;border:1px solid rgba(16,185,129,0.25)',  // Procesada
+            9 => 'background:rgba(239,68,68,0.1);color:#dc2626;border:1px solid rgba(239,68,68,0.25)',    // Anulada
+            10 => 'background:rgba(107,114,128,0.1);color:#374151;border:1px solid rgba(107,114,128,0.25)' // Todas
+        ];
+        return $map[$estatus] ?? 'background:rgba(107,114,128,0.1);color:#374151;border:1px solid rgba(107,114,128,0.25)';
+    }
+
+    public function transferencia_crear(Request $request)
+    {
+        try {
+            // Obtener el ID de la transferencia
+            $id = $request->input('id');
+            
+            session([
+                'menu_active' => 'Distribuciones',
+                'submenu_active' => 'Nueva Transferencia'
+            ]);
+
+            // Obtener sucursales activas
+            $sucursales = GeneralHelper::buscarSucursales(0);
+
+            // Crear DTO con valores por defecto
+            $transferenciaDTO = (object) [
+                'Id' => null,
+                'TransferenciaId' => 0,
+                'Numero' => null,
+                'Estatus' => 1,        // Nueva
+                'Fecha' => date('Y-m-d'),
+                'PasoOperacion' => 0,   // PasoUno
+                'Tipo' => 1,            // Transferencia
+                'SucursalOrigenId' => null,
+                'SucursalDestinoId' => null,
+                'Observacion' => null
+            ];
+
+            $listaProductos = collect([]);
+            $mostrarProductos = false;
+            $sucursalDestinoNombre = '';
+            $mostrarTotales = false;  // ✅ Definir aquí con valor por defecto
+            $detallesExistentes = collect([]);
+            $totalesData = (object) [
+                'CantidadItems' => 0,
+                'CantidadEmitida' => 0,
+                'CostoDivisaTotal' => 0
+            ];
+
+            // ✅ Si hay ID, cargar la transferencia desde la base de datos
+            if ($id) {
+                $transferencia = DB::connection('sqlsrv')
+                    ->table('TransferenciasTMP')
+                    ->where('TransferenciaId', $id)
+                    ->first();
+
+                if ($transferencia) {
+                    // Actualizar DTO con datos de la transferencia
+                    $transferenciaDTO->Id = $transferencia->TransferenciaId;
+                    $transferenciaDTO->TransferenciaId = $transferencia->TransferenciaId;
+                    $transferenciaDTO->Numero = $transferencia->Numero;
+                    $transferenciaDTO->Fecha = $transferencia->Fecha ? date('Y-m-d', strtotime($transferencia->Fecha)) : date('Y-m-d');
+                    $transferenciaDTO->SucursalOrigenId = $transferencia->SucursalOrigenId;
+                    $transferenciaDTO->Observacion = $transferencia->Observacion ?? '';
+                    $transferenciaDTO->Estatus = $transferencia->Estatus ?? 1;
+                    $transferenciaDTO->Tipo = $transferencia->Tipo ?? 1;
+                    $transferenciaDTO->PasoOperacion = 1; // PasoDos
+
+                    // ✅ Obtener sucursal destino
+                    $sucursalDestino = DB::connection('sqlsrv')
+                        ->table('TransferenciasSucursalesTMP')
+                        ->where('TransferenciaId', $id)
+                        ->first();
+
+                    if ($sucursalDestino) {
+                        $transferenciaDTO->SucursalDestinoId = $sucursalDestino->SucursalId;
+                        
+                        // ✅ Obtener el nombre de la sucursal destino
+                        $sucursalInfo = DB::connection('sqlsrv')
+                            ->table('Sucursales')
+                            ->where('ID', $sucursalDestino->SucursalId)
+                            ->first();
+                        
+                        if ($sucursalInfo) {
+                            $sucursalDestinoNombre = $sucursalInfo->Nombre;
+                        }
+                    }
+
+                    // ✅ Obtener productos de la sucursal origen
+                    $listaProductos = $this->buscarProductosPorSucursal(
+                        $transferenciaDTO->SucursalOrigenId,
+                        true
+                    );
+
+                    // ✅ Cargar los detalles existentes (cantidades guardadas)
+                    $detallesExistentes = DB::connection('sqlsrv')
+                        ->table('TransferenciaDetallesTMP')
+                        ->where('TransferenciaId', $id)
+                        ->select('ProductoId', 'CantidadEmitida')
+                        ->get()
+                        ->keyBy('ProductoId');
+
+                    // ✅ Calcular totales desde la base de datos
+                    $totales = DB::connection('sqlsrv')
+                        ->table('TransferenciaTMPTotalizadaView')
+                        ->where('TransferenciaId', $id)
+                        ->select([
+                            'CantidadEmitida',
+                            'CantidadRecibida',
+                            'CantidadDisponible',
+                            'CantidadItems'
+                        ])
+                        ->first();
+
+                    // ✅ Calcular costo divisa total
+                    $costoDivisaTotal = 0;
+                    foreach ($detallesExistentes as $detalle) {
+                        $producto = DB::connection('sqlsrv')
+                            ->table('ProductosSucursalView')
+                            ->where('ID', $detalle->ProductoId)
+                            ->select('CostoDivisa')
+                            ->first();
+                        
+                        if ($producto) {
+                            $costoDivisaTotal += $detalle->CantidadEmitida * ($producto->CostoDivisa ?? 0);
+                        }
+                    }
+
+                    // ✅ Crear objeto con los totales
+                    $totalesData = (object) [
+                        'CantidadItems' => (int) ($totales->CantidadItems ?? 0),
+                        'CantidadEmitida' => (int) ($totales->CantidadEmitida ?? 0),
+                        'CostoDivisaTotal' => $costoDivisaTotal
+                    ];
+
+                    // ✅ Combinar productos con sus cantidades guardadas
+                    $listaProductos = $listaProductos->map(function($producto) use ($detallesExistentes) {
+                        $producto->CantidadGuardada = 0;
+                        if (isset($detallesExistentes[$producto->ID])) {
+                            $producto->CantidadGuardada = $detallesExistentes[$producto->ID]->CantidadEmitida;
+                        }
+                        return $producto;
+                    });
+
+                    $mostrarProductos = true;
+                    $mostrarTotales = true;  // ✅ Activar la sección de totales
+
+                    Log::info('📦 Transferencia cargada', [
+                        'id' => $id,
+                        'numero' => $transferenciaDTO->Numero,
+                        'productos' => $listaProductos->count(),
+                        'detalles_cargados' => $detallesExistentes->count(),
+                        'total_items' => $totalesData->CantidadItems,
+                        'total_unidades' => $totalesData->CantidadEmitida,
+                        'total_costo_divisa' => $totalesData->CostoDivisaTotal
+                    ]);
+                }
+            }
+
+            return view('cpanel.distribuciones.transferencia_crear', compact(
+                'sucursales',
+                'transferenciaDTO',
+                'listaProductos',
+                'mostrarProductos',
+                'mostrarTotales',       // ✅ Ahora siempre existe
+                'sucursalDestinoNombre',
+                'detallesExistentes',
+                'totalesData'           // ✅ Ahora siempre existe
+            ));
+
+        } catch (\Exception $e) {
+            Log::error('Error en transferencia_crear: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar el formulario: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Inicia una nueva transferencia
+     */
+    public function transferencia_iniciar(Request $request)
+    {
+        try {
+            // Validar datos
+            $request->validate([
+                'sucursal_origen' => 'required|integer|min:1',
+                'sucursal_destino' => 'required|integer|min:1|different:sucursal_origen',
+                'fecha' => 'required|date',
+                'observacion' => 'nullable|string|max:500'
+            ]);
+
+            $transferenciaId = (int) $request->input('transferencia_id', 0);
+            $sucursalOrigenId = (int) $request->sucursal_origen;
+            $sucursalDestinoId = (int) $request->sucursal_destino;
+
+            // Si es nueva transferencia (ID = 0)
+            if ($transferenciaId == 0) {
+                
+                // Generar número de transferencia
+                $fecha = date('YmdHi');
+                $numero = "TRA{$fecha}-{$sucursalOrigenId}";
+
+                DB::connection('sqlsrv')->beginTransaction();
+
+                try {
+                    // 1. Insertar cabecera de transferencia (SIN SucursalDestinoId)
+                    $transferenciaId = DB::connection('sqlsrv')
+                        ->table('TransferenciasTMP')
+                        ->insertGetId([
+                            'Numero' => $numero,
+                            'Fecha' => $request->fecha,
+                            'SucursalOrigenId' => $sucursalOrigenId,
+                            'Estatus' => 1, // Nueva
+                            'Tipo' => 1, // Transferencia
+                            'Observacion' => $request->observacion
+                        ]);
+
+                    // 2. Insertar sucursal destino en TransferenciasSucursalesTMP
+                    DB::connection('sqlsrv')
+                        ->table('TransferenciasSucursalesTMP')
+                        ->insert([
+                            'TransferenciaId' => $transferenciaId,
+                            'SucursalId' => $sucursalDestinoId,
+                            'Estatus' => 1 // Nueva
+                        ]);
+
+                    DB::connection('sqlsrv')->commit();
+
+                    Log::info('✅ Transferencia creada', [
+                        'id' => $transferenciaId,
+                        'numero' => $numero,
+                        'sucursal_origen' => $sucursalOrigenId,
+                        'sucursal_destino' => $sucursalDestinoId
+                    ]);
+
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Se ha iniciado la transferencia, por favor agregue los productos',
+                        'transferencia_id' => $transferenciaId,
+                        'redirect' => route('cpanel.distribucion.transferencia-crear', ['id' => $transferenciaId])
+                    ]);
+
+                } catch (\Exception $e) {
+                    DB::connection('sqlsrv')->rollBack();
+                    Log::error('❌ Error al crear transferencia: ' . $e->getMessage());
+                    
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No se pudo iniciar la transferencia: ' . $e->getMessage()
+                    ], 500);
+                }
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Funcionalidad de edición pendiente'
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error de validación',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('❌ Error al iniciar transferencia: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al iniciar la transferencia: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Busca productos por sucursal
+     */
+    private function buscarProductosPorSucursal($sucursalId, $soloConExistencia = true)
+    {
+        try {
+            $productos = DB::connection('sqlsrv')
+                ->table('ProductosSucursalView')
+                ->where('SucursalId', $sucursalId)
+                ->where(function ($query) {
+                    $query->where('Estatus', 10)  // EnumProducto.Todos = 10
+                        ->orWhere('Estatus', 1); // Activo
+                })
+                ->when($soloConExistencia, function ($query) {
+                    $query->where('Existencia', '>', 0);
+                })
+                ->select([
+                    'ID',
+                    'Codigo',
+                    'CodigoBarra',
+                    'Referencia',
+                    'Descripcion',
+                    'SucursalId',
+                    'CostoBs',
+                    'CostoDivisa',
+                    'UrlFoto',
+                    'FechaActualizacion',
+                    'FechaCreacion',
+                    'DepartamentoId',
+                    'EsProveedorAsignado',
+                    'PvpBs',
+                    'PvpDivisa',
+                    'Estatus',
+                    'Existencia',
+                    'FechaUltimaVenta',
+                    'NuevoPvp',
+                    'FechaNuevoPrecio',
+                    'Tipo',
+                    'PvpAnterior'
+                ])
+                ->orderBy('Codigo')
+                ->get()
+                ->map(function ($item) {
+                    return (object) [
+                        'ID' => $item->ID,
+                        'Codigo' => $item->Codigo,
+                        'CodigoBarra' => $item->CodigoBarra,
+                        'Referencia' => $item->Referencia,
+                        'Descripcion' => $item->Descripcion,
+                        'SucursalId' => $item->SucursalId,
+                        'CostoBs' => $item->CostoBs,
+                        'CostoDivisa' => $item->CostoDivisa,
+                        'UrlFoto' => $item->UrlFoto,
+                        'FechaActualizacion' => $item->FechaActualizacion,
+                        'FechaCreacion' => $item->FechaCreacion,
+                        'DepartamentoId' => $item->DepartamentoId,
+                        'EsProveedorAsignado' => $item->EsProveedorAsignado,
+                        'PvpBs' => $item->PvpBs,
+                        'PvpDivisa' => $item->PvpDivisa,
+                        'Estatus' => $item->Estatus,
+                        'Existencia' => $item->Existencia,
+                        'FechaUltimaVenta' => $item->FechaUltimaVenta,
+                        'NuevoPvp' => $item->NuevoPvp,
+                        'FechaNuevoPrecio' => $item->FechaNuevoPrecio,
+                        'Tipo' => $item->Tipo,
+                        'PvpAnterior' => $item->PvpAnterior
+                    ];
+                });
+
+            Log::info('📦 Productos encontrados', [
+                'sucursal_id' => $sucursalId,
+                'total' => $productos->count()
+            ]);
+
+            return $productos;
+
+        } catch (\Exception $e) {
+            Log::error('Error al buscar productos: ' . $e->getMessage());
+            return collect([]);
+        }
+    }
+
+    public function guardarDetalleTransferencia(Request $request)
+    {
+        try {
+            // Validar datos
+            $request->validate([
+                'transferencia_id' => 'required|integer',
+                'detalles' => 'required|array',
+                'detalles.*.producto_id' => 'required|integer',
+                'detalles.*.sucursal_id' => 'required|integer',
+                'detalles.*.cantidad' => 'required|numeric|min:0'
+            ]);
+
+            $transferenciaId = $request->transferencia_id;
+            $detalles = $request->detalles;
+
+            Log::info('📦 Guardando detalles de transferencia', [
+                'transferencia_id' => $transferenciaId,
+                'total_detalles' => count($detalles)
+            ]);
+
+            DB::connection('sqlsrv')->beginTransaction();
+
+            $totalEmitidos = 0;
+            $totalItems = 0;
+
+            // ==========================================
+            // 1. TABLA: TransferenciaDetallesTMP
+            // ==========================================
+            foreach ($detalles as $detalle) {
+                $productoId = $detalle['producto_id'];
+                $sucursalId = $detalle['sucursal_id'];
+                $cantidad = $detalle['cantidad'];
+
+                // Verificar si el detalle ya existe
+                $detalleExistente = DB::connection('sqlsrv')
+                    ->table('TransferenciaDetallesTMP')
+                    ->where('TransferenciaId', $transferenciaId)
+                    ->where('ProductoId', $productoId)
+                    ->where('SucursalId', $sucursalId)
+                    ->first();
+
+                if ($detalleExistente) {
+                    // ✅ UPDATE: Actualizar detalle existente
+                    DB::connection('sqlsrv')
+                        ->table('TransferenciaDetallesTMP')
+                        ->where('TransferenciaDetalleId', $detalleExistente->TransferenciaDetalleId)
+                        ->update([
+                            'CantidadEmitida' => $cantidad,
+                            'CantidadDisponible' => $cantidad
+                        ]);
+                } else {
+                    // ✅ INSERT: Nuevo detalle
+                    DB::connection('sqlsrv')
+                        ->table('TransferenciaDetallesTMP')
+                        ->insert([
+                            'TransferenciaId' => $transferenciaId,
+                            'ProductoId' => $productoId,
+                            'SucursalId' => $sucursalId,
+                            'CantidadEmitida' => $cantidad,
+                            'CantidadDisponible' => $cantidad,
+                            'CantidadRecibida' => 0
+                        ]);
+                }
+
+                $totalEmitidos += $cantidad;
+                $totalItems++;
+            }
+
+            // ==========================================
+            // 2. TABLA: TransferenciasTMP (SOLO Estatus)
+            // ✅ Igual que en .NET
+            // ==========================================
+            DB::connection('sqlsrv')
+                ->table('TransferenciasTMP')
+                ->where('TransferenciaId', $transferenciaId)
+                ->update([
+                    'Estatus' => 2 // EnEdicion
+                ]);
+
+            DB::connection('sqlsrv')->commit();
+
+            Log::info('✅ Detalles guardados correctamente', [
+                'transferencia_id' => $transferenciaId,
+                'total_emitidos' => $totalEmitidos,
+                'total_items' => $totalItems
+            ]);
+
+            // ==========================================
+            // 3. Obtener totales desde la VISTA (igual que .NET)
+            // ==========================================
+            $totales = DB::connection('sqlsrv')
+                ->table('TransferenciaTMPTotalizadaView')
+                ->where('TransferenciaId', $transferenciaId)
+                ->select([
+                    'CantidadEmitida',
+                    'CantidadRecibida',
+                    'CantidadDisponible',
+                    'CantidadItems'
+                ])
+                ->first();
+
+            // ✅ Calcular CostoDivisaTotal
+            $detalles = DB::connection('sqlsrv')
+                ->table('TransferenciaDetallesTMP')
+                ->where('TransferenciaId', $transferenciaId)
+                ->get();
+
+            $costoDivisaTotal = 0;
+            foreach ($detalles as $detalle) {
+                $producto = DB::connection('sqlsrv')
+                    ->table('ProductosSucursalView')
+                    ->where('ID', $detalle->ProductoId)
+                    ->select('CostoDivisa')
+                    ->first();
+                
+                if ($producto) {
+                    $costoDivisaTotal += $detalle->CantidadEmitida * ($producto->CostoDivisa ?? 0);
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Detalles guardados correctamente',
+                'totales' => [
+                    'CantidadItems' => (int) ($totales->CantidadItems ?? 0),
+                    'CantidadEmitida' => (int) ($totales->CantidadEmitida ?? 0),
+                    'CostoDivisaTotal' => $costoDivisaTotal
+                ]
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error de validación',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            DB::connection('sqlsrv')->rollBack();
+            Log::error('❌ Error al guardar detalles: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al guardar los detalles: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function verificarProductosTransferencia($id)
+    {
+        try {
+            $detalles = DB::connection('sqlsrv')
+                ->table('TransferenciaDetallesTMP')
+                ->where('TransferenciaId', $id)
+                ->get();
+
+            $total_items = $detalles->count();
+            $total_unidades = $detalles->sum('CantidadEmitida');
+
+            return response()->json([
+                'success' => true,
+                'has_productos' => $total_items > 0,
+                'total_items' => $total_items,
+                'total_unidades' => (int) $total_unidades
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    private function obtenerTotalesTransferencia($transferenciaId)
+    {
+        $totales = DB::connection('sqlsrv')
+            ->table('Transferencias')
+            ->where('ID', $transferenciaId)
+            ->select([
+                'CantidadEmitida',
+                'CantidadDisponible',
+                'CantidadRecibida',
+                'CantidadItems'
+            ])
+            ->first();
+
+        // Obtener detalles
+        $detalles = DB::connection('sqlsrv')
+            ->table('TransferenciaDetallesTMP as td')
+            ->leftJoin('Productos as p', 'td.ProductoId', '=', 'p.ID')
+            ->where('td.TransferenciaId', $transferenciaId)
+            ->select([
+                'td.*',
+                'p.Codigo',
+                'p.Descripcion',
+                'p.Referencia'
+            ])
+            ->get();
+
+        return (object) [
+            'totales' => $totales,
+            'detalles' => $detalles,
+            'total_productos' => $detalles->count()
+        ];
+    }
+
+    public function eliminarDetalleTransferencia(Request $request)
+    {
+        try {
+            // 1. Validar datos
+            $request->validate([
+                'transferencia_id' => 'required|integer',
+                'producto_id' => 'required|integer',
+                'sucursal_id' => 'required|integer'
+            ]);
+
+            $transferenciaId = $request->transferencia_id;
+            $productoId = $request->producto_id;
+            $sucursalId = $request->sucursal_id;
+
+            Log::info('🗑️ Eliminando detalle de transferencia', [
+                'transferencia_id' => $transferenciaId,
+                'producto_id' => $productoId,
+                'sucursal_id' => $sucursalId
+            ]);
+
+            DB::connection('sqlsrv')->beginTransaction();
+
+            // 2. Buscar el detalle
+            $detalle = DB::connection('sqlsrv')
+                ->table('TransferenciaDetallesTMP')
+                ->where('TransferenciaId', $transferenciaId)
+                ->where('ProductoId', $productoId)
+                ->where('SucursalId', $sucursalId)
+                ->first();
+
+            if (!$detalle) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El detalle no existe'
+                ], 404);
+            }
+
+            // 3. Eliminar el detalle (igual que en .NET)
+            DB::connection('sqlsrv')
+                ->table('TransferenciaDetallesTMP')
+                ->where('TransferenciaId', $transferenciaId)
+                ->where('ProductoId', $productoId)
+                ->where('SucursalId', $sucursalId)
+                ->delete();
+
+            // 4. Obtener totales actualizados desde la vista (igual que en .NET)
+            $totales = DB::connection('sqlsrv')
+                ->table('TransferenciaTMPTotalizadaView')
+                ->where('TransferenciaId', $transferenciaId)
+                ->select([
+                    'CantidadEmitida',
+                    'CantidadRecibida',
+                    'CantidadDisponible',
+                    'CantidadItems'
+                ])
+                ->first();
+
+            // ✅ 5. NO actualizar TransferenciasTMP (igual que en .NET)
+            // El estatus permanece como está (2 = EnEdicion)
+            // En .NET NO se modifica el estatus al eliminar un producto
+
+            DB::connection('sqlsrv')->commit();
+
+            Log::info('✅ Detalle eliminado correctamente', [
+                'transferencia_id' => $transferenciaId,
+                'producto_id' => $productoId,
+                'estatus_permanece' => 2 // EnEdicion (igual que en .NET)
+            ]);
+
+            $detalles = DB::connection('sqlsrv')
+            ->table('TransferenciaDetallesTMP')
+            ->where('TransferenciaId', $transferenciaId)
+            ->get();
+
+            $costoDivisaTotal = 0;
+            foreach ($detalles as $detalle) {
+                $producto = DB::connection('sqlsrv')
+                    ->table('ProductosSucursalView')
+                    ->where('ID', $detalle->ProductoId)
+                    ->select('CostoDivisa')
+                    ->first();
+                
+                if ($producto) {
+                    $costoDivisaTotal += $detalle->CantidadEmitida * ($producto->CostoDivisa ?? 0);
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Producto eliminado correctamente',
+                'totales' => [
+                    'CantidadItems' => (int) ($totales->CantidadItems ?? 0),
+                    'CantidadEmitida' => (int) ($totales->CantidadEmitida ?? 0),
+                    'CostoDivisaTotal' => $costoDivisaTotal
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            DB::connection('sqlsrv')->rollBack();
+            Log::error('❌ Error al eliminar detalle: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar el producto: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function descargarPlantillaTransferencia($id)
+    {
+        try {
+            // 1. Obtener la transferencia
+            $transferencia = DB::connection('sqlsrv')
+                ->table('TransferenciasTMP')
+                ->where('TransferenciaId', $id)
+                ->first();
+
+            if (!$transferencia) {
+                return back()->with('error', 'Transferencia no encontrada');
+            }
+
+            // 2. Obtener la sucursal origen
+            $sucursalOrigen = DB::connection('sqlsrv')
+                ->table('Sucursales')
+                ->where('ID', $transferencia->SucursalOrigenId)
+                ->first();
+
+            // 3. Obtener la sucursal destino
+            $sucursalDestino = DB::connection('sqlsrv')
+                ->table('TransferenciasSucursalesTMP as ts')
+                ->join('Sucursales as s', 'ts.SucursalId', '=', 's.ID')
+                ->where('ts.TransferenciaId', $id)
+                ->select('s.ID', 's.Nombre')
+                ->first();
+
+            if (!$sucursalDestino) {
+                return back()->with('error', 'Sucursal destino no encontrada');
+            }
+
+            // 4. Obtener los productos de la sucursal origen con existencia
+            $productos = DB::connection('sqlsrv')
+                ->table('ProductosSucursalView')
+                ->where('SucursalId', $transferencia->SucursalOrigenId)
+                ->where('Existencia', '>', 0)
+                ->where('Estatus', 1)
+                ->select([
+                    'ID',
+                    'Codigo',
+                    'Referencia',
+                    'Descripcion',
+                    'Existencia'
+                ])
+                ->orderBy('Codigo')
+                ->get();
+
+            // 5. Crear el Excel
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('Hoja1');
+
+            // ==========================================
+            // ENCABEZADOS DEL EXCEL (igual que en .NET)
+            // ==========================================
+
+            // Título: TRANSFERENCIA
+            $sheet->setCellValue('A1', 'TRANSFERENCIA');
+            $sheet->mergeCells('A1:G1');
+            $sheet->getStyle('A1')->applyFromArray([
+                'font' => ['bold' => true, 'size' => 16, 'name' => 'Arial'],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+            ]);
+
+            // Subtítulo: ENTRADA DE TRANSFERENCIA
+            $sheet->setCellValue('A2', 'ENTRADA DE TRANSFERENCIA');
+            $sheet->mergeCells('A2:G2');
+            $sheet->getStyle('A2')->applyFromArray([
+                'font' => ['bold' => true, 'size' => 14, 'name' => 'Arial'],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+            ]);
+
+            // Fila 4: Sucursal Origen y Número
+            $sheet->setCellValue('A4', 'Sucursal Origen');
+            $sheet->setCellValue('B4', $sucursalOrigen->Nombre ?? '');
+            $sheet->setCellValue('E4', 'Numero');
+            $sheet->setCellValue('F4', $transferencia->Numero ?? '');
+            $sheet->getStyle('A4:E4')->getFont()->setBold(true);
+
+            // Fila 6: Fecha y Observaciones
+            $sheet->setCellValue('A6', 'Fecha');
+            $sheet->setCellValue('B6', date('d/m/Y', strtotime($transferencia->Fecha)));
+            $sheet->setCellValue('E6', 'Observaciones');
+            $sheet->setCellValue('F6', $transferencia->Observacion ?? '');
+            $sheet->getStyle('A6:E6')->getFont()->setBold(true);
+
+            // Fila 8: Título de la tabla
+            $sheet->setCellValue('A8', 'Productos');
+            $sheet->mergeCells('A8:G8');
+            $sheet->getStyle('A8')->applyFromArray([
+                'font' => ['bold' => true, 'size' => 12, 'name' => 'Arial'],
+            ]);
+
+            // Fila 9: Encabezados de la tabla (SIN IdProducto y SIN Costo)
+            $headers = [
+                'A' => 'Codigo',
+                'B' => 'Referencia',
+                'C' => 'Descripcion',
+                'D' => 'Existencia',
+                'E' => $sucursalDestino->Nombre . ' (' . $sucursalDestino->ID . ')'
+            ];
+
+            foreach ($headers as $col => $header) {
+                $sheet->setCellValue($col . '9', $header);
+            }
+
+            // Estilo de encabezados
+            $sheet->getStyle('A9:E9')->applyFromArray([
+                'font' => ['bold' => true, 'size' => 10, 'name' => 'Arial'],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+                'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'D3D3D3']],
+            ]);
+            $sheet->getRowDimension(9)->setRowHeight(20);
+
+            // ==========================================
+            // DATOS DE PRODUCTOS
+            // ==========================================
+            $fila = 10;
+            foreach ($productos as $producto) {
+                $sheet->setCellValue('A' . $fila, $producto->Codigo ?? '');
+                $sheet->setCellValue('B' . $fila, $producto->Referencia ?? '');
+                $sheet->setCellValue('C' . $fila, $producto->Descripcion ?? '');
+                $sheet->setCellValue('D' . $fila, $producto->Existencia ?? 0);
+                $sheet->setCellValue('E' . $fila, ''); // Columna vacía para que el usuario ingrese la cantidad
+
+                // Bordes
+                // $sheet->getStyle('A' . $fila . ':E' . $fila)->applyFromArray([
+                //     'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
+                // ]);
+
+                // Filas alternadas
+                if ($fila % 2 == 0) {
+                    $sheet->getStyle('A' . $fila . ':E' . $fila)->applyFromArray([
+                        'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F5F5F5']],
+                    ]);
+                }
+
+                $fila++;
+            }
+
+            // ==========================================
+            // CONFIGURAR ANCHOS DE COLUMNA
+            // ==========================================
+            $sheet->getColumnDimension('A')->setWidth(15);
+            $sheet->getColumnDimension('B')->setWidth(20);
+            $sheet->getColumnDimension('C')->setWidth(40);
+            $sheet->getColumnDimension('D')->setWidth(12);
+            $sheet->getColumnDimension('E')->setWidth(30);
+
+            // ==========================================
+            // GENERAR ARCHIVO
+            // ==========================================
+            $writer = new Xlsx($spreadsheet);
+            $fileName = 'EntradaTransferencia_' . $sucursalOrigen->Nombre . '_' . $transferencia->Numero . '.xlsx';
+
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
+
+            return new StreamedResponse(
+                function () use ($writer) {
+                    $writer->save('php://output');
+                },
+                200,
+                [
+                    'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+                    'Cache-Control' => 'no-cache, no-store, must-revalidate',
+                    'Pragma' => 'no-cache',
+                    'Expires' => '0',
+                ]
+            );
+
+        } catch (\Exception $e) {
+            Log::error('❌ Error al descargar plantilla: ' . $e->getMessage());
+            return back()->with('error', 'Error al descargar la plantilla: ' . $e->getMessage());
+        }
+    }
+
+    public function subirPlantillaTransferencia(Request $request, $id)
+    {
+        try {
+            $request->validate([
+                'archivo_excel' => 'required|file|mimes:xlsx,xls|max:5120'
+            ]);
+
+            $file = $request->file('archivo_excel');
+            $transferenciaId = $id;
+
+            // 1. Obtener la transferencia
+            $transferencia = DB::connection('sqlsrv')
+                ->table('TransferenciasTMP')
+                ->where('TransferenciaId', $transferenciaId)
+                ->first();
+
+            if (!$transferencia) {
+                return redirect()->back()->with('error', 'Transferencia no encontrada');
+            }
+
+            // 2. Obtener la sucursal destino
+            $sucursalDestino = DB::connection('sqlsrv')
+                ->table('TransferenciasSucursalesTMP as ts')
+                ->join('Sucursales as s', 'ts.SucursalId', '=', 's.ID')
+                ->where('ts.TransferenciaId', $transferenciaId)
+                ->select('s.ID', 's.Nombre')
+                ->first();
+
+            if (!$sucursalDestino) {
+                return redirect()->back()->with('error', 'Sucursal destino no encontrada');
+            }
+
+            // 3. Leer el archivo Excel
+            $spreadsheet = IOFactory::load($file->getPathname());
+            $sheet = $spreadsheet->getActiveSheet();
+            $rows = $sheet->toArray();
+
+            // 4. Extraer productos y cantidades del Excel
+            $startRow = 9; // Fila 10 (índice 9)
+            $productosCodigos = [];
+            $productosNoEncontrados = [];
+
+            // Mapeo de columnas (A=0, B=1, C=2, D=3, E=4)
+            // A: Codigo, B: Referencia, C: Descripcion, D: Existencia, E: Cantidad
+            for ($i = $startRow; $i < count($rows); $i++) {
+                $row = $rows[$i];
+                
+                // Verificar que la fila tenga datos
+                if (empty($row[0]) && empty($row[1]) && empty($row[2])) {
+                    continue;
+                }
+
+                $codigo = trim($row[0] ?? '');
+                $cantidad = trim($row[4] ?? '');
+
+                // Solo tomar productos con cantidad > 0
+                if (empty($codigo) || empty($cantidad) || !is_numeric($cantidad) || floatval($cantidad) <= 0) {
+                    continue;
+                }
+
+                $productosCodigos[] = [
+                    'codigo' => $codigo,
+                    'cantidad' => floatval($cantidad)
+                ];
+            }
+
+            if (empty($productosCodigos)) {
+                return redirect()->back()->with('error', 'No se encontraron productos con cantidades válidas en el archivo');
+            }
+
+            // 5. Buscar productos por código y preparar detalles
+            $detalles = [];
+            $detallesConCosto = [];
+
+            foreach ($productosCodigos as $item) {
+                // Buscar el producto por código en la sucursal origen
+                $producto = DB::connection('sqlsrv')
+                    ->table('ProductosSucursalView')
+                    ->where('Codigo', $item['codigo'])
+                    ->where('SucursalId', $transferencia->SucursalOrigenId)
+                    ->where('Estatus', 1)
+                    ->select('ID', 'Codigo', 'CostoDivisa', 'Existencia')
+                    ->first();
+
+                if ($producto) {
+                    $detalles[] = [
+                        'producto_id' => $producto->ID,
+                        'sucursal_id' => $sucursalDestino->ID,
+                        'cantidad' => $item['cantidad']
+                    ];
+                    $detallesConCosto[] = [
+                        'producto_id' => $producto->ID,
+                        'cantidad' => $item['cantidad'],
+                        'costo_divisa' => $producto->CostoDivisa ?? 0
+                    ];
+                } else {
+                    $productosNoEncontrados[] = $item['codigo'];
+                }
+            }
+
+            if (empty($detalles)) {
+                $mensaje = 'No se encontraron productos válidos en el archivo.';
+                if (!empty($productosNoEncontrados)) {
+                    $mensaje .= ' Productos no encontrados: ' . implode(', ', array_slice($productosNoEncontrados, 0, 10));
+                    if (count($productosNoEncontrados) > 10) {
+                        $mensaje .= '... y ' . (count($productosNoEncontrados) - 10) . ' más';
+                    }
+                }
+                return redirect()->back()->with('error', $mensaje);
+            }
+
+            // 6. Guardar detalles
+            Log::info('📦 Guardando detalles desde plantilla Excel', [
+                'transferencia_id' => $transferenciaId,
+                'total_detalles' => count($detalles)
+            ]);
+
+            DB::connection('sqlsrv')->beginTransaction();
+
+            $totalEmitidos = 0;
+            $totalItems = 0;
+
+            foreach ($detalles as $detalle) {
+                $productoId = $detalle['producto_id'];
+                $sucursalId = $detalle['sucursal_id'];
+                $cantidad = $detalle['cantidad'];
+
+                // Verificar si el detalle ya existe
+                $detalleExistente = DB::connection('sqlsrv')
+                    ->table('TransferenciaDetallesTMP')
+                    ->where('TransferenciaId', $transferenciaId)
+                    ->where('ProductoId', $productoId)
+                    ->where('SucursalId', $sucursalId)
+                    ->first();
+
+                if ($detalleExistente) {
+                    DB::connection('sqlsrv')
+                        ->table('TransferenciaDetallesTMP')
+                        ->where('TransferenciaDetalleId', $detalleExistente->TransferenciaDetalleId)
+                        ->update([
+                            'CantidadEmitida' => $cantidad,
+                            'CantidadDisponible' => $cantidad
+                        ]);
+                } else {
+                    DB::connection('sqlsrv')
+                        ->table('TransferenciaDetallesTMP')
+                        ->insert([
+                            'TransferenciaId' => $transferenciaId,
+                            'ProductoId' => $productoId,
+                            'SucursalId' => $sucursalId,
+                            'CantidadEmitida' => $cantidad,
+                            'CantidadDisponible' => $cantidad,
+                            'CantidadRecibida' => 0
+                        ]);
+                }
+
+                $totalEmitidos += $cantidad;
+                $totalItems++;
+            }
+
+            // Actualizar estatus de la transferencia
+            DB::connection('sqlsrv')
+                ->table('TransferenciasTMP')
+                ->where('TransferenciaId', $transferenciaId)
+                ->update([
+                    'Estatus' => 2 // EnEdicion
+                ]);
+
+            DB::connection('sqlsrv')->commit();
+
+            // ✅ 7. Calcular totales después de guardar
+            $totales = DB::connection('sqlsrv')
+                ->table('TransferenciaTMPTotalizadaView')
+                ->where('TransferenciaId', $transferenciaId)
+                ->select([
+                    'CantidadEmitida',
+                    'CantidadRecibida',
+                    'CantidadDisponible',
+                    'CantidadItems'
+                ])
+                ->first();
+
+            // ✅ Calcular CostoDivisaTotal
+            $costoDivisaTotal = 0;
+            foreach ($detallesConCosto as $detalle) {
+                $costoDivisaTotal += $detalle['cantidad'] * $detalle['costo_divisa'];
+            }
+
+            Log::info('✅ Detalles guardados desde plantilla Excel', [
+                'transferencia_id' => $transferenciaId,
+                'total_emitidos' => $totalEmitidos,
+                'total_items' => $totalItems,
+                'costo_divisa_total' => $costoDivisaTotal
+            ]);
+
+            // ✅ 8. Guardar totales en sesión para mostrarlos al recargar
+            session()->put('totales_actualizados', [
+                'CantidadItems' => (int) ($totales->CantidadItems ?? 0),
+                'CantidadEmitida' => (int) ($totales->CantidadEmitida ?? 0),
+                'CostoDivisaTotal' => $costoDivisaTotal
+            ]);
+
+            // 9. Construir mensaje de éxito
+            $mensaje = "✅ Plantilla procesada correctamente. ";
+            $mensaje .= "Se procesaron {$totalItems} productos. ";
+            $mensaje .= "Total de unidades: {$totalEmitidos}. ";
+            $mensaje .= "Total Costo Divisa: $" . number_format($costoDivisaTotal, 2);
+
+            if (!empty($productosNoEncontrados)) {
+                $mostrar = array_slice($productosNoEncontrados, 0, 10);
+                $mensaje .= " ⚠️ Productos no encontrados: " . implode(', ', $mostrar);
+                if (count($productosNoEncontrados) > 10) {
+                    $mensaje .= '... y ' . (count($productosNoEncontrados) - 10) . ' más';
+                }
+            }
+
+            return redirect()->back()->with([
+                'success' => $mensaje,
+                'totales_actualizados' => session('totales_actualizados')
+            ]);
+
+        } catch (\Exception $e) {
+            DB::connection('sqlsrv')->rollBack();
+            Log::error('❌ Error al subir plantilla: ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
+            
+            return redirect()->back()->with('error', 'Error al procesar el archivo: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Guarda una nueva transferencia
+     */
+    public function transferencia_guardar(Request $request)
+    {
+        try {
+            // Validar datos
+            $request->validate([
+                'sucursal_origen' => 'required|integer',
+                'sucursales_destino' => 'required|array|min:1',
+                'sucursales_destino.*' => 'integer|different:sucursal_origen',
+                'fecha' => 'required|date',
+                'productos' => 'required|array|min:1',
+                'productos.*.id' => 'required|integer',
+                'productos.*.cantidad' => 'required|numeric|min:0.01',
+                'productos.*.disponible' => 'required|numeric|min:0'
+            ]);
+
+            DB::connection('sqlsrv')->beginTransaction();
+
+            // 1. Crear la transferencia (cabecera)
+            $transferenciaId = DB::connection('sqlsrv')
+                ->table('Transferencias')
+                ->insertGetId([
+                    'Numero' => $this->generarNumeroTransferencia(),
+                    'Fecha' => $request->fecha,
+                    'SucursalOrigenId' => $request->sucursal_origen,
+                    'Estatus' => 2, // EnEdición
+                    'Tipo' => 1, // Transferencia
+                    'CantidadEmitida' => 0,
+                    'CantidadDisponible' => 0,
+                    'CantidadRecibida' => 0,
+                    'CantidadItems' => count($request->productos),
+                    'UsuarioCreaId' => auth()->id(),
+                    'FechaCreacion' => now()
+                ]);
+
+            // 2. Guardar sucursales destino
+            foreach ($request->sucursales_destino as $sucursalDestinoId) {
+                DB::connection('sqlsrv')
+                    ->table('TransferenciasSucursales')
+                    ->insert([
+                        'TransferenciaId' => $transferenciaId,
+                        'SucursalId' => $sucursalDestinoId
+                    ]);
+            }
+
+            // 3. Guardar detalles de productos
+            $totalEmitidos = 0;
+            $totalDisponibles = 0;
+
+            foreach ($request->productos as $producto) {
+                $cantidad = $producto['cantidad'];
+                $disponible = $producto['disponible'] ?? 0;
+                
+                DB::connection('sqlsrv')
+                    ->table('TransferenciasSucursalesDetalles')
+                    ->insert([
+                        'TransferenciaId' => $transferenciaId,
+                        'ProductoId' => $producto['id'],
+                        'Cantidad' => $cantidad,
+                        'Disponible' => $disponible,
+                        'Recibido' => 0
+                    ]);
+
+                $totalEmitidos += $cantidad;
+                $totalDisponibles += $disponible;
+            }
+
+            // 4. Actualizar totales en la cabecera
+            DB::connection('sqlsrv')
+                ->table('Transferencias')
+                ->where('ID', $transferenciaId)
+                ->update([
+                    'CantidadEmitida' => $totalEmitidos,
+                    'CantidadDisponible' => $totalDisponibles,
+                    'CantidadItems' => count($request->productos)
+                ]);
+
+            DB::connection('sqlsrv')->commit();
+
+            Log::info('Transferencia creada', [
+                'transferencia_id' => $transferenciaId,
+                'usuario' => auth()->id()
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Transferencia creada correctamente',
+                'transferencia_id' => $transferenciaId
+            ]);
+
+        } catch (\Exception $e) {
+            DB::connection('sqlsrv')->rollBack();
+            Log::error('Error al crear transferencia: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al crear la transferencia: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function transferencia_finalizar(Request $request, $id)
+    {
+        try {
+            $transferenciaId = $id;
+
+            Log::info('🏁 Iniciando finalización de transferencia', [
+                'transferencia_id' => $transferenciaId,
+                'usuario' => auth()->id()
+            ]);
+
+            // 1. Obtener la transferencia de la sesión (si existe)
+            // En Laravel no usamos sesión para esto, usamos la base de datos
+            $transferencia = DB::connection('sqlsrv')
+                ->table('TransferenciasTMP')
+                ->where('TransferenciaId', $transferenciaId)
+                ->first();
+
+            // 2. Validar que la transferencia existe (equivalente a _transferenciaDTO == null)
+            if (!$transferencia) {
+                Log::warning('⚠️ Transferencia no encontrada', [
+                    'transferencia_id' => $transferenciaId
+                ]);
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se encuentra disponible la transferencia que desea finalizar, por favor intente de nuevo'
+                ], 404);
+            }
+
+            // 3. Validar que tenga ID (equivalente a _transferenciaDTO.TransferenciaId > 0)
+            if ($transferencia->TransferenciaId <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'ID de transferencia inválido'
+                ], 400);
+            }
+
+            // 4. Validar que esté en estado "EnEdicion" (2)
+            if ($transferencia->Estatus != 2) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La transferencia no está en estado de edición'
+                ], 400);
+            }
+
+            // 5. Validar que tenga productos
+            $detalles = DB::connection('sqlsrv')
+                ->table('TransferenciaDetallesTMP')
+                ->where('TransferenciaId', $transferenciaId)
+                ->count();
+
+            if ($detalles == 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La transferencia no tiene productos asignados'
+                ], 400);
+            }
+
+            // 6. Llamar al servicio que finaliza (equivalente a _transferenciaService.Finalizar())
+            $resultado = $this->finalizarTransferenciaServicio($transferenciaId);
+
+            if (!$resultado['success']) {
+                Log::error('❌ Error al finalizar transferencia en servicio', [
+                    'transferencia_id' => $transferenciaId,
+                    'error' => $resultado['message']
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se pudo finalizar la transferencia, intente de nuevo: ' . $resultado['message']
+                ], 500);
+            }
+
+            // 7. Obtener sucursales destino para cerrar recepciones
+            // Equivalente a: foreach (item in _transferenciaDTO.ListaSucursalDestino)
+            $sucursalesDestino = DB::connection('sqlsrv')
+                ->table('TransferenciasSucursalesTMP')
+                ->where('TransferenciaId', $transferenciaId)
+                ->pluck('SucursalId')
+                ->toArray();
+
+            // 8. Cerrar recepciones para cada sucursal destino
+            // Equivalente a: await _recepcionService.CerrarRecepciones()
+            foreach ($sucursalesDestino as $sucursalDestinoId) {
+                try {
+                    $this->cerrarRecepciones($transferencia->SucursalOrigenId, $transferencia->Fecha);
+                    Log::info('📦 Recepciones cerradas', [
+                        'sucursal_origen' => $transferencia->SucursalOrigenId,
+                        'sucursal_destino' => $sucursalDestinoId
+                    ]);
+                } catch (\Exception $e) {
+                    Log::warning('⚠️ Error al cerrar recepciones (no crítico): ' . $e->getMessage());
+                    // En .NET, esto no detiene el flujo principal
+                }
+            }
+
+            // // 9. Limpiar sesión (equivalente a HttpContext.Session.SetObject(C.TRANSFERENCIA, null))
+            // session()->forget('transferencia');
+            // session()->forget('productos_plantilla');
+            // session()->forget('transferencia_id_plantilla');
+
+            Log::info('✅ Transferencia finalizada correctamente', [
+                'transferencia_id' => $transferenciaId,
+                'numero' => $transferencia->Numero
+            ]);
+
+            // 10. Redirigir al listado (equivalente a RedirectToAction("DistribucionesSucursales"))
+            return response()->json([
+                'success' => true,
+                'message' => 'La transferencia se finalizó correctamente',
+                'redirect' => route('cpanel.distribucion.transferencia')
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Error al finalizar transferencia: ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al finalizar la transferencia: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    private function finalizarTransferenciaServicio($transferenciaId)
+    {
+        try {
+            DB::connection('sqlsrv')->beginTransaction();
+
+            // 1. Obtener datos
+            $transferenciaTMP = DB::connection('sqlsrv')
+                ->table('TransferenciasTMP')
+                ->where('TransferenciaId', $transferenciaId)
+                ->first();
+
+            if (!$transferenciaTMP) {
+                throw new \Exception('Transferencia temporal no encontrada');
+            }
+
+            $detallesTMP = DB::connection('sqlsrv')
+                ->table('TransferenciaDetallesTMP')
+                ->where('TransferenciaId', $transferenciaId)
+                ->get();
+
+            $sucursalesDestino = DB::connection('sqlsrv')
+                ->table('TransferenciasSucursalesTMP')
+                ->where('TransferenciaId', $transferenciaId)
+                ->get();
+
+            // 2. Crear transferencias definitivas
+            foreach ($sucursalesDestino as $sucDestino) {
+                // Calcular saldo
+                $saldo = 0;
+                foreach ($detallesTMP as $detalle) {
+                    if ($detalle->SucursalId == $sucDestino->SucursalId) {
+                        $producto = DB::connection('sqlsrv')
+                            ->table('ProductosSucursalView')
+                            ->where('ID', $detalle->ProductoId)
+                            ->select('CostoDivisa')
+                            ->first();
+                        $costoDivisa = $producto->CostoDivisa ?? 0;
+                        $saldo += $detalle->CantidadEmitida * $costoDivisa;
+                    }
+                }
+
+                $numeroTransferencia = $transferenciaTMP->Numero . '-' . $sucDestino->SucursalId;
+
+                // Insertar en Transferencias
+                $nuevaTransferenciaId = DB::connection('sqlsrv')
+                    ->table('Transferencias')
+                    ->insertGetId([
+                        'Numero' => $numeroTransferencia,
+                        'Fecha' => $transferenciaTMP->Fecha,
+                        'SucursalOrigenId' => $transferenciaTMP->SucursalOrigenId,
+                        'SucursalDestinoId' => $sucDestino->SucursalId,
+                        'Estatus' => 3,
+                        'Tipo' => 0,
+                        'Observacion' => $transferenciaTMP->Observacion,
+                        'Saldo' => $saldo
+                        // ❌ ELIMINAR: UsuarioCreaId y FechaCreacion (no existen en la tabla)
+                    ]);
+
+                // Insertar detalles
+                foreach ($detallesTMP as $detalle) {
+                    if ($detalle->CantidadEmitida > 0 && $detalle->SucursalId == $sucDestino->SucursalId) {
+                        DB::connection('sqlsrv')
+                            ->table('TransferenciaDetalles')
+                            ->insert([
+                                'TransferenciaId' => $nuevaTransferenciaId,
+                                'ProductoId' => $detalle->ProductoId,
+                                'CantidadEmitida' => $detalle->CantidadEmitida,
+                                'CantidadRecibida' => 0
+                            ]);
+                    }
+                }
+
+                // Insertar relación
+                DB::connection('sqlsrv')
+                    ->table('TransferenciasSucursales')
+                    ->insert([
+                        'TransferenciaId' => $nuevaTransferenciaId,
+                        'SucursalId' => $sucDestino->SucursalId,
+                        'Estatus' => 1
+                    ]);
+            }
+
+            // 3. Actualizar inventario
+            foreach ($detallesTMP as $detalle) {
+                if ($detalle->CantidadEmitida > 0) {
+                    DB::connection('sqlsrv')
+                        ->table('ProductoSucursal')
+                        ->where('ProductoId', $detalle->ProductoId)
+                        ->where('SucursalId', $transferenciaTMP->SucursalOrigenId)
+                        ->decrement('Existencia', $detalle->CantidadEmitida);
+                }
+            }
+
+            // 4. Actualizar estatus de temporales
+            DB::connection('sqlsrv')
+                ->table('TransferenciasTMP')
+                ->where('TransferenciaId', $transferenciaId)
+                ->update(['Estatus' => 3]);
+
+            DB::connection('sqlsrv')
+                ->table('TransferenciasSucursalesTMP')
+                ->where('TransferenciaId', $transferenciaId)
+                ->update(['Estatus' => 3]);
+
+            DB::connection('sqlsrv')->commit();
+
+            return [
+                'success' => true,
+                'message' => 'Transferencia finalizada correctamente'
+            ];
+
+        } catch (\Exception $e) {
+            DB::connection('sqlsrv')->rollBack();
+            return [
+                'success' => false,
+                'message' => $e->getMessage()
+            ];
+        }
+    }
+
+    public function transferencia_eliminar($id)
+    {
+        try {
+            $transferenciaId = $id;
+
+            Log::info('🔒 Cerrando transferencia', [
+                'transferencia_id' => $transferenciaId
+            ]);
+
+            // 1. Verificar que la transferencia existe
+            $transferencia = DB::connection('sqlsrv')
+                ->table('TransferenciasTMP')
+                ->where('TransferenciaId', $transferenciaId)
+                ->first();
+
+            if (!$transferencia) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Transferencia no encontrada'
+                ], 404);
+            }
+
+            // ✅ 2. Validar que esté en estado "Nueva" (1) o "EnEdicion" (2)
+            if (!in_array($transferencia->Estatus, [1, 2])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Solo se pueden cerrar transferencias en estado Nueva (1) o EnEdición (2)'
+                ], 400);
+            }
+
+            // 3. Obtener detalles de la transferencia
+            $detalles = DB::connection('sqlsrv')
+                ->table('TransferenciaDetallesTMP')
+                ->where('TransferenciaId', $transferenciaId)
+                ->get();
+
+            DB::connection('sqlsrv')->beginTransaction();
+
+            // 4. Si hay productos, devolverlos al inventario (solo para estado EnEdicion)
+            if ($transferencia->Estatus == 2 && $detalles->isNotEmpty()) {
+                foreach ($detalles as $detalle) {
+                    if ($detalle->CantidadDisponible > 0) {
+                        DB::connection('sqlsrv')
+                            ->table('ProductoSucursal')
+                            ->where('ProductoId', $detalle->ProductoId)
+                            ->where('SucursalId', $transferencia->SucursalOrigenId)
+                            ->increment('Existencia', $detalle->CantidadDisponible);
+
+                        Log::info('📦 Producto devuelto a inventario', [
+                            'producto_id' => $detalle->ProductoId,
+                            'sucursal_id' => $transferencia->SucursalOrigenId,
+                            'cantidad' => $detalle->CantidadDisponible
+                        ]);
+                    }
+                }
+            } else {
+                Log::info('📋 Transferencia sin productos, solo cambiando estatus', [
+                    'transferencia_id' => $transferenciaId,
+                    'estatus' => $transferencia->Estatus
+                ]);
+            }
+
+            // 5. Cambiar estatus a Procesada (6)
+            DB::connection('sqlsrv')
+                ->table('TransferenciasTMP')
+                ->where('TransferenciaId', $transferenciaId)
+                ->update(['Estatus' => 6]);
+
+            // 6. Si existe en Transferencias, actualizar también
+            $transferenciaDefinitiva = DB::connection('sqlsrv')
+                ->table('Transferencias')
+                ->where('TransferenciaId', $transferenciaId)
+                ->first();
+
+            if ($transferenciaDefinitiva) {
+                DB::connection('sqlsrv')
+                    ->table('Transferencias')
+                    ->where('TransferenciaId', $transferenciaId)
+                    ->update(['Estatus' => 6]);
+            }
+
+            DB::connection('sqlsrv')->commit();
+
+            Log::info('✅ Transferencia cerrada correctamente', [
+                'transferencia_id' => $transferenciaId,
+                'numero' => $transferencia->Numero,
+                'estatus_anterior' => $transferencia->Estatus,
+                'productos_devueltos' => $detalles->count()
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Transferencia cerrada correctamente',
+                'redirect' => route('cpanel.distribucion.transferencia')
+            ]);
+
+        } catch (\Exception $e) {
+            DB::connection('sqlsrv')->rollBack();
+            Log::error('❌ Error al cerrar transferencia: ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cerrar la transferencia: ' . $e->getMessage()
+            ], 500);
         }
     }
 }

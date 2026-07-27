@@ -27,6 +27,8 @@ use PhpOffice\PhpSpreadsheet\Reader\Xlsx as XlsxReader;
 use PhpOffice\PhpSpreadsheet\Writer\Xls as XlsWriter;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx as XlsxWriter;
 
+use Symfony\Component\HttpFoundation\StreamedResponse;
+
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 // use PhpOffice\PhpSpreadsheet\Writer\Xls;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
@@ -62,12 +64,17 @@ class InventarioController extends Controller
 
     public function cargarExcel(Request $request)
     {
+        set_time_limit(300);
+
         try {
+
             // 1. Validar archivo y sucursal
             $request->validate([
                 'excel_file' => 'required|file|max:10240',
                 'sucursal_id' => 'required|integer|min:1'
             ]);
+
+            $productosIngresados = 0;
 
             $file = $request->file('excel_file');
             $sucursalId = $request->input('sucursal_id');
@@ -173,217 +180,437 @@ class InventarioController extends Controller
                 $colDescripcion = 3;
             }
 
-            // La cantidad está en la columna P (índice 15)
             $colExistencia = 15;
 
-            // 6. Procesar datos
-            $productos = [];
-            $noEncontrados = [];
-            $actualizados = 0;
-            $totalFilas = 0;
-            $errores = [];
-            
-            // ✅ Array para almacenar productos problemáticos (auditoría)
-            $productosAuditoria = [];
-            $auditoriaId = null;
-            $numeroAuditoria = null;
+            // ============================================================
+            // 6. INICIAR TRANSACCIÓN
+            // ============================================================
+            DB::connection('sqlsrv')->beginTransaction();
 
-            for ($i = $dataStartRowIndex; $i < count($rows); $i++) {
-                $row = $rows[$i];
-                
-                if (empty(array_filter($row))) {
-                    continue;
-                }
+            try {
+                // 6.1 Obtener TODOS los productos de la sucursal en una sola consulta
+                $productosSucursal = DB::connection('sqlsrv')
+                    ->table('ProductoSucursal')
+                    ->where('SucursalId', $sucursalId)
+                    // ->where('Estatus', 1)
+                    ->get()
+                    ->keyBy('ProductoId');
 
-                $codigo = trim($row[$colCodigo] ?? '');
-                $referencia = isset($row[$colReferencia]) ? trim($row[$colReferencia]) : '';
-                
-                // ✅ Caso: Sin Código ni Referencia
-                if (empty($codigo) && empty($referencia)) {
-                    $descripcion = isset($row[$colDescripcion]) ? trim($row[$colDescripcion]) : '';
-                    $existencia = isset($row[$colExistencia]) ? (int) trim($row[$colExistencia]) : 0;
+                // 6.2 Obtener TODOS los productos de la base de datos en una sola consulta
+                $todosProductos = DB::connection('sqlsrv')
+                    ->table('Productos')
+                    ->where('Estatus', 1)
+                    ->get()
+                    ->keyBy('Codigo');
+
+                // ============================================================
+                // 6.3 LOG DE DEPURACIÓN: VERIFICAR ESTRUCTURA DEL EXCEL
+                // ============================================================
+                $primerosRegistros = [];
+                for ($i = $dataStartRowIndex; $i < min($dataStartRowIndex + 10, count($rows)); $i++) {
+                    $row = $rows[$i];
+                    if (empty(array_filter($row))) continue;
                     
-                    $productosAuditoria[] = [
-                        'sucursal_id' => $sucursalId,
-                        'producto_id' => null,
-                        'codigo' => null,
-                        'referencia' => null,
-                        'descripcion' => $descripcion ?: 'Sin código ni referencia',
-                        'cantidad' => $existencia < 0 ? 0 : $existencia,
-                        'existencia_anterior' => null,
-                        'motivo' => 'Producto sin código ni referencia'
-                    ];
-                    continue;
+                    $codigo = trim($row[$colCodigo] ?? '');
+                    $referencia = isset($row[$colReferencia]) ? trim($row[$colReferencia]) : '';
+                    $descripcion = isset($row[$colDescripcion]) ? trim($row[$colDescripcion]) : '';
+                    $existencia = isset($row[$colExistencia]) ? trim($row[$colExistencia]) : '';
+                    
+                    if (!empty($codigo) || !empty($referencia)) {
+                        $primerosRegistros[] = [
+                            'fila' => $i + 1,
+                            'codigo' => $codigo,
+                            'referencia' => $referencia,
+                            'descripcion' => $descripcion,
+                            'cantidad' => $existencia
+                        ];
+                    }
                 }
 
-                $totalFilas++;
+                // 6.4 Procesar datos
+                $productos = [];
+                $noEncontrados = [];
+                $actualizados = 0;
+                $totalFilas = 0;
+                $errores = [];
+                $productosAuditoria = [];
+                $batchUpdates = [];
 
-                // Obtener existencia
-                $existenciaRaw = isset($row[$colExistencia]) ? trim($row[$colExistencia]) : '';
-                $existencia = str_replace(',', '', $existenciaRaw);
-                $existencia = str_replace(' ', '', $existencia);
+                // Contadores para depuración
+                $codigosProcesados = [];
+                $productosEncontrados = 0;
+                $productosNoEncontrados = 0;
+                $productosNoEnSucursal = 0;
 
-                if (!is_numeric($existencia)) {
-                    $errores[] = "Fila " . ($i + 1) . ": Existencia inválida para producto " . ($codigo ?: $referencia);
-                    continue;
-                }
+                $startTime = microtime(true);
 
-                if ($existencia < 0) {
-                    $existencia = 0;
-                }
+                for ($i = $dataStartRowIndex; $i < count($rows); $i++) {
+                    $row = $rows[$i];
+                    
+                    if (empty(array_filter($row))) {
+                        continue;
+                    }
 
-                // ============================================================
-                // ✅ BUSCAR PRODUCTO
-                // ============================================================
-                $producto = null;
-
-                // 1. BUSCAR POR CÓDIGO (prioridad absoluta)
-                if (!empty($codigo)) {
-                    $producto = DB::connection('sqlsrv')
-                        ->table('Productos')
-                        ->where('Codigo', $codigo)
-                        ->first();
-                }
-
-                // 2. SOLO si NO hay código, buscar por referencia
-                if (!$producto && empty($codigo) && !empty($referencia)) {
-                    $productosPorReferencia = DB::connection('sqlsrv')
-                        ->table('Productos')
-                        ->where('Referencia', $referencia)
-                        ->where('Estatus', 1)
-                        ->get();
-
-                    if ($productosPorReferencia->count() === 1) {
-                        $producto = $productosPorReferencia->first();
-                    } elseif ($productosPorReferencia->count() > 1) {
-                        $productoIds = $productosPorReferencia->pluck('ID')->toArray();
+                    $codigo = trim($row[$colCodigo] ?? '');
+                    $referencia = isset($row[$colReferencia]) ? trim($row[$colReferencia]) : '';
+                    $descripcion = isset($row[$colDescripcion]) ? trim($row[$colDescripcion]) : '';
+                    
+                    // ============================================================
+                    // ✅ FILTRAR FILAS NO VÁLIDAS
+                    // ============================================================
+                    
+                    // 1. Saltar filas con "Total Registros" en cualquier columna
+                    $esFilaTotal = false;
+                    foreach ($row as $celda) {
+                        if (is_string($celda) && stripos($celda, 'total registros') !== false) {
+                            $esFilaTotal = true;
+                            break;
+                        }
+                    }
+                    if ($esFilaTotal) {
+                        continue;
+                    }
+                    
+                    // 2. Saltar filas con solo números sueltos (sin letras)
+                    if (!empty($codigo) && is_numeric($codigo) && !preg_match('/[A-Za-z]/', $codigo)) {
+                        continue;
+                    }
+                    
+                    // 3. Saltar filas con solo guiones bajos en descripción
+                    if (trim($descripcion) === '_________________') {
+                        continue;
+                    }
+                    
+                    // 4. Saltar si no hay código, referencia ni descripción
+                    if (empty($codigo) && empty($referencia) && empty($descripcion)) {
+                        continue;
+                    }
+                    
+                    // 5. Saltar si el código es solo número sin letras y no hay referencia
+                    if (!empty($codigo) && !preg_match('/[A-Za-z]/', $codigo) && empty($referencia)) {
+                        continue;
+                    }
+                    
+                    // 6. Si la descripción es un número suelto (total de filas)
+                    if (!empty($descripcion) && is_numeric(trim($descripcion)) && empty($codigo) && empty($referencia)) {
+                        continue;
+                    }
+                    
+                    // ============================================================
+                    // Caso: Sin Código ni Referencia (pero con descripción válida)
+                    // ============================================================
+                    if (empty($codigo) && empty($referencia) && !empty($descripcion)) {
+                        // Verificar que la descripción no sea un número o un total
+                        if (is_numeric(trim($descripcion)) || stripos($descripcion, 'total') !== false) {
+                            continue;
+                        }
                         
-                        $productosEnSucursal = DB::connection('sqlsrv')
-                            ->table('ProductoSucursal')
-                            ->whereIn('ProductoId', $productoIds)
-                            ->where('SucursalId', $sucursalId)
-                            ->get()
-                            ->keyBy('ProductoId');
+                        $existencia = isset($row[$colExistencia]) ? (int) trim($row[$colExistencia]) : 0;
+                        
+                        $productosAuditoria[] = [
+                            'sucursal_id' => $sucursalId,
+                            'producto_id' => null,
+                            'codigo' => null,
+                            'referencia' => null,
+                            'descripcion' => $descripcion ?: 'Sin código ni referencia',
+                            'cantidad' => $existencia < 0 ? 0 : $existencia,
+                            'existencia_anterior' => null,
+                            'motivo' => 'Producto sin código ni referencia'
+                        ];
+                        continue;
+                    }
+                    
+                    // Caso: Sin Código ni Referencia (sin descripción válida)
+                    if (empty($codigo) && empty($referencia)) {
+                        continue;
+                    }
 
-                        if ($productosEnSucursal->count() === 1) {
-                            $productoId = $productosEnSucursal->keys()->first();
-                            $producto = $productosPorReferencia->firstWhere('ID', $productoId);
-                        } elseif ($productosEnSucursal->count() > 1) {
-                            $codigos = $productosPorReferencia
-                                ->filter(function($p) use ($productosEnSucursal) {
-                                    return $productosEnSucursal->has($p->ID);
-                                })
-                                ->pluck('Codigo')
-                                ->filter()
-                                ->toArray();
-                            
-                            $descripcion = isset($row[$colDescripcion]) ? trim($row[$colDescripcion]) : 'Referencia duplicada';
-                            
-                            foreach ($productosEnSucursal as $productoEnSucursal) {
-                                $producto = $productosPorReferencia->firstWhere('ID', $productoEnSucursal->ProductoId);
+                    $totalFilas++;
+
+                    // Guardar código para depuración
+                    if (!empty($codigo)) {
+                        $codigosProcesados[] = $codigo;
+                    }
+
+                    // Obtener existencia
+                    $existenciaRaw = isset($row[$colExistencia]) ? trim($row[$colExistencia]) : '';
+                    $existencia = str_replace(',', '', $existenciaRaw);
+                    $existencia = str_replace(' ', '', $existencia);
+
+                    // Validar existencia
+                    if ($existencia === '' || $existencia === null) {
+                        $existencia = 0;
+                    }
+
+                    if (!is_numeric($existencia)) {
+                        $errores[] = "Fila " . ($i + 1) . ": Existencia inválida para producto " . ($codigo ?: $referencia);
+                        continue;
+                    }
+
+                    if ($existencia < 0) {
+                        $existencia = 0;
+                    }
+
+                    // ============================================================
+                    // BUSCAR PRODUCTO (en memoria, no en BD)
+                    // ============================================================
+                    $producto = null;
+
+                    // 1. BUSCAR POR CÓDIGO
+                    if (!empty($codigo)) {
+                        $producto = $todosProductos->get($codigo);
+                        if ($producto) {
+                            $productosEncontrados++;
+                        } else {
+                            $productosNoEncontrados++;
+                        }
+                    }
+
+                    // 2. SOLO si NO hay código, buscar por referencia
+                    if (!$producto && empty($codigo) && !empty($referencia)) {
+                        // Buscar en la colección en memoria
+                        $productosPorReferencia = $todosProductos->filter(function($p) use ($referencia) {
+                            return $p->Referencia == $referencia;
+                        });
+
+                        if ($productosPorReferencia->count() === 1) {
+                            $producto = $productosPorReferencia->first();
+                            $productosEncontrados++;
+                        } elseif ($productosPorReferencia->count() > 1) {
+                            // Verificar cuáles existen en la sucursal
+                            $productosEnSucursal = $productosPorReferencia->filter(function($p) use ($productosSucursal) {
+                                return $productosSucursal->has($p->ID);
+                            });
+
+                            if ($productosEnSucursal->count() === 1) {
+                                $producto = $productosEnSucursal->first();
+                                $productosEncontrados++;
+                            } elseif ($productosEnSucursal->count() > 1) {
+                                $codigos = $productosEnSucursal->pluck('Codigo')->filter()->toArray();
+                                $descripcion = isset($row[$colDescripcion]) ? trim($row[$colDescripcion]) : 'Referencia duplicada';
                                 
-                                if ($producto) {
+                                foreach ($productosEnSucursal as $p) {
                                     $productosAuditoria[] = [
                                         'sucursal_id' => $sucursalId,
-                                        'producto_id' => $producto->ID,
-                                        'codigo' => $producto->Codigo ?? '',
+                                        'producto_id' => $p->ID,
+                                        'codigo' => $p->Codigo ?? '',
                                         'referencia' => $referencia,
                                         'descripcion' => $descripcion,
                                         'cantidad' => (int) $existencia,
-                                        'existencia_anterior' => $productoEnSucursal->Existencia ?? 0,
+                                        'existencia_anterior' => $productosSucursal->get($p->ID)->Existencia ?? 0,
                                         'motivo' => "Referencia duplicada - Seleccione este producto para actualizar"
                                     ];
                                 }
+                                continue;
+                            } else {
+                                $codigos = $productosPorReferencia->pluck('Codigo')->filter()->implode(', ');
+                                $errores[] = "Fila " . ($i + 1) . ": Ningún producto con referencia '$referencia' existe en la sucursal seleccionada. Productos disponibles: " . $codigos;
+                                continue;
                             }
-                            continue;
-                        } else {
-                            $codigos = $productosPorReferencia->pluck('Codigo')->filter()->implode(', ');
-                            $descripcion = isset($row[$colDescripcion]) ? trim($row[$colDescripcion]) : '';
+                        }
+                    }
+
+                    if (!$producto) {
+                        $noEncontrados[] = $codigo ?: $referencia;
+                        continue;
+                    }
+
+                    // Guardar para el inventario teórico
+                    $productoData = [
+                        'codigo' => $producto->Codigo ?? '',
+                        'referencia' => $producto->Referencia ?? '',
+                        'existencia' => (int) $existencia,
+                        'producto_id' => $producto->ID
+                    ];
+
+                    if ($colDescripcion !== null && isset($row[$colDescripcion])) {
+                        $productoData['descripcion'] = trim($row[$colDescripcion]);
+                    }
+
+                    $productos[] = $productoData;
+
+                    // ✅ Verificar si existe en ProductoSucursal (en memoria)
+                    if ($productosSucursal->has($producto->ID)) {
+                        // Agregar a batch para actualización
+                        $batchUpdates[] = [
+                            'ProductoId' => $producto->ID,
+                            'Existencia' => (int) $existencia
+                        ];
+                        $actualizados++;
+                    } else {
+                        // ✅ El producto no existe en la sucursal, buscar para clonar
+                        \Log::info('📋 Buscando producto para clonar en sucursal: ' . $sucursalId . ' - Producto: ' . $producto->Codigo);
+                        
+                        // Buscar el producto en otras sucursales, ordenado por PvpDivisa DESC (el más alto primero)
+                        $productosExistentes = DB::connection('sqlsrv')
+                            ->table('ProductoSucursal')
+                            ->where('ProductoId', $producto->ID)
+                            ->where('Estatus', 1)
+                            ->orderBy('PvpDivisa', 'desc')  // ✅ El más alto primero
+                            ->get();
+                        
+                        $productoClonar = null;
+                        $pvpDivisa = 0;
+                        $pvpBs = 0;
+                        
+                        if ($productosExistentes->isNotEmpty()) {
+                            // ✅ Tomar el primero (el que tiene PvpDivisa más alto)
+                            $productoClonar = $productosExistentes->first();
+                            $pvpDivisa = $productoClonar->PvpDivisa ?? 0;
+                            $pvpBs = $productoClonar->PvpBs ?? 0;
                             
-                            // ❌ Ningún producto de esta referencia existe en la sucursal
-                            // NO se crea auditoría, solo se agrega error
-                            $errores[] = "Fila " . ($i + 1) . ": Ningún producto con referencia '$referencia' existe en la sucursal seleccionada. Productos disponibles: " . $codigos;
-                            continue;
+                            \Log::info('✅ Producto encontrado con PvpDivisa: ' . $pvpDivisa . ' (Sucursal: ' . $productoClonar->SucursalId . ' - PvpBs: ' . $pvpBs . ')');
+                        }
+                        
+                        if ($productoClonar) {
+
+                            // ✅ Clonar el producto con los valores obtenidos
+                            DB::connection('sqlsrv')
+                                ->table('ProductoSucursal')
+                                ->insert([
+                                    'SucursalId' => $sucursalId,
+                                    'ProductoId' => $producto->ID,
+                                    'PvpBs' => $pvpBs,
+                                    'PvpDivisa' => $pvpDivisa,
+                                    'Estatus' => 1,
+                                    'Existencia' => (int) $existencia,
+                                    'FechaIngreso' => $productoClonar->FechaIngreso ?? now(),
+                                    'FechaUltimaVenta' => null,
+                                    'Sobreventa' => null,
+                                    'NuevoPvp' => 0.00,
+                                    'FechaNuevoPrecio' => null,
+                                    'Tipo' => null,
+                                    'PvpAnterior' => 0.00,
+                                    'FechaBajaPrecio' => null,
+                                    'FechaSubePrecio' => null
+                                ]);
+                            $actualizados++;
+                            $productosIngresados++;
+                            \Log::info('✅ Producto clonado en sucursal: ' . $sucursalId . ' - Producto: ' . $producto->Codigo . ' - PvpDivisa: ' . $pvpDivisa . ' - PvpBs: ' . $pvpBs);
+                        } else {
+                            // ❌ No se encontró el producto en ninguna sucursal, crear desde cero
+                            \Log::warning('⚠️ Producto no encontrado en ninguna sucursal, creando desde cero: ' . $producto->Codigo);
+                            DB::connection('sqlsrv')
+                                ->table('ProductoSucursal')
+                                ->insert([
+                                    'SucursalId' => $sucursalId,
+                                    'ProductoId' => $producto->ID,
+                                    'PvpBs' => 0.00,
+                                    'PvpDivisa' => 0.00,
+                                    'Estatus' => 1,
+                                    'Existencia' => (int) $existencia,
+                                    'FechaIngreso' => now(),
+                                    'FechaUltimaVenta' => null,
+                                    'Sobreventa' => null,
+                                    'NuevoPvp' => 0.00,
+                                    'FechaNuevoPrecio' => null,
+                                    'Tipo' => null,
+                                    'PvpAnterior' => 0.00,
+                                    'FechaBajaPrecio' => null,
+                                    'FechaSubePrecio' => null
+                                ]);
+                            $actualizados++;
+                            \Log::info('✅ Producto creado desde cero en sucursal: ' . $sucursalId . ' - Producto: ' . $producto->Codigo);
                         }
                     }
                 }
 
-                if (!$producto) {
-                    $noEncontrados[] = $codigo ?: $referencia;
-                    continue;
+                // ============================================================
+                // 6.6 EJECUTAR ACTUALIZACIONES EN BATCH
+                // ============================================================
+                if (!empty($batchUpdates)) {
+                    \Log::info('📝 Actualizando ' . count($batchUpdates) . ' productos en batch real');
+
+                    // Procesamos en chunks para no exceder el límite de parámetros de SQL Server (~2100)
+                    $chunks = array_chunk($batchUpdates, 500);
+
+                    foreach ($chunks as $chunk) {
+                        // Case para Existencia
+                        $caseSql = "CASE ProductoId ";
+                        $caseBindings = [];
+
+                        foreach ($chunk as $u) {
+                            $caseSql .= "WHEN ? THEN ? ";
+                            $caseBindings[] = $u['ProductoId'];
+                            $caseBindings[] = $u['Existencia'];
+                        }
+                        $caseSql .= "END";
+
+                        // ✅ Case para Estatus (siempre 1)
+                        $caseEstatusSql = "CASE ProductoId ";
+                        foreach ($chunk as $u) {
+                            $caseEstatusSql .= "WHEN ? THEN 1 ";
+                            $caseBindings[] = $u['ProductoId'];
+                        }
+                        $caseEstatusSql .= "END";
+
+                        $ids = array_column($chunk, 'ProductoId');
+                        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+                        $sql = "UPDATE ProductoSucursal
+                                SET Existencia = $caseSql,
+                                    Estatus = $caseEstatusSql
+                                WHERE SucursalId = ?
+                                AND ProductoId IN ($placeholders)";
+
+                        $bindings = array_merge($caseBindings, [$sucursalId], $ids);
+
+                        DB::connection('sqlsrv')->update($sql, $bindings);
+                    }
+
+                    \Log::info('✅ Actualización batch completada (real, en ' . count($chunks) . ' lotes)');
                 }
 
-                // Guardar para el inventario teórico
-                $productoData = [
-                    'codigo' => $producto->Codigo ?? '',
-                    'referencia' => $producto->Referencia ?? '',
-                    'existencia' => (int) $existencia,
-                    'producto_id' => $producto->ID
-                ];
 
-                if ($colDescripcion !== null && isset($row[$colDescripcion])) {
-                    $productoData['descripcion'] = trim($row[$colDescripcion]);
-                }
+                // ============================================================
+                // 6.7 CREAR AUDITORÍA SI HAY PRODUCTOS PROBLEMÁTICOS
+                // ============================================================
+                if (!empty($productosAuditoria)) {
+                    $numeroAuditoria = 'AUD' . date('YmdHi') . '-' . str_pad(rand(0, 9999), 4, '0', STR_PAD_LEFT);
 
-                $productos[] = $productoData;
-
-                // ✅ Actualizar ProductoSucursal (SOLO si existe)
-                $productoSucursal = DB::connection('sqlsrv')
-                    ->table('ProductoSucursal')
-                    ->where('ProductoId', $producto->ID)
-                    ->where('SucursalId', $sucursalId)
-                    ->first();
-
-                if ($productoSucursal) {
-                    DB::connection('sqlsrv')
-                        ->table('ProductoSucursal')
-                        ->where('ProductoId', $producto->ID)
-                        ->where('SucursalId', $sucursalId)
-                        ->update([
-                            'Existencia' => (int) $existencia
-                        ]);
-                    $actualizados++;
-                } else {
-                    // ❌ Producto no existe en la sucursal - NO se registra en auditoría
-                    // Solo se agrega un error para informar al usuario
-                    $errores[] = "Fila " . ($i + 1) . ": Producto " . ($codigo ?: $referencia) . " no existe en la sucursal seleccionada. No se puede actualizar.";
-                }
-            }
-
-            // ============================================================
-            // ✅ CREAR AUDITORÍA SOLO SI HAY PRODUCTOS PROBLEMÁTICOS
-            // ============================================================
-            if (!empty($productosAuditoria)) {
-
-                $numeroAuditoria = 'AUD' . date('YmdHi') . '-' . str_pad(rand(0, 9999), 4, '0', STR_PAD_LEFT);
-
-                $auditoriaId = DB::connection('sqlsrv')
-                    ->table('AuditoriaInventario')
-                    ->insertGetId([
-                        'SucursalId' => $sucursalId,
-                        'Fecha' => now(),
-                        'Numero' => $numeroAuditoria,
-                        'Estatus' => 1
-                    ]);
-
-                foreach ($productosAuditoria as $detalle) {
-                    DB::connection('sqlsrv')
-                        ->table('AuditoriaInventarioDetalles')
-                        ->insert([
-                            'AuditoriaInventarioId' => $auditoriaId,
-                            'SucursalId' => $detalle['sucursal_id'],
-                            'ProductoId' => $detalle['producto_id'],
-                            'Codigo' => $detalle['codigo'],
-                            'Referencia' => $detalle['referencia'],
-                            'Descripcion' => $detalle['descripcion'],
-                            'Cantidad' => $detalle['cantidad'],
-                            'ExistenciaAnterior' => $detalle['existencia_anterior'],
+                    $auditoriaId = DB::connection('sqlsrv')
+                        ->table('AuditoriaInventario')
+                        ->insertGetId([
+                            'SucursalId' => $sucursalId,
+                            'Fecha' => now(),
+                            'Numero' => $numeroAuditoria,
                             'Estatus' => 1
                         ]);
+
+                    foreach ($productosAuditoria as $detalle) {
+                        DB::connection('sqlsrv')
+                            ->table('AuditoriaInventarioDetalles')
+                            ->insert([
+                                'AuditoriaInventarioId' => $auditoriaId,
+                                'SucursalId' => $detalle['sucursal_id'],
+                                'ProductoId' => $detalle['producto_id'],
+                                'Codigo' => $detalle['codigo'],
+                                'Referencia' => $detalle['referencia'],
+                                'Descripcion' => $detalle['descripcion'],
+                                'Cantidad' => $detalle['cantidad'],
+                                'ExistenciaAnterior' => $detalle['existencia_anterior'],
+                                'Estatus' => 1
+                            ]);
+                    }
+
                 }
+
+                // ============================================================
+                // 6.8 COMMIT DE LA TRANSACCIÓN
+                // ============================================================
+                DB::connection('sqlsrv')->commit();
+
+                $endTime = microtime(true);
+
+            } catch (\Exception $e) {
+                DB::connection('sqlsrv')->rollBack();
+                \Log::error('❌ Error en transacción, rollback realizado: ' . $e->getMessage());
+                throw $e;
             }
 
-            // Construir mensaje
+            // ============================================================
+            // 7. CONSTRUIR MENSAJE DE RESPUESTA
+            // ============================================================
             $mensaje = "✅ Inventario actualizado: {$actualizados} productos.";
 
             if (!empty($productosAuditoria)) {
@@ -401,7 +628,7 @@ class InventarioController extends Controller
             if (!empty($errores)) {
                 $mensaje .= " ⚠️ " . count($errores) . " errores: " . implode('; ', array_slice($errores, 0, 5));
                 if (count($errores) > 5) {
-                    $mensaje .= " ... y ' . (count($errores) - 5) . ' más";
+                    $mensaje .= " ... y " . (count($errores) - 5) . " más";
                 }
             }
 
@@ -415,12 +642,11 @@ class InventarioController extends Controller
                 'productos' => $productos,
                 'auditoria_id' => $auditoriaId ?? null,
                 'auditoria_numero' => $numeroAuditoria ?? null,
-                'productos_auditoria' => count($productosAuditoria)
+                'productos_auditoria' => count($productosAuditoria),
+                'productos_ingresados' => $productosIngresados
             ]);
 
         } catch (\Exception $e) {
-            \Log::error('ERROR AL CARGAR INVENTARIO: ' . $e->getMessage());
-            \Log::error('Trace: ' . $e->getTraceAsString());
 
             return response()->json([
                 'success' => false,
@@ -436,7 +662,8 @@ class InventarioController extends Controller
             env('CLOUDCONVERT_API_KEY'),
             env('CLOUDCONVERT_API_KEY_1'),
             env('CLOUDCONVERT_API_KEY_2'),
-            // env('CLOUDCONVERT_API_KEY_3'),
+            env('CLOUDCONVERT_API_KEY_3'),
+            // env('CLOUDCONVERT_API_KEY_4'),
             // Agrega más si es necesario
         ];
         
@@ -852,7 +1079,7 @@ class InventarioController extends Controller
                 return response()->json(['success' => false, 'message' => 'Este producto ya fue procesado']);
             }
 
-            // 3. Si tiene ProductoId, actualizar la existencia
+            // 3. Si tiene ProductoId, actualizar la existencia (SOLO si existe)
             if ($detalle->ProductoId) {
                 // Obtener el ProductoSucursal actual
                 $productoSucursal = DB::connection('sqlsrv')
@@ -862,7 +1089,7 @@ class InventarioController extends Controller
                     ->first();
 
                 if ($productoSucursal) {
-                    // Actualizar existencia
+                    // ✅ Actualizar existencia
                     DB::connection('sqlsrv')
                         ->table('ProductoSucursal')
                         ->where('ProductoId', $detalle->ProductoId)
@@ -877,21 +1104,12 @@ class InventarioController extends Controller
                         'nueva_existencia' => $detalle->Cantidad
                     ]);
                 } else {
-                    // Si no existe en ProductoSucursal, crearlo
-                    DB::connection('sqlsrv')
-                        ->table('ProductoSucursal')
-                        ->insert([
-                            'ProductoId' => $detalle->ProductoId,
-                            'SucursalId' => $detalle->SucursalId,
-                            'Existencia' => $detalle->Cantidad,
-                            'Estatus' => 1
-                        ]);
-
-                    \Log::info('Producto creado en sucursal por auditoría', [
-                        'auditoria_id' => $auditoriaId,
-                        'producto_id' => $detalle->ProductoId,
-                        'existencia' => $detalle->Cantidad
-                    ]);
+                    // ❌ El producto no existe en la sucursal, NO se puede actualizar
+                    DB::connection('sqlsrv')->rollBack();
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'El producto no existe en la sucursal seleccionada. No se puede actualizar.'
+                    ], 400);
                 }
             }
 
@@ -1010,5 +1228,189 @@ class InventarioController extends Controller
                 'message' => 'Error al rechazar el producto: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    public function descargarPlantilla(Request $request)
+    {
+        try {
+            // ✅ Buscar la sucursal de tipo "Almacén" (Tipo = 2)
+            $sucursalAlmacen = DB::connection('sqlsrv')
+                ->table('Sucursales')
+                ->where('Tipo', 2)
+                ->first();
+
+            if (!$sucursalAlmacen) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se encontró la sucursal Almacén'
+                ], 404);
+            }
+
+            // ✅ Obtener productos de la sucursal Almacén con existencia > 0
+            $productos = DB::connection('sqlsrv')
+                ->table('ProductosSucursalView')
+                ->where('SucursalId', $sucursalAlmacen->ID)
+                ->where('Estatus', 1)
+                ->where('Existencia', '>', 0)
+                ->select(['Codigo', 'Descripcion', 'Referencia', 'Existencia'])
+                ->orderBy('Codigo')
+                ->get();
+
+            // ==========================================
+            // CREAR EXCEL
+            // ==========================================
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('Sheet1');
+
+            // 📌 TÍTULO - Fila 1
+            $sheet->setCellValue('A1', 'ALMACEN');
+            $sheet->mergeCells('A1:E1');
+            $sheet->getStyle('A1')->applyFromArray([
+                'font' => ['bold' => true, 'size' => 16, 'name' => 'Arial'],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+            ]);
+            $sheet->getRowDimension(1)->setRowHeight(25);
+
+            // 📌 FECHA Y HORA - Filas 2 y 3
+            $sheet->setCellValue('N2', 'Fecha :');
+            $sheet->setCellValue('S2', date('d/m/Y'));
+            $sheet->setCellValue('N3', 'Hora :');
+            $sheet->setCellValue('S3', date('h:i a'));
+            $sheet->getStyle('N2:N3')->getFont()->setBold(true);
+
+            // 📌 PÁGINA - Fila 5
+            $sheet->setCellValue('N5', 'Pág :');
+            $sheet->setCellValue('S5', '1');
+            $sheet->getStyle('N5')->getFont()->setBold(true);
+
+            // 📌 TÍTULO DEL REPORTE - Fila 8
+            $sheet->setCellValue('A8', 'Inventario fisico');
+            $sheet->mergeCells('A8:E8');
+            $sheet->getStyle('A8')->applyFromArray([
+                'font' => ['bold' => true, 'size' => 14, 'name' => 'Arial'],
+            ]);
+            $sheet->getRowDimension(8)->setRowHeight(25);
+
+            // 📌 ENCABEZADOS - FILA 11
+            $headers = [
+                'A' => 'Código',
+                'C' => 'Referencia',
+                'D' => 'Descripción',
+                'J' => 'Unidad',
+                'M' => 'Existencia',
+                'Q' => 'Existencia Real',
+            ];
+            foreach ($headers as $col => $header) {
+                $sheet->setCellValue($col . '11', $header);
+            }
+
+            // Estilo de encabezados
+            $sheet->getStyle('A11:Q11')->applyFromArray([
+                'font' => ['bold' => true, 'size' => 10, 'name' => 'Arial'],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+                'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'D3D3D3']],
+            ]);
+            $sheet->getRowDimension(11)->setRowHeight(20);
+
+            // 📌 DATOS DE PRODUCTOS - DESDE FILA 12
+            $fila = 12;
+            foreach ($productos as $producto) {
+                $sheet->setCellValue('A' . $fila, $producto->Codigo ?? '');
+                $sheet->setCellValue('C' . $fila, $producto->Referencia ?? '');
+                $sheet->setCellValue('D' . $fila, $producto->Descripcion ?? '');
+                $sheet->setCellValue('J' . $fila, '');  // Unidad vacía
+                $sheet->setCellValue('M' . $fila, '');  // Existencia vacía (para llenar)
+                $sheet->setCellValue('P' . $fila, $producto->Existencia ?? '');
+                $sheet->setCellValue('Q' . $fila, '_________________'); // Existencia Real
+
+                $sheet->getStyle('A' . $fila . ':Q' . $fila)->applyFromArray([
+                    'font' => ['size' => 9, 'name' => 'Arial'],
+                ]);
+
+                $fila++;
+            }
+
+            // // 📌 TOTAL DE REGISTROS
+            // $fila++;
+            // $sheet->setCellValue('O' . $fila, 'Total Registros :');
+            // $sheet->setCellValue('T' . $fila, $productos->count());
+            // $sheet->getStyle('O' . $fila . ':T' . $fila)->applyFromArray([
+            //     'font' => ['bold' => true, 'size' => 10, 'name' => 'Arial'],
+            // ]);
+
+            // 📌 ANCHOS DE COLUMNA
+            $columnWidths = [
+                'A' => 12, 'B' => 2, 'C' => 30, 'D' => 35,
+                'E' => 2, 'F' => 2, 'G' => 2, 'H' => 2,
+                'I' => 2, 'J' => 10, 'K' => 2, 'L' => 2,
+                'M' => 12, 'N' => 2, 'O' => 2, 'P' => 12,
+                'Q' => 18
+            ];
+            foreach ($columnWidths as $col => $width) {
+                $sheet->getColumnDimension($col)->setWidth($width);
+            }
+
+            // 📌 CONGELAR PANELES
+            //$sheet->freezePane('A12');
+
+            // ==========================================
+            // GENERAR ARCHIVO PARA DESCARGA
+            // ==========================================
+            // $writer = new Xlsx($spreadsheet);
+            $writer = new XlsxWriter($spreadsheet);
+            $fileName = 'Inventariofisico_' . date('Ymd_His') . '.xlsx';
+
+            // Limpiar buffer
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
+
+            return new StreamedResponse(
+                function () use ($writer) {
+                    $writer->save('php://output');
+                },
+                200,
+                [
+                    'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'Content-Disposition' => 'attachment; filename=Almacen',
+                    'Cache-Control' => 'no-cache, no-store, must-revalidate',
+                    'Pragma' => 'no-cache',
+                    'Expires' => '0',
+                ]
+            );
+
+        } catch (\Exception $e) {
+            Log::error('❌ Error generando plantilla: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al generar la plantilla: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    
+    private function getProductosPorSucursal($sucursalId, $soloConExistencia = true)
+    {
+        $query = DB::connection('sqlsrv')
+            ->table('ProductosSucursalView')
+            ->where('SucursalId', $sucursalId)
+            ->where('Estatus', 1);  // Activo
+        
+        if ($soloConExistencia) {
+            $query->where('Existencia', '>', 0);
+        }
+        
+        return $query->select([
+                'ID',
+                'Codigo',
+                'Descripcion',
+                'Referencia',
+                'CostoDivisa',
+                'Existencia',
+                'UrlFoto'
+            ])
+            ->orderBy('Codigo')
+            ->get();
     }
 }

@@ -165,7 +165,7 @@ class ContabilidadController extends Controller
             $totalTransferencias = array_sum(array_map(fn($t) => $t['MontoCalculado'], $listadoTransferencias));
             $totalTransferenciasSaldo = array_sum(array_map(fn($t) => $t['Saldo'], $listadoTransferencias));
 
-
+ 
             // 6. Facturas por pagar (solo para oficina)
             $listadoFacturas = [];
             $totalFacturas = 0;
