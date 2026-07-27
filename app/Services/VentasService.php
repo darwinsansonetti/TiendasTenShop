@@ -552,7 +552,8 @@ class VentasService
 
             // ===== 1. Obtener TODAS las transferencias =====
             $query = Transferencia::with('detalles.producto')  // Cargar detalles y productos
-                ->where('SucursalOrigenId', $sucursalId);
+                ->where('SucursalOrigenId', $sucursalId)
+                ->where('Saldo', '>', 0);
 
             if ($fechaFin) {
                 $query->where('Fecha', '>=', $fechaLimite);
