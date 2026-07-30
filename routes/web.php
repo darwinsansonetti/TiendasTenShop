@@ -635,6 +635,14 @@ Route::middleware('auth')->group(function() {
     // 📥 Descargar plantilla
     Route::post('/cpanel/inventario/descargar-plantilla', [InventarioController::class, 'descargarPlantilla'])
         ->name('cpanel.inventario.descargar-plantilla');
+
+    // AI automatico para transferencias
+    Route::get('/cpanel/transferencias/sugerencia/ai', [DistribucionController::class, 'ai_transferencias'])
+        ->name('cpanel.distribucion.ai.transferencias');
+
+    // Descargar Excel con productos y cantidades sugeridas
+    Route::get('/cpanel/distribucion/ai-transferencias/descargar-plantilla', [DistribucionController::class, 'descargarPlantillaIASugerencias'])
+        ->name('cpanel.distribucion.ai-transferencias.descargar-plantilla');
 });
 
 

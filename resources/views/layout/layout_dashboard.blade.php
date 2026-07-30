@@ -623,18 +623,6 @@
                       <i class="nav-icon bi bi-arrow-repeat"></i><p>Indice de Rotación</p>
                     </a>
                   </li>
-                  <li class="nav-item">
-                    <a href="{{ route('cpanel.baja.ventas') }}"
-                       class="nav-link {{ session('submenu_active') == 'Baja Demanda' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-arrow-down-circle"></i><p>Baja Demanda</p>
-                    </a>
-                  </li>
-                  <li class="nav-item">
-                    <a href="{{ route('cpanel.alta.ventas') }}"
-                       class="nav-link {{ session('submenu_active') == 'Alta Demanda' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-arrow-up-circle"></i><p>Alta Demanda</p>
-                    </a>
-                  </li>
                 </ul>
               </li>
 
@@ -783,12 +771,6 @@
                     <a href="{{ route('cpanel.empleados.lista_empleados_prestamos') }}"
                        class="nav-link {{ session('submenu_active') == 'Prestamos' ? 'active' : '' }}">
                       <i class="nav-icon bi bi-cash-coin"></i><p>Prestamos</p>
-                    </a>
-                  </li>
-                  <li class="nav-item">
-                    <a href="{{ route('cpanel.empleados.lista_liberalidad') }}"
-                       class="nav-link {{ session('submenu_active') == 'Liberalidad' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-heart"></i><p>Liberalidad</p>
                     </a>
                   </li>
                 </ul>
@@ -946,6 +928,52 @@
                       <i class="nav-icon bi bi-list-ul"></i><p>Gestión de Precios</p>
                     </a>
                   </li>
+                </ul>
+              </li>
+
+              <!-- ========================================== -->
+              <!-- SECCIÓN: PROCESOS AUTOMATIZADOS -->
+              <!-- ========================================== -->
+              <li class="nav-header">AUTOMATIZACIONES</li>
+
+              <li class="nav-item {{ session('menu_active') == 'Productos' ? 'menu-open' : '' }}">
+                <a href="#" class="nav-link">
+                  <i class="nav-icon bi bi-robot"></i>
+                  <p>IA <i class="nav-arrow bi bi-chevron-right"></i></p>
+                </a>
+                <ul class="nav nav-treeview">
+
+                  
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.empleados.lista_liberalidad') }}"
+                       class="nav-link {{ session('submenu_active') == 'Liberalidad' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-heart"></i><p>Liberalidad</p>
+                    </a>
+                  </li>
+
+                  
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.baja.ventas') }}"
+                       class="nav-link {{ session('submenu_active') == 'Baja Demanda' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-arrow-down-circle"></i><p>Baja Demanda</p>
+                    </a>
+                  </li>
+
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.alta.ventas') }}"
+                       class="nav-link {{ session('submenu_active') == 'Alta Demanda' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-arrow-up-circle"></i><p>Alta Demanda</p>
+                    </a>
+                  </li>
+                  
+                  <li class="nav-item">
+                      <a href="{{ route('cpanel.distribucion.ai.transferencias') }}"
+                        class="nav-link {{ session('submenu_active') == 'IA transferencias' ? 'active' : '' }}">
+                          <i class="nav-icon bi bi-cpu"></i>
+                          <p>Transferencias</p>
+                      </a>
+                  </li>
+
                 </ul>
               </li>
 

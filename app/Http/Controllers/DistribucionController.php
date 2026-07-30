@@ -3764,4 +3764,771 @@ class DistribucionController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Muestra las sugerencias de transferencias (IA)
+     * @param Request $request - Contiene el filtro 'tipo' (ventas|existencia)
+     */
+    public function ai_transferencias(Request $request)
+    {
+        try {
+            session([
+                'menu_active' => 'Distribuciones',
+                'submenu_active' => 'IA transferencias'
+            ]);
+
+            // ✅ Obtener sucursal seleccionada de la sesión
+            $sucursalSeleccionada = session('sucursal_id', 0);
+            $sucursalNombre = session('sucursal_nombre', 'Todas');
+
+            // ✅ Si no hay sucursal seleccionada, mostrar mensaje y no ejecutar algoritmos
+            if ($sucursalSeleccionada <= 0) {
+                $sugerencias = collect([]);
+                $estadisticas = [
+                    'total_sugerencias' => 0,
+                    'productos_unicos' => 0,
+                    'sucursales_origen' => 0,
+                    'sucursales_destino' => 0,
+                    'sucursal_seleccionada' => 'Todas',
+                    'sucursal_seleccionada_id' => 0,
+                    'tipo_sugerencia' => $request->input('tipo', 'ventas'),
+                    'sin_sucursal' => true  // ✅ Indicador para la vista
+                ];
+
+                // Obtener sucursales activas para el selector
+                $sucursales = DB::connection('sqlsrv')
+                    ->table('Sucursales')
+                    ->where('EsActiva', 1)
+                    ->where('ID', '!=', 6)
+                    ->orderBy('Nombre')
+                    ->get();
+
+                return view('cpanel.distribuciones.ai_transferencias', compact(
+                    'sucursales',
+                    'sugerencias',
+                    'estadisticas'
+                ));
+            }
+
+            // ✅ Obtener el tipo de sugerencia (default: ventas)
+            $tipoSugerencia = $request->input('tipo', 'ventas');
+            
+            // ✅ Validar que sea un tipo válido
+            if (!in_array($tipoSugerencia, ['ventas', 'existencia'])) {
+                $tipoSugerencia = 'ventas';
+            }
+
+            // ✅ Obtener sugerencias según el tipo (solo con sucursal seleccionada)
+            if ($tipoSugerencia === 'ventas') {
+                $sugerencias = $this->obtenerSugerenciasTransferenciaOptimizado($sucursalSeleccionada);
+            } else {
+                $sugerencias = $this->obtenerSugerenciasPorExistencia($sucursalSeleccionada);
+            }
+
+            // Obtener sucursales activas para el selector
+            $sucursales = DB::connection('sqlsrv')
+                ->table('Sucursales')
+                ->where('EsActiva', 1)
+                ->where('ID', '!=', 6)
+                ->orderBy('Nombre')
+                ->get();
+
+            // Estadísticas
+            $estadisticas = [
+                'total_sugerencias' => $sugerencias->count(),
+                'productos_unicos' => $sugerencias->pluck('ProductoId')->unique()->count(),
+                'sucursales_origen' => $sugerencias->pluck('SucursalOrigenId')->unique()->count(),
+                'sucursales_destino' => $sugerencias->pluck('SucursalDestinoId')->unique()->count(),
+                'sucursal_seleccionada' => $sucursalNombre,
+                'sucursal_seleccionada_id' => $sucursalSeleccionada,
+                'tipo_sugerencia' => $tipoSugerencia,
+                'sin_sucursal' => false
+            ];
+
+            return view('cpanel.distribuciones.ai_transferencias', compact(
+                'sucursales',
+                'sugerencias',
+                'estadisticas',
+                'tipoSugerencia'
+            ));
+
+        } catch (\Exception $e) {
+            Log::error('Error en ai_transferencias: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar las sugerencias de transferencias: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Obtiene sugerencias de transferencia - NUEVA LÓGICA
+     * Basada en productos más vendidos por sucursal
+     * @param int $sucursalSeleccionada 0 = todas, >0 = solo esa sucursal como destino
+     */
+    private function obtenerSugerenciasTransferenciaOptimizado($sucursalSeleccionada = 0)
+    {
+        try {
+            // 1. Obtener sucursales (excluyendo almacén)
+            $sucursales = DB::connection('sqlsrv')
+                ->table('Sucursales')
+                ->where('EsActiva', 1)
+                ->where('ID', '!=', 6)
+                ->pluck('ID')
+                ->toArray();
+
+            // ✅ Si hay una sucursal seleccionada, solo usarla como destino
+            $sucursalesDestino = [];
+            if ($sucursalSeleccionada > 0) {
+                // Verificar que la sucursal seleccionada esté en la lista de activas
+                if (!in_array($sucursalSeleccionada, $sucursales)) {
+                    Log::warning('Sucursal seleccionada no está activa o es el almacén', [
+                        'sucursal_id' => $sucursalSeleccionada
+                    ]);
+                    return collect([]);
+                }
+                $sucursalesDestino = [$sucursalSeleccionada];
+            } else {
+                $sucursalesDestino = $sucursales;
+            }
+
+            // Las sucursales origen son todas las activas (excluyendo la destino si está seleccionada)
+            $sucursalesOrigen = $sucursales;
+
+            if (count($sucursalesDestino) < 1) {
+                return collect([]);
+            }
+
+            if (count($sucursalesOrigen) < 1) {
+                return collect([]);
+            }
+
+            $sugerencias = collect([]);
+            $fechaInicio = now()->subDays(30);
+
+            // 2. Obtener TOP productos más vendidos por sucursal (destino)
+            $topVentasPorSucursal = DB::connection('sqlsrv')
+                ->table('VentaProductosView')
+                ->whereIn('SucursalId', $sucursalesDestino)
+                ->where('Fecha', '>=', $fechaInicio)
+                ->select([
+                    'SucursalId',
+                    'ProductoId',
+                    DB::raw('SUM(Cantidad) as total_vendido'),
+                    DB::raw('COUNT(DISTINCT VentaId) as numero_ventas'),
+                    DB::raw('MAX(Fecha) as ultima_venta')
+                ])
+                ->groupBy('SucursalId', 'ProductoId')
+                ->havingRaw('SUM(Cantidad) > 0')
+                ->orderByRaw('SUM(Cantidad) DESC')
+                ->get()
+                ->groupBy('SucursalId');
+
+            // 3. Obtener stock actual de todos los productos (EXCLUYENDO SALDO)
+            $stockActual = DB::connection('sqlsrv')
+                ->table('ProductosSucursalView')
+                ->where('Estatus', 1)
+                ->where('Codigo', '!=', 'SALDO')  // ✅ Excluir productos con código SALDO
+                ->whereIn('SucursalId', array_merge($sucursalesOrigen, $sucursalesDestino))
+                ->select([
+                    'ID as ProductoId',
+                    'SucursalId',
+                    'Codigo',
+                    'Descripcion',
+                    'Referencia',
+                    'Existencia',
+                    'CostoDivisa'
+                ])
+                ->get()
+                ->groupBy('SucursalId');
+
+            // 4. Obtener ventas en origen (EXCLUYENDO SALDO)
+            $ventasOrigen = DB::connection('sqlsrv')
+                ->table('VentaProductosView')
+                ->whereIn('SucursalId', $sucursalesOrigen)
+                ->where('Fecha', '>=', $fechaInicio)
+                ->whereNotIn('ProductoId', function($query) {
+                    $query->select('ID')
+                        ->from('ProductosSucursalView')
+                        ->where('Codigo', 'SALDO');
+                })
+                ->select([
+                    'SucursalId',
+                    'ProductoId',
+                    DB::raw('SUM(Cantidad) as total_vendido_origen')
+                ])
+                ->groupBy('SucursalId', 'ProductoId')
+                ->get()
+                ->groupBy('SucursalId');
+
+            // 5. Analizar cada sucursal destino
+            foreach ($sucursalesDestino as $destinoId) {
+                // Obtener TOP productos vendidos en esta sucursal
+                $topProductos = $topVentasPorSucursal[$destinoId] ?? collect();
+
+                // Tomar solo los top 20 productos más vendidos
+                $topProductos = $topProductos->take(20);
+
+                foreach ($topProductos as $venta) {
+                    $productoId = $venta->ProductoId;
+                    $demandaDestino = $venta->total_vendido;
+
+                    // ✅ Verificar stock en destino
+                    $stockDestino = isset($stockActual[$destinoId]) 
+                        ? $stockActual[$destinoId]->firstWhere('ProductoId', $productoId) 
+                        : null;
+
+                    $existenciaDestino = $stockDestino ? $stockDestino->Existencia : 0;
+
+                    // Calcular stock mínimo recomendado (basado en demanda)
+                    $stockRecomendado = ceil($demandaDestino / 30 * 7);
+
+                    // Si el stock en destino es suficiente, no hacer nada
+                    if ($existenciaDestino >= $stockRecomendado) {
+                        continue;
+                    }
+
+                    // Buscar en otras sucursales (origen)
+                    $cantidadNecesaria = $stockRecomendado - $existenciaDestino;
+
+                    foreach ($sucursalesOrigen as $origenId) {
+                        if ($origenId == $destinoId) continue;
+
+                        // ✅ Verificar stock en origen
+                        $stockOrigen = isset($stockActual[$origenId]) 
+                            ? $stockActual[$origenId]->firstWhere('ProductoId', $productoId) 
+                            : null;
+
+                        if (!$stockOrigen || $stockOrigen->Existencia < 5) {
+                            continue;
+                        }
+
+                        // Verificar si el producto se vende en origen
+                        $ventaOrigen = isset($ventasOrigen[$origenId]) 
+                            ? $ventasOrigen[$origenId]->firstWhere('ProductoId', $productoId) 
+                            : null;
+                            
+                        $ventaOrigenTotal = $ventaOrigen ? $ventaOrigen->total_vendido_origen : 0;
+
+                        // Si se vende mucho en origen, NO transferir
+                        if ($ventaOrigenTotal > $demandaDestino * 0.5) {
+                            continue;
+                        }
+
+                        // Calcular prioridad
+                        $prioridad = $this->calcularPrioridadDemanda(
+                            $demandaDestino,
+                            $ventaOrigenTotal,
+                            $existenciaDestino,
+                            $stockOrigen->Existencia
+                        );
+
+                        // Calcular cantidad a transferir
+                        $cantidadTransferir = min(
+                            $cantidadNecesaria,
+                            floor($stockOrigen->Existencia * 0.6)
+                        );
+
+                        if ($cantidadTransferir > 0 && $prioridad > 0) {
+                            $sugerencias->push($this->crearSugerenciaDemanda(
+                                $stockOrigen,
+                                $origenId,
+                                $destinoId,
+                                $existenciaDestino,
+                                $demandaDestino,
+                                $ventaOrigenTotal,
+                                $prioridad,
+                                $cantidadTransferir
+                            ));
+                        }
+                    }
+                }
+            }
+
+            return $sugerencias->sortByDesc('Prioridad')->take(100)->values();
+
+        } catch (\Exception $e) {
+            Log::error('Error en obtenerSugerenciasTransferenciaOptimizado: ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
+            return collect([]);
+        }
+    }
+
+    /**
+     * Obtiene sugerencias de transferencia basadas en EXISTENCIA
+     * (Stock Alto en Origen vs Stock Bajo en Destino)
+     */
+    private function obtenerSugerenciasPorExistencia($sucursalSeleccionada = 0)
+    {
+        try {
+            // 1. Obtener sucursales (excluyendo almacén)
+            $sucursales = DB::connection('sqlsrv')
+                ->table('Sucursales')
+                ->where('EsActiva', 1)
+                ->where('ID', '!=', 6)
+                ->pluck('ID')
+                ->toArray();
+
+            // ✅ Si hay una sucursal seleccionada, solo usarla como destino
+            $sucursalesDestino = [];
+            if ($sucursalSeleccionada > 0) {
+                if (!in_array($sucursalSeleccionada, $sucursales)) {
+                    return collect([]);
+                }
+                $sucursalesDestino = [$sucursalSeleccionada];
+            } else {
+                $sucursalesDestino = $sucursales;
+            }
+
+            $sucursalesOrigen = $sucursales;
+
+            if (count($sucursalesDestino) < 1 || count($sucursalesOrigen) < 1) {
+                return collect([]);
+            }
+
+            $sugerencias = collect([]);
+
+            // 2. Obtener stock actual de todos los productos (EXCLUYENDO SALDO)
+            $stockActual = DB::connection('sqlsrv')
+                ->table('ProductosSucursalView')
+                ->where('Estatus', 1)
+                ->where('Codigo', '!=', 'SALDO')  // ✅ Excluir productos con código SALDO
+                ->whereIn('SucursalId', array_merge($sucursalesOrigen, $sucursalesDestino))
+                ->select([
+                    'ID as ProductoId',
+                    'SucursalId',
+                    'Codigo',
+                    'Descripcion',
+                    'Referencia',
+                    'Existencia',
+                    'CostoDivisa'
+                ])
+                ->get()
+                ->groupBy('SucursalId');
+
+            // 3. Analizar cada sucursal destino
+            foreach ($sucursalesDestino as $destinoId) {
+                foreach ($sucursalesOrigen as $origenId) {
+                    if ($origenId == $destinoId) continue;
+
+                    // Productos en destino con stock bajo (< 5)
+                    $productosDestino = isset($stockActual[$destinoId]) 
+                        ? $stockActual[$destinoId]->where('Existencia', '<', 5) 
+                        : collect();
+
+                    foreach ($productosDestino as $productoDestino) {
+                        $productoId = $productoDestino->ProductoId;
+
+                        // Verificar si el producto existe en origen con stock alto (> 10)
+                        $productoOrigen = isset($stockActual[$origenId]) 
+                            ? $stockActual[$origenId]->firstWhere('ProductoId', $productoId) 
+                            : null;
+
+                        if (!$productoOrigen || $productoOrigen->Existencia < 10) {
+                            continue;
+                        }
+
+                        // Calcular prioridad basada en diferencia de stock
+                        $diferencia = $productoOrigen->Existencia - $productoDestino->Existencia;
+                        $prioridad = $this->calcularPrioridadExistencia(
+                            $productoOrigen->Existencia,
+                            $productoDestino->Existencia,
+                            $diferencia
+                        );
+
+                        // Calcular cantidad a transferir (mitad del stock de origen)
+                        $cantidadTransferir = min(
+                            floor($productoOrigen->Existencia / 2),
+                            50
+                        );
+
+                        if ($cantidadTransferir > 0 && $prioridad > 0) {
+                            $nombreOrigen = DB::connection('sqlsrv')
+                                ->table('Sucursales')
+                                ->where('ID', $origenId)
+                                ->value('Nombre') ?? 'Sucursal ' . $origenId;
+
+                            $nombreDestino = DB::connection('sqlsrv')
+                                ->table('Sucursales')
+                                ->where('ID', $destinoId)
+                                ->value('Nombre') ?? 'Sucursal ' . $destinoId;
+
+                            $sugerencias->push((object) [
+                                'ProductoId' => $productoId,
+                                'Codigo' => $productoOrigen->Codigo,
+                                'Descripcion' => $productoOrigen->Descripcion,
+                                'Referencia' => $productoOrigen->Referencia ?? '',
+                                'SucursalOrigenId' => $origenId,
+                                'SucursalOrigen' => $nombreOrigen,
+                                'StockOrigen' => $productoOrigen->Existencia,
+                                'VentaOrigen' => 0,
+                                'SucursalDestinoId' => $destinoId,
+                                'SucursalDestino' => $nombreDestino,
+                                'StockDestino' => $productoDestino->Existencia,
+                                'DemandaDestino' => 0,
+                                'CantidadSugerida' => $cantidadTransferir,
+                                'CostoDivisa' => $productoOrigen->CostoDivisa ?? 0,
+                                'Prioridad' => $prioridad,
+                                'Motivo' => $this->obtenerMotivoExistencia(
+                                    $prioridad,
+                                    $productoOrigen->Existencia,
+                                    $productoDestino->Existencia,
+                                    $diferencia
+                                )
+                            ]);
+                        }
+                    }
+                }
+            }
+
+            return $sugerencias->sortByDesc('Prioridad')->take(100)->values();
+
+        } catch (\Exception $e) {
+            Log::error('Error en obtenerSugerenciasPorExistencia: ' . $e->getMessage());
+            return collect([]);
+        }
+    }
+
+    /**
+     * Calcula prioridad basada en diferencia de existencia
+     */
+    private function calcularPrioridadExistencia($stockOrigen, $stockDestino, $diferencia)
+    {
+        $prioridad = 0;
+
+        // Factor 1: Stock en destino (0-40 puntos)
+        if ($stockDestino <= 0) $prioridad += 40;
+        elseif ($stockDestino <= 2) $prioridad += 30;
+        elseif ($stockDestino <= 5) $prioridad += 20;
+        elseif ($stockDestino <= 10) $prioridad += 10;
+
+        // Factor 2: Diferencia de stock (0-40 puntos)
+        if ($diferencia > 30) $prioridad += 40;
+        elseif ($diferencia > 20) $prioridad += 30;
+        elseif ($diferencia > 10) $prioridad += 20;
+        elseif ($diferencia > 5) $prioridad += 10;
+
+        // Factor 3: Stock en origen (0-20 puntos)
+        if ($stockOrigen > 30) $prioridad += 20;
+        elseif ($stockOrigen > 20) $prioridad += 15;
+        elseif ($stockOrigen > 10) $prioridad += 10;
+
+        return min(100, $prioridad);
+    }
+
+    /**
+     * Obtiene motivo para sugerencia por existencia
+     */
+    private function obtenerMotivoExistencia($prioridad, $stockOrigen, $stockDestino, $diferencia)
+    {
+        $motivos = [];
+
+        // Prioridad
+        if ($prioridad >= 80) {
+            $motivos[] = '🔴 ALTA PRIORIDAD - Diferencia de stock crítica';
+        } elseif ($prioridad >= 60) {
+            $motivos[] = '🟡 PRIORIDAD MEDIA - Diferencia de stock significativa';
+        } else {
+            $motivos[] = '🟢 PRIORIDAD BAJA - Diferencia de stock moderada';
+        }
+
+        // Stock en origen y destino
+        $motivos[] = "📦 Stock Origen: {$stockOrigen} unidades";
+        $motivos[] = "📦 Stock Destino: {$stockDestino} unidades";
+        $motivos[] = "📊 Diferencia: {$diferencia} unidades";
+
+        return implode(' | ', $motivos);
+    }
+
+    /**
+     * Calcula prioridad basada en demanda
+     */
+    private function calcularPrioridadDemanda($demandaDestino, $ventaOrigen, $stockDestino, $stockOrigen)
+    {
+        $prioridad = 0;
+
+        // Factor 1: Demanda en destino (0-40 puntos)
+        if ($demandaDestino > 50) $prioridad += 40;
+        elseif ($demandaDestino > 20) $prioridad += 30;
+        elseif ($demandaDestino > 10) $prioridad += 20;
+        elseif ($demandaDestino > 5) $prioridad += 10;
+
+        // Factor 2: Bajo stock en destino (0-30 puntos)
+        if ($stockDestino <= 2) $prioridad += 30;
+        elseif ($stockDestino <= 5) $prioridad += 20;
+        elseif ($stockDestino <= 10) $prioridad += 10;
+
+        // Factor 3: Baja rotación en origen (0-20 puntos)
+        if ($ventaOrigen <= 2) $prioridad += 20;
+        elseif ($ventaOrigen <= 5) $prioridad += 10;
+
+        // Factor 4: Stock disponible en origen (0-10 puntos)
+        if ($stockOrigen > 20) $prioridad += 10;
+        elseif ($stockOrigen > 10) $prioridad += 5;
+
+        return min(100, $prioridad);
+    }
+
+    /**
+     * Crea sugerencia basada en demanda
+     */
+    private function crearSugerenciaDemanda($producto, $origenId, $destinoId, $stockDestino, $demandaDestino, $ventaOrigen, $prioridad, $cantidadTransferir)
+    {
+        $nombreOrigen = DB::connection('sqlsrv')
+            ->table('Sucursales')
+            ->where('ID', $origenId)
+            ->value('Nombre') ?? 'Sucursal ' . $origenId;
+
+        $nombreDestino = DB::connection('sqlsrv')
+            ->table('Sucursales')
+            ->where('ID', $destinoId)
+            ->value('Nombre') ?? 'Sucursal ' . $destinoId;
+
+        $motivo = $this->obtenerMotivoDemanda($prioridad, $demandaDestino, $ventaOrigen);
+
+        return (object) [
+            'ProductoId' => $producto->ProductoId,
+            'Codigo' => $producto->Codigo,
+            'Descripcion' => $producto->Descripcion,
+            'Referencia' => $producto->Referencia ?? '',
+            'SucursalOrigenId' => $origenId,
+            'SucursalOrigen' => $nombreOrigen,
+            'StockOrigen' => $producto->Existencia,
+            'VentaOrigen' => $ventaOrigen,
+            'SucursalDestinoId' => $destinoId,
+            'SucursalDestino' => $nombreDestino,
+            'StockDestino' => $stockDestino,
+            'DemandaDestino' => $demandaDestino,
+            'CantidadSugerida' => $cantidadTransferir,
+            'CostoDivisa' => $producto->CostoDivisa ?? 0,
+            'Prioridad' => $prioridad,
+            // ✅ Motivo en diferentes formatos
+            'Motivo' => $motivo['html'],           // Para la vista HTML
+            'MotivoTexto' => $motivo['texto'],     // Para el Excel
+            'MotivoSimple' => $motivo['simple']    // Para versiones simplificadas
+        ];
+    }
+
+    /**
+     * Obtiene motivo basado en demanda
+     */
+    private function obtenerMotivoDemanda($prioridad, $demandaDestino, $ventaOrigen)
+    {
+        $motivos = [];
+
+        // Prioridad
+        if ($prioridad >= 80) {
+            $motivos[] = '🔴 ALTA PRIORIDAD - Producto con alta demanda';
+        } elseif ($prioridad >= 60) {
+            $motivos[] = '🟡 PRIORIDAD MEDIA - Demanda regular';
+        } else {
+            $motivos[] = '🟢 PRIORIDAD BAJA - Demanda moderada';
+        }
+
+        // Demanda en destino
+        $motivos[] = "📈 Demanda en destino: {$demandaDestino} unidades (últimos 30 días)";
+
+        // Ventas en origen
+        if ($ventaOrigen == 0) {
+            $motivos[] = '🔄 Sin ventas en origen (ideal para transferir)';
+        } else {
+            $motivos[] = "🔄 Ventas en origen: {$ventaOrigen} unidades (baja rotación)";
+        }
+
+        // Unir con saltos de línea (para la vista) y con pipe (para el Excel)
+        return [
+            'html' => implode('<br>', $motivos),        // Para la vista HTML
+            'texto' => implode(' | ', $motivos),        // Para el Excel (pipe)
+            'simple' => implode(' - ', $motivos)        // Para versiones simplificadas
+        ];
+    }
+
+    /**
+     * Obtiene el color de prioridad para la vista
+     */
+    public function obtenerColorPrioridad($prioridad)
+    {
+        if ($prioridad >= 80) return 'danger';
+        if ($prioridad >= 60) return 'warning';
+        if ($prioridad >= 40) return 'info';
+        return 'success';
+    }
+
+    /**
+     * Descarga la plantilla de sugerencias IA para una sucursal específica
+     * Formato compatible con el Excel de Nueva Transferencia
+     */
+    public function descargarPlantillaIASugerencias(Request $request)
+    {
+        try {
+            // Obtener sucursal seleccionada de la sesión
+            $sucursalId = session('sucursal_id', 0);
+            $sucursalNombre = session('sucursal_nombre', 'Todas');
+
+            if ($sucursalId <= 0) {
+                return back()->with('error', 'Debe seleccionar una sucursal específica para descargar la plantilla');
+            }
+
+            // Obtener sugerencias para la sucursal seleccionada
+            $sugerencias = $this->obtenerSugerenciasTransferenciaOptimizado($sucursalId);
+
+            if ($sugerencias->isEmpty()) {
+                return back()->with('error', 'No hay sugerencias de transferencia para esta sucursal');
+            }
+
+            // Obtener información de la sucursal destino
+            $sucursalDestino = DB::connection('sqlsrv')
+                ->table('Sucursales')
+                ->where('ID', $sucursalId)
+                ->first();
+
+            if (!$sucursalDestino) {
+                return back()->with('error', 'Sucursal no encontrada');
+            }
+
+            // Obtener el número de la última transferencia (para generar un número ficticio)
+            $ultimoNumero = DB::connection('sqlsrv')
+                ->table('TransferenciasTMP')
+                ->orderBy('TransferenciaId', 'desc')
+                ->value('Numero') ?? 'SUG-001';
+
+            // Crear el Excel
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('Hoja1');
+
+            // ==========================================
+            // ENCABEZADOS DEL EXCEL
+            // ==========================================
+
+            // Título: TRANSFERENCIA
+            $sheet->setCellValue('A1', 'TRANSFERENCIA');
+            $sheet->mergeCells('A1:F1');
+            $sheet->getStyle('A1')->applyFromArray([
+                'font' => ['bold' => true, 'size' => 16, 'name' => 'Arial'],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+            ]);
+
+            // Subtítulo: ENTRADA DE TRANSFERENCIA
+            $sheet->setCellValue('A2', 'ENTRADA DE TRANSFERENCIA');
+            $sheet->mergeCells('A2:F2');
+            $sheet->getStyle('A2')->applyFromArray([
+                'font' => ['bold' => true, 'size' => 14, 'name' => 'Arial'],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+            ]);
+
+            // Fila 4: Sucursal Origen y Número
+            $sheet->setCellValue('A4', 'Sucursal Origen');
+            $sheet->setCellValue('B4', 'MÚLTIPLES ORÍGENES (SUGERIDO POR IA)');
+            $sheet->setCellValue('E4', 'Numero');
+            $sheet->setCellValue('F4', 'SUG-' . date('Ymd') . '-' . $sucursalId);
+            $sheet->getStyle('A4:E4')->getFont()->setBold(true);
+
+            // Fila 6: Fecha y Observaciones
+            $sheet->setCellValue('A6', 'Fecha');
+            $sheet->setCellValue('B6', date('d/m/Y'));
+            $sheet->setCellValue('E6', 'Observaciones');
+            $sheet->setCellValue('F6', 'Sugerencias generadas por IA - ' . date('d/m/Y H:i'));
+            $sheet->getStyle('A6:E6')->getFont()->setBold(true);
+
+            // Fila 8: Título de la tabla
+            $sheet->setCellValue('A8', 'Productos Sugeridos');
+            $sheet->mergeCells('A8:F8');
+            $sheet->getStyle('A8')->applyFromArray([
+                'font' => ['bold' => true, 'size' => 12, 'name' => 'Arial'],
+            ]);
+
+            // Fila 9: Encabezados de la tabla
+            $headers = [
+                'A' => 'Codigo',
+                'B' => 'Referencia',
+                'C' => 'Descripcion',
+                'D' => 'Existencia',
+                'E' => $sucursalDestino->Nombre . ' (' . $sucursalDestino->ID . ')',
+                'F' => 'Sucursal Origen'
+            ];
+
+            foreach ($headers as $col => $header) {
+                $sheet->setCellValue($col . '9', $header);
+            }
+
+            // Estilo de encabezados
+            $sheet->getStyle('A9:F9')->applyFromArray([
+                'font' => ['bold' => true, 'size' => 10, 'name' => 'Arial'],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+                'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'D3D3D3']],
+            ]);
+            $sheet->getRowDimension(9)->setRowHeight(20);
+
+            // ==========================================
+            // DATOS DE SUGERENCIAS
+            // ==========================================
+            $fila = 10;
+            foreach ($sugerencias as $sugerencia) {
+                // Obtener la referencia del producto (si existe)
+                $referencia = DB::connection('sqlsrv')
+                    ->table('ProductosSucursalView')
+                    ->where('ID', $sugerencia->ProductoId)
+                    ->value('Referencia') ?? '';
+
+                $sheet->setCellValue('A' . $fila, $sugerencia->Codigo ?? '');
+                $sheet->setCellValue('B' . $fila, $referencia);
+                $sheet->setCellValue('C' . $fila, $sugerencia->Descripcion ?? '');
+                $sheet->setCellValue('D' . $fila, $sugerencia->StockOrigen ?? 0);
+                // ✅ Columna E: Cantidad sugerida (pre-llenada)
+                $sheet->setCellValue('E' . $fila, $sugerencia->CantidadSugerida ?? 0);
+                // ✅ Columna F: Sucursal Origen
+                $sheet->setCellValue('F' . $fila, $sugerencia->SucursalOrigen ?? '');
+
+                // Agregar comentario con información adicional (prioridad y motivo)
+                $comentario = "Prioridad: {$sugerencia->Prioridad}% | Motivo: {$sugerencia->Motivo}";
+                $sheet->getComment('E' . $fila)->getText()->createTextRun($comentario);
+
+                // Filas alternadas
+                if ($fila % 2 == 0) {
+                    $sheet->getStyle('A' . $fila . ':F' . $fila)->applyFromArray([
+                        'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F5F5F5']],
+                    ]);
+                }
+
+                $fila++;
+            }
+
+            // ==========================================
+            // CONFIGURAR ANCHOS DE COLUMNA
+            // ==========================================
+            $sheet->getColumnDimension('A')->setWidth(15);
+            $sheet->getColumnDimension('B')->setWidth(20);
+            $sheet->getColumnDimension('C')->setWidth(40);
+            $sheet->getColumnDimension('D')->setWidth(12);
+            $sheet->getColumnDimension('E')->setWidth(30);
+            $sheet->getColumnDimension('F')->setWidth(25);
+
+            // ==========================================
+            // GENERAR ARCHIVO
+            // ==========================================
+            $writer = new Xlsx($spreadsheet);
+            $fileName = 'Sugerencias_IA_' . $sucursalDestino->Nombre . '_' . date('Ymd_His') . '.xlsx';
+
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
+
+            return new StreamedResponse(
+                function () use ($writer) {
+                    $writer->save('php://output');
+                },
+                200,
+                [
+                    'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+                    'Cache-Control' => 'no-cache, no-store, must-revalidate',
+                    'Pragma' => 'no-cache',
+                    'Expires' => '0',
+                ]
+            );
+
+        } catch (\Exception $e) {
+            Log::error('❌ Error al descargar plantilla de sugerencias: ' . $e->getMessage());
+            return back()->with('error', 'Error al descargar la plantilla: ' . $e->getMessage());
+        }
+    }
 }

@@ -1028,10 +1028,16 @@ class RecepcionesController extends Controller
             // ✅ Obtener facturas pendientes SOLO si NO tiene factura asociada
             $facturasPendientes = collect();
             if (!$tieneFacturaAsociada) {  // ✅ Ahora sí está definida
+
+                $fechaInicio = Carbon::now()->subMonths(2); // 2 mes atrás
+                $fechaFin = Carbon::now(); // Hoy
+
                 $facturasPendientes = DB::connection('sqlsrv')
                     ->table('Facturas')
                     ->where('ProveedorId', $recepcion->ProveedorId)
-                    ->where('Estatus', 1)  // En Proceso
+                    //->where('Estatus', 1)  // En Proceso
+                    ->whereIn('Estatus', [1, 4])
+                    ->whereBetween('FechaCreacion', [$fechaInicio, $fechaFin])
                     ->select(['ID', 'Numero', 'Traspaso'])
                     ->get();
                 
