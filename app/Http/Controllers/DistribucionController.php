@@ -3934,7 +3934,8 @@ class DistribucionController extends Controller
                     'Descripcion',
                     'Referencia',
                     'Existencia',
-                    'CostoDivisa'
+                    'CostoDivisa',
+                    'UrlFoto'
                 ])
                 ->get()
                 ->groupBy('SucursalId');
@@ -4035,7 +4036,8 @@ class DistribucionController extends Controller
                                 $demandaDestino,
                                 $ventaOrigenTotal,
                                 $prioridad,
-                                $cantidadTransferir
+                                $cantidadTransferir,
+                                $stockOrigen->UrlFoto
                             ));
                         }
                     }
@@ -4089,7 +4091,7 @@ class DistribucionController extends Controller
             $stockActual = DB::connection('sqlsrv')
                 ->table('ProductosSucursalView')
                 ->where('Estatus', 1)
-                ->where('Codigo', '!=', 'SALDO')  // ✅ Excluir productos con código SALDO
+                ->where('Codigo', '!=', 'SALDO')
                 ->whereIn('SucursalId', array_merge($sucursalesOrigen, $sucursalesDestino))
                 ->select([
                     'ID as ProductoId',
@@ -4098,7 +4100,8 @@ class DistribucionController extends Controller
                     'Descripcion',
                     'Referencia',
                     'Existencia',
-                    'CostoDivisa'
+                    'CostoDivisa',
+                    'UrlFoto'
                 ])
                 ->get()
                 ->groupBy('SucursalId');
@@ -4155,6 +4158,7 @@ class DistribucionController extends Controller
                                 'Codigo' => $productoOrigen->Codigo,
                                 'Descripcion' => $productoOrigen->Descripcion,
                                 'Referencia' => $productoOrigen->Referencia ?? '',
+                                'UrlFoto' => $productoOrigen->UrlFoto ?? '',  // ✅ Agregado
                                 'SucursalOrigenId' => $origenId,
                                 'SucursalOrigen' => $nombreOrigen,
                                 'StockOrigen' => $productoOrigen->Existencia,
@@ -4269,7 +4273,7 @@ class DistribucionController extends Controller
     /**
      * Crea sugerencia basada en demanda
      */
-    private function crearSugerenciaDemanda($producto, $origenId, $destinoId, $stockDestino, $demandaDestino, $ventaOrigen, $prioridad, $cantidadTransferir)
+    private function crearSugerenciaDemanda($producto, $origenId, $destinoId, $stockDestino, $demandaDestino, $ventaOrigen, $prioridad, $cantidadTransferir, $urlFoto = null)
     {
         $nombreOrigen = DB::connection('sqlsrv')
             ->table('Sucursales')
@@ -4288,6 +4292,7 @@ class DistribucionController extends Controller
             'Codigo' => $producto->Codigo,
             'Descripcion' => $producto->Descripcion,
             'Referencia' => $producto->Referencia ?? '',
+            'UrlFoto' => $urlFoto ?? $producto->UrlFoto ?? '',
             'SucursalOrigenId' => $origenId,
             'SucursalOrigen' => $nombreOrigen,
             'StockOrigen' => $producto->Existencia,

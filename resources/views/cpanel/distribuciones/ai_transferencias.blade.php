@@ -214,12 +214,11 @@
                                 );
                             @endphp
                             <tr data-codigo="{{ strtolower($sugerencia->Codigo) }}" style="border-bottom:1px solid #f1f5f9;">
-                                <td class="text-center">
+                                <td class="text-center" style="width: 60px; max-width: 60px; padding: 5px;">
                                     <img src="{{ $imgSrc }}" 
                                         alt="{{ $sugerencia->Codigo }}"
                                         loading="lazy"
-                                        class="img-thumbnail img-zoomable"
-                                        style="width: 35px; height: 35px; object-fit: cover; cursor: pointer; border-radius:4px;"
+                                        style="width: 45px; height: 45px; object-fit: cover; cursor: pointer; border-radius: 8px; border: 2px solid #e5e7eb; display: block; margin: 0 auto;"
                                         data-full-image="{{ $imgSrc }}"
                                         data-description="{{ $sugerencia->Descripcion }}"
                                         onclick="zoomImagen(this)"
