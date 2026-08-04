@@ -643,6 +643,14 @@ Route::middleware('auth')->group(function() {
     // Descargar Excel con productos y cantidades sugeridas
     Route::get('/cpanel/distribucion/ai-transferencias/descargar-plantilla', [DistribucionController::class, 'descargarPlantillaIASugerencias'])
         ->name('cpanel.distribucion.ai-transferencias.descargar-plantilla');
+
+    // Consolidar productos
+    Route::get('/cpanel/distribucion/listado/consolidar', [DistribucionController::class, 'consolidar_listado'])
+        ->name('cpanel.distribucion.consolidar');
+
+    // Guardar Consolidacion de productos
+    Route::post('/cpanel/distribucion/guardar/consolidacion', [DistribucionController::class, 'guardarConsolidacion'])
+            ->name('cpanel.consolidacion.guardar');
 });
 
 

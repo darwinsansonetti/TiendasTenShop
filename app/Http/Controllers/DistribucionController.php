@@ -8,6 +8,7 @@ use App\Helpers\GeneralHelper;
 use App\Helpers\VentasHelper;
 use App\Models\Proveedor;
 use App\Models\DivisaValor;
+use App\Models\Sucursal;
 
 use App\Helpers\ParametrosFiltroFecha;
 use Carbon\Carbon;
@@ -4534,6 +4535,213 @@ class DistribucionController extends Controller
         } catch (\Exception $e) {
             Log::error('❌ Error al descargar plantilla de sugerencias: ' . $e->getMessage());
             return back()->with('error', 'Error al descargar la plantilla: ' . $e->getMessage());
+        }
+    }
+
+    public function consolidar_listado(Request $request)
+    {
+        try {
+            session([
+                'menu_active' => 'Distribuciones',
+                'submenu_active' => 'Consolidar productos'
+            ]);
+
+            // 1️⃣ Obtener sucursal: primero del Request, si no de session
+            $sucursalId = $request->input('sucursal_id');
+            
+            if ($sucursalId === null) {
+                $sucursalId = session('sucursal_id');
+            }
+
+            // 2️⃣ Si es 0 (todas), asignar almacén por defecto (6)
+            if ($sucursalId == 0) {
+                $sucursalId = 6; // Almacén por defecto
+            }
+
+            // 3️⃣ Obtener sucursales para el selector
+            $sucursales = Sucursal::orderBy('Nombre')
+                        ->where('EsActiva', 1)
+                        ->whereIn('Tipo', [1, 2])
+                        ->get();
+
+            // 4️⃣ Buscar productos
+            $productos = $this->buscarProductosPorSucursal(
+                $sucursalId,
+                true
+            );
+
+            // 5️⃣ Retornar vista con los datos necesarios
+            return view('cpanel.consolidacion.listado_consolidaciones', compact(
+                'sucursales',
+                'sucursalId',
+                'productos'
+            ));
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en consolidar_listado: ' . $e->getMessage());
+            return back()->with('error', 'Error al listar las consolidaciones de productos: ' . $e->getMessage());
+        }
+    }
+
+    public function guardarConsolidacion(Request $request)
+    {
+        try {
+            Log::info('=== INICIO GUARDAR CONSOLIDACIÓN ===');
+            
+            $sucursalId = $request->input('sucursal_id');
+            $productoDestinoId = $request->input('producto_destino_id');
+            $productosOrigen = $request->input('productos_origen', []);
+            
+            Log::info('Datos recibidos:', [
+                'sucursal_id' => $sucursalId,
+                'producto_destino_id' => $productoDestinoId,
+                'productos_origen' => $productosOrigen,
+                'cantidad_productos' => count($productosOrigen)
+            ]);
+
+            // ✅ Validar
+            if (empty($productosOrigen) || empty($productoDestinoId)) {
+                Log::warning('Validación fallida: Datos incompletos');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Datos incompletos'
+                ], 400);
+            }
+
+            // ✅ Construir array con TODOS los productos (origen + destino)
+            $todosLosProductos = array_merge($productosOrigen, [$productoDestinoId]);
+            $todosLosProductos = array_unique($todosLosProductos); // Eliminar duplicados
+
+            Log::info('Todos los productos a procesar:', [
+                'productos' => $todosLosProductos,
+                'cantidad' => count($todosLosProductos)
+            ]);
+
+            // ✅ Calcular ExistenciaTotal y CostoPromedio desde la BD
+            $existenciaTotal = 0;
+            $totalCosto = 0;
+            $countConCosto = 0;
+            $productosDetalle = [];
+
+            foreach ($todosLosProductos as $productoId) {
+                $producto = DB::table('Productos as p')
+                    ->join('ProductoSucursal as ps', 'p.ID', '=', 'ps.ProductoId')
+                    ->where('p.ID', $productoId)
+                    ->where('ps.SucursalId', $sucursalId)
+                    ->select('p.ID', 'p.Codigo', 'p.CostoDivisa', 'ps.Existencia')
+                    ->first();
+
+                if ($producto) {
+                    $existencia = (float)($producto->Existencia ?? 0);
+                    $costo = (float)($producto->CostoDivisa ?? 0);
+
+                    $existenciaTotal += $existencia;
+                    if ($costo > 0) {
+                        $totalCosto += $costo;
+                        $countConCosto++;
+                    }
+
+                    $productosDetalle[] = [
+                        'id' => $producto->ID,
+                        'codigo' => $producto->Codigo,
+                        'existencia' => $existencia,
+                        'costo' => $costo
+                    ];
+
+                    Log::info('Producto procesado:', [
+                        'id' => $producto->ID,
+                        'codigo' => $producto->Codigo,
+                        'existencia' => $existencia,
+                        'costo' => $costo
+                    ]);
+                } else {
+                    Log::warning('Producto no encontrado en la sucursal:', [
+                        'producto_id' => $productoId,
+                        'sucursal_id' => $sucursalId
+                    ]);
+                }
+            }
+
+            $costoPromedio = $countConCosto > 0 ? ($totalCosto / $countConCosto) : 0;
+
+            Log::info('Totales calculados:', [
+                'existencia_total' => $existenciaTotal,
+                'total_costo' => $totalCosto,
+                'count_con_costo' => $countConCosto,
+                'costo_promedio' => $costoPromedio
+            ]);
+
+            // ✅ Consolidar productos (igual que en .NET)
+            Log::info('Iniciando consolidación de productos...');
+
+            foreach ($todosLosProductos as $productoId) {
+                Log::info('Procesando producto:', [
+                    'producto_id' => $productoId,
+                    'es_destino' => ($productoDestinoId == $productoId) ? 'SI' : 'NO'
+                ]);
+
+                if ($productoDestinoId != $productoId) {
+                    // ✅ Producto origen: SET Existencia = 0
+                    $affected = DB::table('ProductoSucursal')
+                        ->where('SucursalId', $sucursalId)
+                        ->where('ProductoId', $productoId)
+                        ->update(['Existencia' => 0]);
+
+                    Log::info('Producto origen actualizado:', [
+                        'producto_id' => $productoId,
+                        'sucursal_id' => $sucursalId,
+                        'existencia_nueva' => 0,
+                        'filas_afectadas' => $affected
+                    ]);
+                } else {
+                    // ✅ Producto destino: Actualizar Existencia y Costo
+                    $affectedExistencia = DB::table('ProductoSucursal')
+                        ->where('SucursalId', $sucursalId)
+                        ->where('ProductoId', $productoId)
+                        ->update(['Existencia' => $existenciaTotal]);
+
+                    Log::info('Producto destino - Existencia actualizada:', [
+                        'producto_id' => $productoId,
+                        'sucursal_id' => $sucursalId,
+                        'existencia_nueva' => $existenciaTotal,
+                        'filas_afectadas' => $affectedExistencia
+                    ]);
+
+                    $affectedCosto = DB::table('Productos')
+                        ->where('ID', $productoId)
+                        ->update(['CostoDivisa' => $costoPromedio]);
+
+                    Log::info('Producto destino - Costo actualizado:', [
+                        'producto_id' => $productoId,
+                        'costo_nuevo' => $costoPromedio,
+                        'filas_afectadas' => $affectedCosto
+                    ]);
+                }
+            }
+
+            Log::info('=== FIN GUARDAR CONSOLIDACIÓN - EXITOSO ===');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Productos consolidados exitosamente',
+                'data' => [
+                    'productos_consolidados' => count($todosLosProductos),
+                    'producto_destino_id' => $productoDestinoId,
+                    'existencia_total' => $existenciaTotal,
+                    'costo_promedio' => $costoPromedio
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('=== ERROR EN GUARDAR CONSOLIDACIÓN ===');
+            Log::error('Mensaje: ' . $e->getMessage());
+            Log::error('Archivo: ' . $e->getFile() . ' - Línea: ' . $e->getLine());
+            Log::error('Trace: ' . $e->getTraceAsString());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al consolidar productos: ' . $e->getMessage()
+            ], 500);
         }
     }
 }

@@ -897,6 +897,14 @@
                   </li>
 
                   <li class="nav-item">
+                      <a href="{{ route('cpanel.distribucion.consolidar') }}"
+                        class="nav-link {{ session('submenu_active') == 'Consolidar productos' ? 'active' : '' }}">
+                          <i class="nav-icon bi bi-layers"></i>
+                          <p>Consolidar productos</p>
+                      </a>
+                  </li>
+
+                  <li class="nav-item">
                       <a href="{{ route('cpanel.distribucion.inventario') }}"
                         class="nav-link {{ session('submenu_active') == 'Inventario de almacen' ? 'active' : '' }}">
                           <i class="nav-icon bi bi-box-seam"></i>
