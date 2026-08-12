@@ -651,6 +651,70 @@ Route::middleware('auth')->group(function() {
     // Guardar Consolidacion de productos
     Route::post('/cpanel/distribucion/guardar/consolidacion', [DistribucionController::class, 'guardarConsolidacion'])
             ->name('cpanel.consolidacion.guardar');
+
+    // Listado de inventarios
+    Route::get('/cpanel/inventario/listado', [InventarioController::class, 'listadoInventario'])
+    ->name('cpanel.inventario.listado');
+
+    // ✅ NUEVO: Formulario para crear inventario
+    Route::get('/cpanel/inventario/crear', [InventarioController::class, 'crearInventario'])
+        ->name('cpanel.inventario.crear');
+
+    // ✅ Guardar nuevo inventario (POST)
+    Route::post('/cpanel/inventario/guardar', [InventarioController::class, 'guardarInventario'])
+        ->name('cpanel.inventario.guardar');
+
+    // ✅ Editar inventario (GET)
+    Route::get('/cpanel/inventario/editar/{id}', [InventarioController::class, 'editarInventario'])
+        ->name('cpanel.inventario.editar');
+
+    // ✅ Actualizar inventario (PUT/PATCH)
+    Route::put('/cpanel/inventario/actualizar/{id}', [InventarioController::class, 'actualizarInventario'])
+        ->name('cpanel.inventario.actualizar');
+
+    // ✅ Iniciar Conteo
+    Route::get('/cpanel/inventario/iniciar-conteo/{id}', [InventarioController::class, 'iniciarConteo'])
+        ->name('cpanel.inventario.iniciar-conteo');
+
+    // Buscar producto para conteo manual
+    Route::post('/cpanel/inventario/buscar-producto-conteo', [InventarioController::class, 'buscarProductoConteo'])
+        ->name('cpanel.inventario.buscar-producto-conteo');
+
+    // Guardar conteo manual
+    Route::post('/cpanel/inventario/guardar-conteo-manual', [InventarioController::class, 'guardarConteoManual'])
+        ->name('cpanel.inventario.guardar-conteo-manual');
+
+    // ✅ Generar plantilla de conteo
+    Route::get('/cpanel/inventario/generar-plantilla-conteo/{id}', [InventarioController::class, 'generarPlantillaConteo'])
+        ->name('cpanel.inventario.generar-plantilla-conteo');
+
+    // ✅ Cargar conteo desde Excel
+    Route::post('/cpanel/inventario/upload-conteo-excel', [InventarioController::class, 'uploadConteoExcel'])
+        ->name('cpanel.inventario.upload-conteo-excel');
+
+    // Buscar detalle JSON para tabs
+    Route::post('/cpanel/inventario/buscar-detalle-json', [InventarioController::class, 'buscarDetalleJSON'])
+        ->name('cpanel.inventario.buscar-detalle-json');
+
+    // ✅ Auditar Conteo (Diferencias, Exactos, NoVendibles)
+    Route::get('/cpanel/inventario/auditar-conteo/{id}/{tipo}', [InventarioController::class, 'auditarConteo'])
+        ->name('cpanel.inventario.auditar-conteo');
+
+    // ✅ Guardar Conteo Producto (para auditoría)
+    Route::post('/cpanel/inventario/guardar-conteo-producto', [InventarioController::class, 'guardarConteoProducto'])
+        ->name('cpanel.inventario.guardar-conteo-producto');
+
+    // ✅ Finalizar Conteo (Cerrar inventario)
+    Route::get('/cpanel/inventario/finalizar-conteo/{id}', [InventarioController::class, 'finalizarConteo'])
+        ->name('cpanel.inventario.finalizar-conteo');
+
+    // ✅ Generar Resultados Conteo (Excel)
+    Route::get('/cpanel/inventario/generar-resultados-excel/{id}', [InventarioController::class, 'generarResultadosExcel'])
+        ->name('cpanel.inventario.generar-resultados-excel');
+
+    // ✅ Monitorear Conteo
+    Route::get('/cpanel/inventario/monitorear-conteo/{id}', [InventarioController::class, 'monitorearConteo'])
+        ->name('cpanel.inventario.monitorear-conteo');
 });
 
 

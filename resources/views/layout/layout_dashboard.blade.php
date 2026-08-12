@@ -819,6 +819,12 @@
                 </a>
                 <ul class="nav nav-treeview">
                   <li class="nav-item">
+                    <a href="{{ route('cpanel.inventario.listado') }}"
+                       class="nav-link {{ session('submenu_active') == 'Listado' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-table"></i><p>Listado</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
                     <a href="{{ route('cpanel.inventario.cargar.excel') }}"
                        class="nav-link {{ session('submenu_active') == 'Cargar Inventario' ? 'active' : '' }}">
                       <i class="nav-icon bi bi-table"></i><p>Cargar Inventario</p>
