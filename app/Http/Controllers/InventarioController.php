@@ -4056,18 +4056,6 @@ class InventarioController extends Controller
             $porcentaje = round(($contados / $totalProductos) * 100, 2);
         }
 
-        // ============================================
-        // LOG PARA VER LOS DATOS REALES
-        // ============================================
-        \Log::info('=== MONITOREAR CONTEO ===');
-        \Log::info('Inventario ID: ' . $id);
-        \Log::info('Total productos: ' . $totalProductos);
-        \Log::info('Contados: ' . $contados);
-        \Log::info('Exactos: ' . $exactos);
-        \Log::info('Con diferencias: ' . $conDiferencias);
-        \Log::info('Exactitud: ' . $exactitud . '%');
-        \Log::info('Porcentaje: ' . $porcentaje . '%');
-
         return view('cpanel.inventario.monitorear-general', [
             'inventario' => $inventario,
             'sucursal' => $sucursal,
