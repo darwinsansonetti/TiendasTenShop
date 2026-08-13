@@ -388,6 +388,29 @@ Route::middleware('auth')->group(function() {
     // Contenedores
     Route::get('/proveedor/contenedores', [ProveedoresController::class, 'listaContenedores'])->name('cpanel.proveedor.mercancia.contenedores');
 
+    // ============================================
+    // RUTAS DE RENTABILIDAD
+    // ============================================
+
+    // Rentabilidad
+    Route::get('/proveedor/rentabilidad', [ProveedoresController::class, 'listaRentabilidad'])->name('cpanel.proveedor.mercancia.rentabilidad');
+
+    // Lista principal de rentabilidad
+    Route::get('/proveedor/rentabilidad', [ProveedoresController::class, 'listaRentabilidad'])
+        ->name('cpanel.proveedor.mercancia.rentabilidad');
+
+    // Detalle de rentabilidad por proveedor (Nivel 1: Información del proveedor + sucursales)
+    Route::get('/proveedor/rentabilidad/detalle/{id}', [ProveedoresController::class, 'detalleRentabilidad'])
+        ->name('cpanel.proveedor.mercancia.rentabilidad.detalle');
+
+    // Detalle de productos por proveedor y sucursal (Nivel 2: Productos en una sucursal específica)
+    Route::get('/proveedor/rentabilidad/detalle/{proveedorId}/sucursal/{sucursalId}', [ProveedoresController::class, 'detalleRentabilidadSucursal'])
+        ->name('cpanel.proveedor.mercancia.rentabilidad.detalle.sucursal');
+
+    // Estadísticas de rentabilidad por proveedor y sucursal
+    Route::get('/proveedor/rentabilidad/estadisticas/{proveedorId}/{sucursalId}', [ProveedoresController::class, 'estadisticasRentabilidadSucursal'])
+        ->name('cpanel.proveedor.mercancia.rentabilidad.estadisticas');
+
     Route::get('/contenedores/crear', [ProveedoresController::class, 'crearContenedor'])->name('cpanel.contenedores.crear');
     Route::post('/contenedores', [ProveedoresController::class, 'guardarContenedor'])->name('cpanel.contenedores.guardar');
     Route::get('/contenedores/{id}/detalle', [ProveedoresController::class, 'detalleContenedor'])->name('cpanel.contenedores.detalle');

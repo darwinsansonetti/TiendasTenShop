@@ -809,6 +809,12 @@
                       <i class="nav-icon bi bi-archive"></i><p>Contenedores</p>
                     </a>
                   </li>
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.proveedor.mercancia.rentabilidad') }}"
+                       class="nav-link {{ session('submenu_active') == 'Rentabilidad' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-bar-chart-fill"></i><p>Rentabilidad</p>
+                    </a>
+                  </li>
                 </ul>
               </li>
 

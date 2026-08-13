@@ -2053,153 +2053,6 @@ class ProveedoresController extends Controller
         }
     }
 
-    // private function guardarNuevoProductosDeFactura($productos, $facturaId)
-    // {
-    //     $productosConId = [];
-    //     $proveedorId = null;
-    //     $porcentajeGastos = 0;
-        
-    //     // Obtener el proveedor de la factura
-    //     $factura = DB::connection('sqlsrv')
-    //         ->table('Facturas')
-    //         ->where('ID', $facturaId)
-    //         ->first();
-        
-    //     if ($factura) {
-    //         $proveedorId = $factura->ProveedorId;
-
-    //         // Obtener el porcentaje de gastos del contenedor
-    //         if ($factura->ContenedorId) {
-    //             $contenedor = DB::connection('sqlsrv')
-    //                 ->table('Contenedor')
-    //                 ->where('Id', $factura->ContenedorId)
-    //                 ->first();
-                
-    //             if ($contenedor) {
-    //                 $porcentajeGastos = $contenedor->PorcentajeGastos ?? 0;
-                    
-    //                 // Log para debug
-    //                 \Log::info('Porcentaje de gastos obtenido', [
-    //                     'factura_id' => $facturaId,
-    //                     'contenedor_id' => $factura->ContenedorId,
-    //                     'porcentaje_gastos' => $porcentajeGastos
-    //                 ]);
-    //             }
-    //         }
-    //     }
-        
-    //     // Obtener sucursal de tipo Almacén (si existe en tu BD)
-    //     $sucursalAlmacen = $this->buscarSucursalAlmacen();
-    //     $sucursalId = $sucursalAlmacen ? $sucursalAlmacen->ID : null;
-        
-    //     foreach ($productos as $producto) {
-    //         // Buscar producto por código
-    //         $productoModel = DB::connection('sqlsrv')
-    //             ->table('Productos')
-    //             ->where('Codigo', $producto['codigo'])
-    //             ->first();
-            
-    //         $productoId = null;
-
-    //         // Calcular costo con gastos
-    //         $costoUnitario = $producto['costo_unitario'] ?? 0;
-    //         $costoConGastos = $costoUnitario * (1 + ($porcentajeGastos / 100));
-            
-    //         // Redondear a 2 decimales para moneda
-    //         $costoConGastos = round($costoConGastos, 2);
-            
-    //         \Log::info('Calculando costo con gastos', [
-    //             'codigo' => $producto['codigo'],
-    //             'costo_unitario' => $costoUnitario,
-    //             'porcentaje_gastos' => $porcentajeGastos,
-    //             'costo_final' => $costoConGastos
-    //         ]);
-            
-    //         if (!$productoModel) {
-    //             // Crear nuevo producto
-    //             $productoId = DB::connection('sqlsrv')->table('Productos')->insertGetId([
-    //                 'Codigo' => $producto['codigo'],
-    //                 'Descripcion' => $producto['descripcion'],
-    //                 'Referencia' => $producto['referencia'] ?? '',
-    //                 //'CostoDivisa' => $producto['costo_unitario'],
-    //                 'CostoDivisa' => $costoConGastos, // ✅ Costo unitario + % gastos
-    //                 // 'CostoBs' => $producto['costo'] * 40,
-    //                 'Estatus' => 1,
-    //                 'EsProveedorAsignado' => 1,
-    //                 'FechaCreacion' => now(),
-    //                 'FechaActualizacion' => now()
-    //             ]);
-    //         } else {
-    //             // Actualizar producto existente
-    //             DB::connection('sqlsrv')
-    //                 ->table('Productos')
-    //                 ->where('ID', $productoModel->ID)
-    //                 ->update([
-    //                     'Descripcion' => $producto['descripcion'],
-    //                     'Referencia' => $producto['referencia'] ?? '',
-    //                     // 'CostoDivisa' => $producto['costo_unitario'],
-    //                     'CostoDivisa' => $costoConGastos, // ✅ Costo unitario + % gastos
-    //                     'CostoBs' => 0,
-    //                     'EsProveedorAsignado' => 1,
-    //                     'FechaActualizacion' => now()
-    //                 ]);
-    //             $productoId = $productoModel->ID;
-    //         }
-            
-    //         // Guardar en almacén (ProductoSucursal) - si existe la tabla
-    //         if ($sucursalId) {
-    //             $existeAlmacen = DB::connection('sqlsrv')
-    //                 ->table('ProductoSucursal')
-    //                 ->where('SucursalId', $sucursalId)
-    //                 ->where('ProductoId', $productoId)
-    //                 ->exists();
-                
-    //             if (!$existeAlmacen) {
-    //                 DB::connection('sqlsrv')->table('ProductoSucursal')->insert([
-    //                     'SucursalId' => $sucursalId,
-    //                     'ProductoId' => $productoId,
-    //                     'PvpBs' => 0,
-    //                     'PvpDivisa' => 0,
-    //                     'Estatus' => 1,
-    //                     'Existencia' => 0,
-    //                     'FechaIngreso' => now(),
-    //                     'FechaUltimaVenta' => null
-    //                 ]);
-    //             }
-    //         }
-            
-    //         // Guardar asociación proveedor-producto
-    //         if ($proveedorId) {
-    //             $existeAsociacion = DB::connection('sqlsrv')
-    //                 ->table('ProveedorProducto')
-    //                 ->where('ProveedorId', $proveedorId)
-    //                 ->where('ProductoId', $productoId)
-    //                 ->exists();
-                
-    //             if (!$existeAsociacion) {
-    //                 DB::connection('sqlsrv')->table('ProveedorProducto')->insert([
-    //                     'ProveedorId' => $proveedorId,
-    //                     'ProductoId' => $productoId
-    //                 ]);
-    //             }
-    //         }
-            
-    //         $productosConId[] = [
-    //             'producto_id' => $productoId,
-    //             'codigo' => $producto['codigo'],
-    //             'descripcion' => $producto['descripcion'],
-    //             'referencia' => $producto['referencia'] ?? '',  // ✅ Agregar referencia
-    //             'costo' => $producto['costo'],
-    //             'costo_unitario' => $producto['costo_unitario'] ?? 0,  // ✅ AGREGAR
-    //             'costo_excel' => $producto['costo_excel'] ?? 0,
-    //             'cantidad' => $producto['cantidad'],
-    //             'empaque' => $producto['empaque']
-    //         ];
-    //     }
-        
-    //     return $productosConId;
-    // }
-
     private function guardarNuevoProductosDeFactura($productos, $facturaId)
     {
         $productosConId = [];
@@ -2536,13 +2389,6 @@ class ProveedoresController extends Controller
         \Log::info('=== guardarOActualizarDetalleFactura FIN ===');
     }
 
-
-
-
-
-
-
-
     private function guardarDetalleFactura($producto, $facturaId, $esEdicion = false)
     {
         $detalleExistente = DB::connection('sqlsrv')
@@ -2683,89 +2529,6 @@ class ProveedoresController extends Controller
             ], 500);
         }
     }
-
-    // public function store(Request $request)
-    // {
-    //     try {
-    //         // Validación directa
-    //         $validated = $request->validate([
-    //             'proveedor_id' => 'required|exists:Proveedores,ProveedorId',
-    //             'fecha' => 'required|date',
-    //             'descripcion' => 'required|string|max:500',
-    //             'tasa_cambio' => 'required|numeric|min:0',
-    //             'monto_divisa' => 'required|numeric|min:0.01',
-    //             'monto_bs' => 'required|numeric|min:0',
-    //             'forma_pago' => 'required|integer',
-    //             'numero_operacion' => 'nullable|string|max:100',
-    //             'estatus' => 'required|integer',
-    //             'tipo_transaccion' => 'required|integer',
-    //             'sucursal_id' => 'required|integer',
-    //             'comprobante' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120'
-    //         ]);
-            
-    //         DB::connection('sqlsrv')->beginTransaction();
-
-    //         $proveedor = $this->buscarDatosTransaccionProveedor($request->proveedor_id);
-            
-    //         if (!$proveedor) {
-    //             return response()->json(['success' => false, 'message' => 'Proveedor no encontrado'], 404);
-    //         }
-            
-    //         // 2. Crear objeto Pago con los datos del formulario
-    //         $pago = $proveedor->pago;
-    //         $pago->Descripcion = $request->descripcion;
-    //         $pago->MontoDivisaAbonado = $request->monto_divisa;
-    //         $pago->MontoAbonado = $request->monto_bs;
-    //         $pago->FormaDePago = $request->forma_pago;
-    //         $pago->Fecha = $request->fecha;
-    //         $pago->TasaDeCambio = $request->tasa_cambio;
-    //         $pago->SucursalId = $request->sucursal_id;
-            
-    //         // Subir comprobante si existe
-    //         if ($request->hasFile('comprobante')) {
-    //             $comprobante = $request->file('comprobante');
-    //             $extension = $comprobante->getClientOriginalExtension();
-                
-    //             // Generar nombre como en .NET: PAG{yyyyMMddhhmm}-{proveedorId}.extensión
-    //             $fileName = 'PAG' . date('YmdHi') . '-' . $request->proveedor_id . '.' . $extension;
-                
-    //             // Guardar en storage/app/public/images/comprobantes/
-    //             $path = $comprobante->storeAs('images/comprobantes', $fileName, 'public');
-                
-    //             // Guardar SOLO el nombre del archivo (como en .NET)
-    //             $pago->UrlComprobante = $fileName;
-    //         }
-            
-    //         // 3. Asignar Tipo y Estatus
-    //         $pago->Tipo = 0;     // PagoMercancia
-    //         $pago->Estatus = 2;  // Pagada
-            
-    //         // 4. Guardar transacción (como GuardarTransaccionDeProveedor)
-    //         $pagoGuardado = $this->guardarTransaccionDeProveedor($pago, $request->proveedor_id);
-            
-    //         // 5. Si es proveedor de mercancía, refrescar facturas vigentes
-    //         if ($proveedor->Tipo == 0) { // 0 = Mercancía
-    //             $facturasVigentes = $this->buscarFacturasActivas($request->proveedor_id);
-    //         }
-            
-    //         DB::connection('sqlsrv')->commit();
-            
-    //         return response()->json([
-    //             'success' => true,
-    //             'message' => 'La transacción se guardó con éxito',
-    //             'transaccion_id' => $pagoGuardado->Id,
-    //             'numero_operacion' => $pagoGuardado->NumeroOperacion
-    //         ]);
-            
-    //     } catch (\Exception $e) {
-    //         DB::connection('sqlsrv')->rollBack();
-            
-    //         return response()->json([
-    //             'success' => false,
-    //             'message' => $e->getMessage()
-    //         ], 500);
-    //     }
-    // }
 
     public function store(Request $request)
     {
@@ -3153,162 +2916,6 @@ class ProveedoresController extends Controller
             return redirect()->back()->with('error', 'Error al cargar el formulario: ' . $e->getMessage());
         }
     }
-
-    /**
-     * Actualizar pago (solo comprobante)
-     */
-    // public function actualizarPago(Request $request, $id)
-    // {
-    //     try {
-    //         DB::connection('sqlsrv')->beginTransaction();
-            
-    //         // Validar datos
-    //         $request->validate([
-    //             'monto_divisa' => 'required|numeric|min:0.01',
-    //             'tasa_cambio' => 'required|numeric|min:0',
-    //             'fecha' => 'required|date',
-    //             'descripcion' => 'nullable|string|max:500',
-    //             'numero_operacion' => 'nullable|string|max:100',
-    //             'comprobante' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120'
-    //         ]);
-            
-    //         // 1. Buscar el pago original
-    //         $pagoOriginal = DB::connection('sqlsrv')
-    //             ->table('Transacciones')
-    //             ->where('ID', $id)
-    //             ->first();
-            
-    //         if (!$pagoOriginal) {
-    //             throw new \Exception('Pago no encontrado');
-    //         }
-            
-    //         // 2. Buscar la relación original
-    //         $relacionOriginal = DB::connection('sqlsrv')
-    //             ->table('TransaccionesProveedor')
-    //             ->where('TransaccionId', $id)
-    //             ->first();
-            
-    //         if (!$relacionOriginal) {
-    //             throw new \Exception('Relación del pago no encontrada');
-    //         }
-            
-    //         $proveedorId = $relacionOriginal->ProveedorId;
-            
-    //         // 3. ELIMINAR la transacción original y su relación (para recrearla)
-    //         DB::connection('sqlsrv')->table('TransaccionesProveedor')
-    //             ->where('TransaccionId', $id)
-    //             ->delete();
-            
-    //         DB::connection('sqlsrv')->table('Transacciones')
-    //             ->where('ID', $id)
-    //             ->delete();
-            
-    //         // 4. Subir nuevo comprobante si existe, si no conservar el anterior
-    //         $urlComprobante = null;
-    //         if ($request->hasFile('comprobante')) {
-    //             $comprobante = $request->file('comprobante');
-    //             $extension = $comprobante->getClientOriginalExtension();
-    //             $fileName = 'PAG' . date('YmdHi') . '-' . $proveedorId . '.' . $extension;
-    //             $comprobante->storeAs('images/comprobantes', $fileName, 'public');
-    //             $urlComprobante = $fileName;
-    //         } else {
-    //             $urlComprobante = $pagoOriginal->UrlComprobante;
-    //         }
-            
-    //         // 5. Calcular el nuevo monto en Bs
-    //         $montoBs = $request->monto_divisa * $request->tasa_cambio;
-            
-    //         // 6. Crear nuevo objeto pago con los datos actualizados
-    //         $pago = new \stdClass();
-    //         $pago->Id = 0;
-    //         $pago->Descripcion = $request->descripcion ?? $pagoOriginal->Descripcion;
-    //         $pago->MontoDivisaAbonado = $request->monto_divisa;
-    //         $pago->MontoAbonado = $montoBs;
-    //         $pago->NumeroOperacion = $request->numero_operacion ?? $pagoOriginal->NumeroOperacion;
-    //         $pago->TasaDeCambio = $request->tasa_cambio;
-    //         $pago->FormaDePago = $pagoOriginal->FormaDePago;
-    //         $pago->Fecha = $request->fecha;
-    //         $pago->Estatus = $pagoOriginal->Estatus;
-    //         $pago->Tipo = $pagoOriginal->Tipo;
-    //         $pago->UrlComprobante = $urlComprobante;
-            
-    //         // 7. Obtener facturas vigentes del proveedor
-    //         $facturasVigentes = $this->buscarFacturasActivas($proveedorId);
-            
-    //         // 8. Distribuir el nuevo monto entre las facturas
-    //         $montoRestante = $pago->MontoDivisaAbonado;
-    //         $transaccionCreada = null;
-    //         $facturasAfectadas = [];
-            
-    //         foreach ($facturasVigentes as $factura) {
-    //             if ($montoRestante <= 0) break;
-                
-    //             if ($factura->saldo_pendiente <= 0) continue;
-                
-    //             $montoAPagar = 0;
-    //             $cerrarFactura = false;
-                
-    //             if ($montoRestante >= $factura->saldo_pendiente) {
-    //                 $montoAPagar = $factura->saldo_pendiente;
-    //                 $montoRestante -= $montoAPagar;
-    //                 $cerrarFactura = true;
-    //             } else {
-    //                 $montoAPagar = $montoRestante;
-    //                 $montoRestante = 0;
-    //             }
-                
-    //             $descripcionAuto = 'Auto.' . ($pago->Descripcion ?? 'Pago registrado');
-    //             $sucursalId = $factura->SucursalId ?? 8;
-                
-    //             // Crear nueva transacción
-    //             $transaccionId = DB::connection('sqlsrv')->table('Transacciones')->insertGetId([
-    //                 'Descripcion' => $descripcionAuto,
-    //                 'MontoAbonado' => $montoAPagar * $pago->TasaDeCambio,
-    //                 'MontoDivisaAbonado' => $montoAPagar,
-    //                 'NumeroOperacion' => $pago->NumeroOperacion,
-    //                 'DivisaId' => null,
-    //                 'TasaDeCambio' => $pago->TasaDeCambio,
-    //                 'Tipo' => $pago->Tipo,
-    //                 'FormaDePago' => $pago->FormaDePago,
-    //                 'Estatus' => $pago->Estatus,
-    //                 'Fecha' => $pago->Fecha,
-    //                 'UrlComprobante' => $pago->UrlComprobante,
-    //                 'SucursalOrigenId' => $sucursalId,
-    //                 'SucursalId' => $sucursalId,
-    //                 'Observacion' => $descripcionAuto,
-    //                 'Nombre' => '',
-    //                 'Cedula' => '',
-    //                 'CategoriaId' => 0
-    //             ]);
-                
-    //             // Guardar relación
-    //             DB::connection('sqlsrv')->table('TransaccionesProveedor')->insert([
-    //                 'ProveedorId' => $proveedorId,
-    //                 'TransaccionId' => $transaccionId,
-    //                 'FacturaId' => $factura->ID
-    //             ]);
-                
-    //             $facturasAfectadas[] = [
-    //                 'factura_id' => $factura->ID,
-    //                 'factura_numero' => $factura->Numero,
-    //                 'monto_pagado' => $montoAPagar,
-    //                 'factura_cerrada' => $cerrarFactura
-    //             ];
-                
-    //             $transaccionCreada = $transaccionId;
-    //         }
-            
-    //         DB::connection('sqlsrv')->commit();
-            
-    //         return redirect()->route('cpanel.pagos.detalle', $transaccionCreada)
-    //             ->with('success', 'Pago actualizado correctamente. Se redistribuyó $' . number_format($request->monto_divisa, 2) . ' entre las facturas pendientes.');
-            
-    //     } catch (\Exception $e) {
-    //         DB::connection('sqlsrv')->rollBack();
-    //         Log::error('Error en actualizarPago: ' . $e->getMessage());
-    //         return redirect()->back()->with('error', 'Error al actualizar el pago: ' . $e->getMessage());
-    //     }
-    // }
 
     public function actualizarPago(Request $request, $id)
     {
@@ -4191,6 +3798,735 @@ class ProveedoresController extends Controller
             return response()->json(['success' => true, 'message' => 'Contenedor eliminado']);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function listaRentabilidad(Request $request)
+    {
+        try {
+            session([
+                'menu_active' => 'Proveedor Mercancía',
+                'submenu_active' => 'Rentabilidad'
+            ]);
+
+            $tipo = 0;
+
+            $fechaInicio = $request->input('fecha_inicio') 
+                ? Carbon::parse($request->input('fecha_inicio'))->startOfDay()
+                : Carbon::now()->startOfMonth();
+
+            $fechaFin = $request->input('fecha_fin') 
+                ? Carbon::parse($request->input('fecha_fin'))->endOfDay()
+                : Carbon::now()->endOfDay();
+
+            $proveedoresMercancia = GeneralHelper::BuscarListadoProveedores($tipo);
+
+            $ventasDiarias = DB::connection('sqlsrv')
+                ->table('VentaDiariaProveedorTotalizada')
+                ->whereBetween('Fecha', [$fechaInicio, $fechaFin])
+                ->select('ProveedorId', 'Cantidad', 'Costodivisa', 'Totaldivisa')
+                ->get();
+
+            $ventasPorProveedor = [];
+            foreach ($ventasDiarias as $venta) {
+                $proveedorId = $venta->ProveedorId;
+                
+                if (!isset($ventasPorProveedor[$proveedorId])) {
+                    $ventasPorProveedor[$proveedorId] = [
+                        'totalCosto' => 0,
+                        'totalVentas' => 0,
+                        'totalCantidad' => 0
+                    ];
+                }
+                
+                $ventasPorProveedor[$proveedorId]['totalCosto'] += $venta->Costodivisa ?? 0;
+                $ventasPorProveedor[$proveedorId]['totalVentas'] += $venta->Totaldivisa ?? 0;
+                $ventasPorProveedor[$proveedorId]['totalCantidad'] += $venta->Cantidad ?? 0;
+            }
+
+            // --- CALCULAR ESTADÍSTICAS SOBRE TODOS LOS PROVEEDORES ---
+            $datosRentabilidad = [];
+            $estadisticasGenerales = $this->calcularEstadisticasGenerales($proveedoresMercancia, $ventasPorProveedor);
+
+            $totalesGlobales = (object) [
+                'compras' => $estadisticasGenerales['totalCompras'],
+                'ventas' => $estadisticasGenerales['totalVentas'],
+                'utilidad' => $estadisticasGenerales['utilidadTotal'],
+                'rentabilidad' => $estadisticasGenerales['rentabilidadGeneral'],
+                'cantidadTotal' => $estadisticasGenerales['cantidadTotal'],
+                'promedioVentaPorProveedor' => $estadisticasGenerales['promedioVentaPorProveedor'],
+                'proveedoresConVentas' => $estadisticasGenerales['proveedoresConVentas'],
+                'proveedoresSinVentas' => $estadisticasGenerales['proveedoresSinVentas'],
+                'maxRentabilidad' => $estadisticasGenerales['maxRentabilidad'],
+                'minRentabilidad' => $estadisticasGenerales['minRentabilidad'],
+                'promedioRentabilidad' => $estadisticasGenerales['promedioRentabilidad'],
+                'medianaRentabilidad' => $estadisticasGenerales['medianaRentabilidad'],
+                'desviacionRentabilidad' => $estadisticasGenerales['desviacionRentabilidad'],
+            ];
+
+            // Construir datos de rentabilidad para cada proveedor
+            foreach ($proveedoresMercancia as $proveedor) {
+                $proveedorId = $proveedor->ProveedorId;
+                
+                if (isset($ventasPorProveedor[$proveedorId])) {
+                    $data = $ventasPorProveedor[$proveedorId];
+                    $ventas = $data['totalVentas'];
+                    $costo = $data['totalCosto'];
+                    $utilidad = $ventas - $costo;
+                    $rentabilidad = $ventas > 0 ? round(($utilidad / $ventas) * 100, 2) : 0;
+                    $cantidad = $data['totalCantidad'];
+                } else {
+                    $ventas = 0;
+                    $costo = 0;
+                    $utilidad = 0;
+                    $rentabilidad = 0;
+                    $cantidad = 0;
+                }
+
+                $datosRentabilidad[$proveedorId] = (object) [
+                    'compras' => $costo,
+                    'ventas' => $ventas,
+                    'utilidad' => $utilidad,
+                    'rentabilidad' => $rentabilidad,
+                    'cantidad' => $cantidad
+                ];
+            }
+
+            // ============================================
+            // CALCULAR TOP PROVEEDORES
+            // ============================================
+
+            // 1. Top 3 por Utilidad ($)
+            $topPorUtilidad = collect($proveedoresMercancia)
+                ->map(function($proveedor) use ($datosRentabilidad) {
+                    $id = $proveedor->ProveedorId;
+                    return (object) [
+                        'proveedor' => $proveedor,
+                        'utilidad' => $datosRentabilidad[$id]->utilidad ?? 0,
+                        'ventas' => $datosRentabilidad[$id]->ventas ?? 0,
+                        'compras' => $datosRentabilidad[$id]->compras ?? 0,
+                        'rentabilidad' => $datosRentabilidad[$id]->rentabilidad ?? 0
+                    ];
+                })
+                ->sortByDesc('utilidad')
+                ->take(3)
+                ->values();
+
+            // 2. Top 3 por Rentabilidad (%)
+            $topPorRentabilidad = collect($proveedoresMercancia)
+                ->map(function($proveedor) use ($datosRentabilidad) {
+                    $id = $proveedor->ProveedorId;
+                    return (object) [
+                        'proveedor' => $proveedor,
+                        'utilidad' => $datosRentabilidad[$id]->utilidad ?? 0,
+                        'ventas' => $datosRentabilidad[$id]->ventas ?? 0,
+                        'compras' => $datosRentabilidad[$id]->compras ?? 0,
+                        'rentabilidad' => $datosRentabilidad[$id]->rentabilidad ?? 0
+                    ];
+                })
+                ->filter(function($item) {
+                    return $item->ventas > 0; // Solo proveedores con ventas
+                })
+                ->sortByDesc('rentabilidad')
+                ->take(3)
+                ->values();
+
+            // Ordenar proveedores por rentabilidad (para la tabla principal)
+            usort($proveedoresMercancia, function($a, $b) use ($datosRentabilidad) {
+                $rentabilidadA = isset($datosRentabilidad[$a->ProveedorId]) 
+                    ? $datosRentabilidad[$a->ProveedorId]->rentabilidad 
+                    : -999999;
+                $rentabilidadB = isset($datosRentabilidad[$b->ProveedorId]) 
+                    ? $datosRentabilidad[$b->ProveedorId]->rentabilidad 
+                    : -999999;
+                return $rentabilidadB <=> $rentabilidadA;
+            });
+
+            return view('cpanel.proveedores.rentabilidad', [
+                'proveedoresMercancia' => $proveedoresMercancia,
+                'datosRentabilidad' => $datosRentabilidad,
+                'totales' => $totalesGlobales,
+                'estadisticas' => $estadisticasGenerales,
+                'topPorUtilidad' => $topPorUtilidad,
+                'topPorRentabilidad' => $topPorRentabilidad,
+                'fechaInicio' => $fechaInicio->format('Y-m-d'),
+                'fechaFin' => $fechaFin->format('Y-m-d')
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error en listaRentabilidad: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar Rentabilidad: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Calcular estadísticas avanzadas basadas en todos los proveedores
+     */
+    private function calcularEstadisticasGenerales($proveedoresMercancia, $ventasPorProveedor)
+    {
+        $totalCompras = 0;
+        $totalVentas = 0;
+        $totalCantidad = 0;
+        $rentabilidades = [];
+        $proveedoresConVentas = 0;
+        $proveedoresSinVentas = 0;
+        $totalProveedores = count($proveedoresMercancia);
+
+        // Iterar sobre TODOS los proveedores, no solo los que tienen ventas
+        foreach ($proveedoresMercancia as $proveedor) {
+            $proveedorId = $proveedor->ProveedorId;
+            
+            if (isset($ventasPorProveedor[$proveedorId])) {
+                $data = $ventasPorProveedor[$proveedorId];
+                $compras = $data['totalCosto'];
+                $ventas = $data['totalVentas'];
+                $cantidad = $data['totalCantidad'];
+                
+                $totalCompras += $compras;
+                $totalVentas += $ventas;
+                $totalCantidad += $cantidad;
+
+                if ($ventas > 0) {
+                    $proveedoresConVentas++;
+                    $utilidad = $ventas - $compras;
+                    $rentabilidad = ($ventas > 0) ? round(($utilidad / $ventas) * 100, 2) : 0;
+                    $rentabilidades[] = $rentabilidad;
+                } else {
+                    $proveedoresSinVentas++;
+                    $rentabilidades[] = 0;
+                }
+            } else {
+                // Proveedor sin ventas en el período
+                $proveedoresSinVentas++;
+                $rentabilidades[] = 0;
+            }
+        }
+
+        $utilidadTotal = $totalVentas - $totalCompras;
+        $rentabilidadGeneral = $totalVentas > 0 ? round(($utilidadTotal / $totalVentas) * 100, 2) : 0;
+        
+        $promedioVentaPorProveedor = $totalProveedores > 0 ? round($totalVentas / $totalProveedores, 2) : 0;
+
+        // Estadísticas de rentabilidad
+        sort($rentabilidades);
+        $count = count($rentabilidades);
+        $maxRentabilidad = $count > 0 ? max($rentabilidades) : 0;
+        $minRentabilidad = $count > 0 ? min($rentabilidades) : 0;
+        $promedioRentabilidad = $count > 0 ? round(array_sum($rentabilidades) / $count, 2) : 0;
+        
+        // Mediana
+        $medianaRentabilidad = 0;
+        if ($count > 0) {
+            $middle = floor($count / 2);
+            if ($count % 2 == 0) {
+                $medianaRentabilidad = round(($rentabilidades[$middle - 1] + $rentabilidades[$middle]) / 2, 2);
+            } else {
+                $medianaRentabilidad = round($rentabilidades[$middle], 2);
+            }
+        }
+
+        // Desviación estándar
+        $desviacionRentabilidad = 0;
+        if ($count > 1) {
+            $mean = array_sum($rentabilidades) / $count;
+            $variance = array_sum(array_map(function($x) use ($mean) {
+                return pow($x - $mean, 2);
+            }, $rentabilidades)) / $count;
+            $desviacionRentabilidad = round(sqrt($variance), 2);
+        }
+
+        return [
+            'totalCompras' => $totalCompras,
+            'totalVentas' => $totalVentas,
+            'utilidadTotal' => $utilidadTotal,
+            'rentabilidadGeneral' => $rentabilidadGeneral,
+            'cantidadTotal' => $totalCantidad,
+            'totalProveedores' => $totalProveedores,
+            'proveedoresConVentas' => $proveedoresConVentas,
+            'proveedoresSinVentas' => $proveedoresSinVentas,
+            'promedioVentaPorProveedor' => $promedioVentaPorProveedor,
+            'maxRentabilidad' => $maxRentabilidad,
+            'minRentabilidad' => $minRentabilidad,
+            'promedioRentabilidad' => $promedioRentabilidad,
+            'medianaRentabilidad' => $medianaRentabilidad,
+            'desviacionRentabilidad' => $desviacionRentabilidad,
+        ];
+    }
+
+    public function detalleRentabilidad($id, Request $request)
+    {
+        try {
+            // RECIBIR LAS FECHAS DEL REQUEST (DESDE LA LISTA PRINCIPAL)
+            $fechaInicio = $request->input('fecha_inicio') 
+                ? Carbon::parse($request->input('fecha_inicio'))->startOfDay()
+                : Carbon::now()->startOfMonth();
+
+            $fechaFin = $request->input('fecha_fin') 
+                ? Carbon::parse($request->input('fecha_fin'))->endOfDay()
+                : Carbon::now()->endOfDay();
+
+            // 1. Buscar proveedor
+            $proveedor = DB::connection('sqlsrv')
+                ->table('Proveedores')
+                ->where('ProveedorId', $id)
+                ->first();
+
+            if (!$proveedor) {
+                return back()->with('error', 'Proveedor no encontrado');
+            }
+
+            // 2. Obtener ventas por sucursal del proveedor en el período
+            $ventasPorSucursal = DB::connection('sqlsrv')
+                ->table('VentaDiariaProveedorTotalizada')
+                ->where('ProveedorId', $id)
+                ->whereBetween('Fecha', [$fechaInicio, $fechaFin])
+                ->select(
+                    'SucursalId',
+                    DB::raw('SUM(cantidad) as TotalCantidad'),
+                    DB::raw('SUM(costodivisa) as TotalCosto'),
+                    DB::raw('SUM(totaldivisa) as TotalVentas'),
+                    DB::raw('COUNT(*) as NumeroVentas')
+                )
+                ->groupBy('SucursalId')
+                ->get();
+
+            // 3. Obtener nombres de sucursales
+            $sucursalesIds = $ventasPorSucursal->pluck('SucursalId')->filter()->toArray();
+            $sucursales = [];
+            
+            if (!empty($sucursalesIds)) {
+                $sucursalesData = DB::connection('sqlsrv')
+                    ->table('Sucursales')
+                    ->whereIn('ID', $sucursalesIds)
+                    ->get();
+                
+                foreach ($sucursalesData as $suc) {
+                    $sucursales[$suc->ID] = $suc->Nombre ?? 'Sucursal ' . $suc->ID;
+                }
+            }
+
+            // 4. Calcular totales generales
+            $totalVentas = 0;
+            $totalCosto = 0;
+            $totalCantidad = 0;
+            $totalVentasCount = 0;
+
+            foreach ($ventasPorSucursal as $item) {
+                $totalVentas += $item->TotalVentas ?? 0;
+                $totalCosto += $item->TotalCosto ?? 0;
+                $totalCantidad += $item->TotalCantidad ?? 0;
+                $totalVentasCount += $item->NumeroVentas ?? 0;
+            }
+
+            $totalUtilidad = $totalVentas - $totalCosto;
+            $rentabilidadGeneral = $totalVentas > 0 
+                ? round(($totalUtilidad / $totalVentas) * 100, 2) 
+                : 0;
+
+            // 5. Preparar datos por sucursal
+            $sucursalesData = [];
+            foreach ($ventasPorSucursal as $item) {
+                $sucursalId = $item->SucursalId;
+                $ventas = $item->TotalVentas ?? 0;
+                $costo = $item->TotalCosto ?? 0;
+                $utilidad = $ventas - $costo;
+                $rentabilidad = $ventas > 0 ? round(($utilidad / $ventas) * 100, 2) : 0;
+
+                $sucursalesData[] = (object) [
+                    'SucursalId' => $sucursalId,
+                    'SucursalNombre' => $sucursales[$sucursalId] ?? 'Sucursal ' . $sucursalId,
+                    'TotalVentas' => $ventas,
+                    'TotalCosto' => $costo,
+                    'TotalUtilidad' => $utilidad,
+                    'Rentabilidad' => $rentabilidad,
+                    'TotalCantidad' => $item->TotalCantidad ?? 0,
+                    'NumeroVentas' => $item->NumeroVentas ?? 0
+                ];
+            }
+
+            // Ordenar sucursales por rentabilidad (mayor a menor)
+            usort($sucursalesData, function($a, $b) {
+                return $b->Rentabilidad <=> $a->Rentabilidad;
+            });
+
+            return view('cpanel.proveedores.rentabilidad-detalle', [
+                'proveedor' => $proveedor,
+                'sucursalesData' => $sucursalesData,
+                'totalVentas' => $totalVentas,
+                'totalCosto' => $totalCosto,
+                'totalUtilidad' => $totalUtilidad,
+                'rentabilidadGeneral' => $rentabilidadGeneral,
+                'totalCantidad' => $totalCantidad,
+                'totalVentasCount' => $totalVentasCount,
+                'fechaInicio' => $fechaInicio->format('Y-m-d'),
+                'fechaFin' => $fechaFin->format('Y-m-d')
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error en detalleRentabilidad: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar el detalle: ' . $e->getMessage());
+        }
+    }
+
+    public function detalleRentabilidadSucursal($proveedorId, $sucursalId, Request $request)
+    {
+        try {
+            $fechaInicio = $request->input('fecha_inicio') 
+                ? Carbon::parse($request->input('fecha_inicio'))->startOfDay()
+                : Carbon::now()->startOfMonth();
+
+            $fechaFin = $request->input('fecha_fin') 
+                ? Carbon::parse($request->input('fecha_fin'))->endOfDay()
+                : Carbon::now()->endOfDay();
+
+            // 1. Buscar proveedor
+            $proveedor = DB::connection('sqlsrv')
+                ->table('Proveedores')
+                ->where('ProveedorId', $proveedorId)
+                ->first();
+
+            if (!$proveedor) {
+                return back()->with('error', 'Proveedor no encontrado');
+            }
+
+            // 2. Buscar sucursal
+            $sucursal = DB::connection('sqlsrv')
+                ->table('Sucursales')
+                ->where('ID', $sucursalId)
+                ->first();
+
+            if (!$sucursal) {
+                return back()->with('error', 'Sucursal no encontrada');
+            }
+
+            // 3. Obtener el costo histórico total de la sucursal desde VentaDiariaProveedorTotalizada
+            $costoHistoricoTotal = DB::connection('sqlsrv')
+                ->table('VentaDiariaProveedorTotalizada')
+                ->where('ProveedorId', $proveedorId)
+                ->where('SucursalId', $sucursalId)
+                ->whereBetween('Fecha', [$fechaInicio, $fechaFin])
+                ->sum('costodivisa');
+
+            // 4. Obtener productos con sus ventas y costo actual
+            $productosData = DB::connection('sqlsrv')
+                ->table('VentaProductosView as vpv')
+                ->join('Productos as p', 'vpv.ProductoId', '=', 'p.ID')
+                ->join('ProveedorProducto as pp', 'p.ID', '=', 'pp.ProductoId')
+                ->where('vpv.SucursalId', $sucursalId)
+                ->where('pp.ProveedorId', $proveedorId)
+                ->whereBetween('vpv.Fecha', [$fechaInicio, $fechaFin])
+                ->select(
+                    'p.ID as ProductoId',
+                    'p.Codigo',
+                    'p.Referencia',
+                    'p.Descripcion',
+                    'p.UrlFoto',
+                    'p.CostoDivisa as CostoActualUnitario',
+                    DB::raw('SUM(vpv.Cantidad) as TotalCantidad'),
+                    DB::raw('SUM(vpv.MontoDivisa) as TotalVentas'),
+                    DB::raw('COUNT(DISTINCT vpv.VentaId) as NumeroTransacciones'),
+                    DB::raw('COUNT(DISTINCT vpv.Fecha) as DiasVendidos'),
+                    DB::raw('AVG(vpv.PvpDivisa) as PrecioPromedioDivisa')
+                )
+                ->groupBy('p.ID', 'p.Codigo', 'p.Referencia', 'p.Descripcion', 'p.UrlFoto', 'p.CostoDivisa')
+                ->orderBy(DB::raw('SUM(vpv.MontoDivisa)'), 'desc')
+                ->get();
+
+            // 5. Calcular costos histórico y actual por producto
+            $totalVentasProductos = $productosData->sum('TotalVentas');
+            $totalCostoHistorico = 0;
+            $totalCostoActual = 0;
+            
+            foreach ($productosData as $producto) {
+                // Costo histórico (distribuido proporcionalmente)
+                $proporcion = $totalVentasProductos > 0 ? ($producto->TotalVentas / $totalVentasProductos) : 0;
+                $costoHistorico = round($costoHistoricoTotal * $proporcion, 2);
+                
+                // Costo actual (desde la tabla Productos)
+                $costoActual = round(($producto->CostoActualUnitario ?? 0) * $producto->TotalCantidad, 2);
+                
+                $producto->CostoHistoricoTotal = $costoHistorico;
+                $producto->CostoActualTotal = $costoActual;
+                $producto->CostoHistoricoUnitario = $producto->TotalCantidad > 0 
+                    ? round($costoHistorico / $producto->TotalCantidad, 2) 
+                    : 0;
+                
+                $totalCostoHistorico += $costoHistorico;
+                $totalCostoActual += $costoActual;
+            }
+
+            // Ajustar el último producto para compensar errores de redondeo
+            if ($productosData->count() > 0 && round($totalCostoHistorico, 2) != round($costoHistoricoTotal, 2)) {
+                $diferencia = $costoHistoricoTotal - $totalCostoHistorico;
+                $ultimoProducto = $productosData->last();
+                $ultimoProducto->CostoHistoricoTotal += round($diferencia, 2);
+                $totalCostoHistorico += round($diferencia, 2);
+            }
+
+            // 6. Calcular totales y rentabilidad
+            $totalVentas = $productosData->sum('TotalVentas');
+            $totalCantidad = $productosData->sum('TotalCantidad');
+            
+            // Rentabilidad con costo histórico (ESTA ES LA QUE SE USA PARA TODO)
+            $totalUtilidad = $totalVentas - $totalCostoHistorico;
+            $rentabilidadSucursal = $totalVentas > 0 
+                ? round(($totalUtilidad / $totalVentas) * 100, 2) 
+                : 0;
+            
+            // Rentabilidad con costo actual (solo informativa)
+            $totalUtilidadActual = $totalVentas - $totalCostoActual;
+            $rentabilidadActual = $totalVentas > 0 
+                ? round(($totalUtilidadActual / $totalVentas) * 100, 2) 
+                : 0;
+
+            // 7. Procesar cada producto con sus métricas
+            foreach ($productosData as $producto) {
+                $ventas = $producto->TotalVentas ?? 0;
+                
+                // Rentabilidad histórica (USA ESTA PARA LA VISTA)
+                $costoHistorico = $producto->CostoHistoricoTotal ?? 0;
+                $utilidadHistorica = $ventas - $costoHistorico;
+                $rentabilidadHistorica = $ventas > 0 
+                    ? round(($utilidadHistorica / $ventas) * 100, 2) 
+                    : 0;
+                
+                // Rentabilidad actual (solo informativa)
+                $costoActual = $producto->CostoActualTotal ?? 0;
+                $utilidadActual = $ventas - $costoActual;
+                $rentabilidadActualProducto = $ventas > 0 
+                    ? round(($utilidadActual / $ventas) * 100, 2) 
+                    : 0;
+                
+                $producto->UtilidadHistorica = $utilidadHistorica;
+                $producto->RentabilidadHistorica = $rentabilidadHistorica;
+                $producto->UtilidadActual = $utilidadActual;
+                $producto->RentabilidadActual = $rentabilidadActualProducto;
+                $producto->PrecioPromedio = $producto->TotalCantidad > 0 
+                    ? round($producto->TotalVentas / $producto->TotalCantidad, 2) 
+                    : 0;
+            }
+
+            // 8. Ordenar productos por rentabilidad histórica (mayor a menor)
+            $productosData = $productosData->sortByDesc('RentabilidadHistorica')->values();
+
+            return view('cpanel.proveedores.rentabilidad-productos', [
+                'proveedor' => $proveedor,
+                'sucursal' => $sucursal,
+                'productosData' => $productosData,
+                // Variables que usa la vista
+                'totalVentas' => $totalVentas,
+                'totalCostoHistorico' => $totalCostoHistorico,
+                'totalCostoActual' => $totalCostoActual,
+                'totalUtilidad' => $totalUtilidad, // Utilidad con costo histórico
+                'rentabilidadSucursal' => $rentabilidadSucursal, // Rentabilidad con costo histórico
+                'rentabilidadActual' => $rentabilidadActual, // Rentabilidad con costo actual (informativa)
+                'totalCantidad' => $totalCantidad,
+                'fechaInicio' => $fechaInicio->format('Y-m-d'),
+                'fechaFin' => $fechaFin->format('Y-m-d')
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error en detalleRentabilidadSucursal: ' . $e->getMessage() . ' en ' . $e->getFile() . ':' . $e->getLine());
+            return back()->with('error', 'Error al cargar los productos: ' . $e->getMessage());
+        }
+    }
+
+    public function estadisticasRentabilidadSucursal($proveedorId, $sucursalId, Request $request)
+    {
+        try {
+            $fechaInicio = $request->input('fecha_inicio') 
+                ? Carbon::parse($request->input('fecha_inicio'))->startOfDay()
+                : Carbon::now()->startOfMonth();
+
+            $fechaFin = $request->input('fecha_fin') 
+                ? Carbon::parse($request->input('fecha_fin'))->endOfDay()
+                : Carbon::now()->endOfDay();
+
+            // 1. Buscar proveedor
+            $proveedor = DB::connection('sqlsrv')
+                ->table('Proveedores')
+                ->where('ProveedorId', $proveedorId)
+                ->first();
+
+            if (!$proveedor) {
+                return back()->with('error', 'Proveedor no encontrado');
+            }
+
+            // 2. Buscar sucursal
+            $sucursal = DB::connection('sqlsrv')
+                ->table('Sucursales')
+                ->where('ID', $sucursalId)
+                ->first();
+
+            if (!$sucursal) {
+                return back()->with('error', 'Sucursal no encontrada');
+            }
+
+            // 3. Obtener productos del proveedor en esta sucursal
+            // USANDO EL COSTO REAL DE Productos.CostoDivisa
+            $productosData = DB::connection('sqlsrv')
+                ->table('Ventas as v')
+                ->join('VentaProductos as vp', 'v.ID', '=', 'vp.VentaId')
+                ->join('Productos as p', 'vp.ProductoId', '=', 'p.ID')
+                ->join('ProveedorProducto as pp', 'p.ID', '=', 'pp.ProductoId')
+                ->where('v.SucursalId', $sucursalId)
+                ->where('pp.ProveedorId', $proveedorId)
+                ->whereBetween('v.Fecha', [$fechaInicio, $fechaFin])
+                ->select(
+                    'p.ID as ProductoId',
+                    'p.Codigo',
+                    'p.Referencia',
+                    'p.Descripcion',
+                    'p.CostoDivisa',
+                    'p.UrlFoto',
+                    DB::raw('SUM(vp.Cantidad) as TotalCantidad'),
+                    DB::raw('SUM(vp.Cantidad * p.CostoDivisa) as TotalCosto'),
+                    DB::raw('SUM(vp.MontoDivisa) as TotalVentas'),
+                    DB::raw('COUNT(DISTINCT v.Fecha) as DiasVendidos'),
+                    DB::raw('COUNT(*) as NumeroTransacciones')
+                )
+                ->groupBy('p.ID', 'p.Codigo', 'p.Referencia', 'p.Descripcion', 'p.CostoDivisa', 'p.UrlFoto')
+                ->orderBy(DB::raw('SUM(vp.MontoDivisa)'), 'desc')
+                ->get();
+
+            // 4. Calcular estadísticas por producto
+            foreach ($productosData as $producto) {
+                $ventas = $producto->TotalVentas ?? 0;
+                $costo = $producto->TotalCosto ?? 0;
+                $utilidad = $ventas - $costo;
+                $rentabilidad = $ventas > 0 ? round(($utilidad / $ventas) * 100, 2) : 0;
+                
+                $producto->Utilidad = $utilidad;
+                $producto->Rentabilidad = $rentabilidad;
+                $producto->PrecioPromedio = $producto->TotalCantidad > 0 
+                    ? round($producto->TotalVentas / $producto->TotalCantidad, 2) 
+                    : 0;
+                $producto->CostoPromedio = $producto->TotalCantidad > 0 
+                    ? round($producto->TotalCosto / $producto->TotalCantidad, 2) 
+                    : 0;
+            }
+
+            // 5. Calcular estadísticas generales
+            $totalProductos = $productosData->count();
+            $totalVentas = $productosData->sum('TotalVentas');
+            $totalCosto = $productosData->sum('TotalCosto');
+            $totalUtilidad = $totalVentas - $totalCosto;
+            $totalCantidad = $productosData->sum('TotalCantidad');
+            $totalTransacciones = $productosData->sum('NumeroTransacciones');
+            $rentabilidadGlobal = $totalVentas > 0 ? round(($totalUtilidad / $totalVentas) * 100, 2) : 0;
+
+            // 6. Producto más vendido (por cantidad)
+            $productoMasVendido = $productosData->sortByDesc('TotalCantidad')->first();
+            
+            // 7. Producto más rentable (por rentabilidad % - solo productos con ventas > 0)
+            $productosConVentas = $productosData->filter(function($item) {
+                return ($item->TotalVentas ?? 0) > 0;
+            });
+
+            $productoMasRentable = $productosConVentas->sortByDesc('Rentabilidad')->first();
+            
+            // 8. Producto menos rentable (por rentabilidad % - solo productos con ventas > 0)
+            $productoMenosRentable = $productosConVentas->sortBy('Rentabilidad')->first();
+
+            // 9. Producto que más factura (por monto de ventas)
+            $productoMasFactura = $productosData->sortByDesc('TotalVentas')->first();
+
+            // 10. Calcular posicionamiento del proveedor a nivel general
+            $todosLosProveedores = GeneralHelper::BuscarListadoProveedores(0);
+
+            $ventasRanking = DB::connection('sqlsrv')
+                ->table('VentaDiariaProveedorTotalizada')
+                ->whereBetween('Fecha', [$fechaInicio, $fechaFin])
+                ->select(
+                    'ProveedorId',
+                    DB::raw('SUM(totaldivisa) as TotalVentas'),
+                    DB::raw('SUM(costodivisa) as TotalCosto')
+                )
+                ->groupBy('ProveedorId')
+                ->get()
+                ->keyBy('ProveedorId');
+
+            $rankingConRentabilidad = [];
+            foreach ($todosLosProveedores as $proveedorRanking) {
+                $id = $proveedorRanking->ProveedorId;
+                
+                if (isset($ventasRanking[$id])) {
+                    $ventas = $ventasRanking[$id]->TotalVentas ?? 0;
+                    $costo = $ventasRanking[$id]->TotalCosto ?? 0;
+                } else {
+                    $ventas = 0;
+                    $costo = 0;
+                }
+                
+                $utilidad = $ventas - $costo;
+                $rentabilidad = $ventas > 0 ? round(($utilidad / $ventas) * 100, 2) : 0;
+                
+                $rankingConRentabilidad[] = (object) [
+                    'ProveedorId' => $id,
+                    'TotalVentas' => $ventas,
+                    'TotalCosto' => $costo,
+                    'Utilidad' => $utilidad,
+                    'Rentabilidad' => $rentabilidad,
+                    'Nombre' => $proveedorRanking->Nombre ?? 'Proveedor ' . $id
+                ];
+            }
+
+            $rankingConRentabilidad = collect($rankingConRentabilidad)
+                ->sortByDesc('Utilidad')
+                ->values();
+
+            $posicionProveedor = $rankingConRentabilidad->search(function($item) use ($proveedorId) {
+                return $item->ProveedorId == $proveedorId;
+            });
+            $posicionProveedor = $posicionProveedor !== false ? $posicionProveedor + 1 : null;
+            $totalProveedores = $rankingConRentabilidad->count();
+
+            // 11. Calcular estadísticas adicionales
+            $promedioRentabilidad = $productosConVentas->isNotEmpty() 
+                ? round($productosConVentas->avg('Rentabilidad'), 2) 
+                : 0;
+
+            $productosConPerdida = $productosData->filter(function($item) {
+                return ($item->Utilidad ?? 0) < 0;
+            });
+
+            $productosAltaRentabilidad = $productosData->filter(function($item) {
+                return ($item->Rentabilidad ?? 0) >= 30;
+            });
+
+            $productosBajaRentabilidad = $productosData->filter(function($item) {
+                $rentabilidad = $item->Rentabilidad ?? 0;
+                return $rentabilidad > 0 && $rentabilidad < 10;
+            });
+
+            return view('cpanel.proveedores.rentabilidad-estadisticas', [
+                'proveedor' => $proveedor,
+                'sucursal' => $sucursal,
+                'productosData' => $productosData,
+                'totalProductos' => $totalProductos,
+                'totalVentas' => $totalVentas,
+                'totalCosto' => $totalCosto,
+                'totalUtilidad' => $totalUtilidad,
+                'totalCantidad' => $totalCantidad,
+                'totalTransacciones' => $totalTransacciones,
+                'rentabilidadGlobal' => $rentabilidadGlobal,
+                'productoMasVendido' => $productoMasVendido,
+                'productoMasRentable' => $productoMasRentable,
+                'productoMenosRentable' => $productoMenosRentable,
+                'productoMasFactura' => $productoMasFactura,
+                'posicionProveedor' => $posicionProveedor,
+                'totalProveedores' => $totalProveedores,
+                'promedioRentabilidad' => $promedioRentabilidad,
+                'productosConPerdida' => $productosConPerdida,
+                'productosAltaRentabilidad' => $productosAltaRentabilidad,
+                'productosBajaRentabilidad' => $productosBajaRentabilidad,
+                'fechaInicio' => $fechaInicio->format('Y-m-d'),
+                'fechaFin' => $fechaFin->format('Y-m-d')
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error en estadisticasRentabilidadSucursal: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar las estadísticas: ' . $e->getMessage());
         }
     }
 }

@@ -683,42 +683,110 @@ class VentasHelper
     }
 
     // Buscar Proveedot
-    public static function BuscarProveedor($proveedorId, $_enumDetalles)
+    // public static function BuscarProveedor($proveedorId, $_enumDetalles)
+    // {
+    //     $_proveedor = Proveedor::find($proveedorId);
+
+    //     if (!$_proveedor)
+    //     {
+    //         switch ($_enumDetalles)
+    //         {
+    //             case 0:
+    //                 break;
+    //             // case EnumDetalleBusquedaProveedores.IncluirCabeceraFacturas:
+
+    //             //     _proveedor.Facturas = await _context.Facturas.Where(d => d.ProveedorId == id).ToListAsync();
+
+    //             //     break;
+    //             // case EnumDetalleBusquedaProveedores.IncluirDetalleFacturas:
+
+    //             //     _proveedor.Facturas = await _context.Facturas.Where(d => d.ProveedorId == id).ToListAsync();
+
+    //             //     foreach (var item in _proveedor.Facturas)
+    //             //     {
+    //             //         item.FacturaDetalles = await _context.FacturaDetalles.Where(d => d.FacturaId == item.Id).ToListAsync();
+    //             //     }
+    //             //     break;
+    //             default:
+    //                 break;
+    //         }
+    //     }
+
+    //     if (!$_proveedor)
+    //     {
+    //         // ProveedorDTO proveedorDTO = _mapper.Map<ProveedorDTO>(_proveedor);
+    //         // return proveedorDTO;
+    //     }
+
+    //     return null;
+    // }
+
+    public static function BuscarProveedor($proveedorId, $enumDetalles = 0)
     {
-        $_proveedor = Proveedor::find($proveedorId);
+        try {
+            // 1. Buscar el proveedor
+            $proveedor = DB::connection('sqlsrv')
+                ->table('Proveedores')
+                ->where('ProveedorId', $proveedorId)
+                ->first();
 
-        if (!$_proveedor)
-        {
-            switch ($_enumDetalles)
-            {
-                case 0:
+            if (!$proveedor) {
+                return null;
+            }
+
+            // 2. Convertir a objeto stdClass para agregar propiedades dinámicas
+            $proveedorData = (object) (array) $proveedor;
+            $proveedorData->Facturas = [];
+
+            // 3. Cargar facturas según el nivel de detalle
+            switch ($enumDetalles) {
+                case 0: // SoloProveedor
+                    // No cargar nada adicional
                     break;
-                // case EnumDetalleBusquedaProveedores.IncluirCabeceraFacturas:
 
-                //     _proveedor.Facturas = await _context.Facturas.Where(d => d.ProveedorId == id).ToListAsync();
+                case 1: // IncluirCabeceraFacturas
+                    $facturas = DB::connection('sqlsrv')
+                        ->table('Facturas')
+                        ->where('ProveedorId', $proveedorId)
+                        ->get();
+                    
+                    $proveedorData->Facturas = $facturas->map(function($factura) {
+                        return (object) (array) $factura;
+                    })->toArray();
+                    break;
 
-                //     break;
-                // case EnumDetalleBusquedaProveedores.IncluirDetalleFacturas:
+                case 2: // IncluirDetalleFacturas
+                    $facturas = DB::connection('sqlsrv')
+                        ->table('Facturas')
+                        ->where('ProveedorId', $proveedorId)
+                        ->get();
 
-                //     _proveedor.Facturas = await _context.Facturas.Where(d => d.ProveedorId == id).ToListAsync();
+                    $proveedorData->Facturas = $facturas->map(function($factura) use ($proveedorId) {
+                        // Obtener detalles de la factura
+                        $detalles = DB::connection('sqlsrv')
+                            ->table('FacturaDetalles')
+                            ->where('FacturaId', $factura->Id)
+                            ->get();
+                        
+                        $facturaObj = (object) (array) $factura;
+                        $facturaObj->FacturaDetalles = $detalles->map(function($detalle) {
+                            return (object) (array) $detalle;
+                        })->toArray();
+                        
+                        return $facturaObj;
+                    })->toArray();
+                    break;
 
-                //     foreach (var item in _proveedor.Facturas)
-                //     {
-                //         item.FacturaDetalles = await _context.FacturaDetalles.Where(d => d.FacturaId == item.Id).ToListAsync();
-                //     }
-                //     break;
                 default:
                     break;
             }
-        }
 
-        if (!$_proveedor)
-        {
-            // ProveedorDTO proveedorDTO = _mapper.Map<ProveedorDTO>(_proveedor);
-            // return proveedorDTO;
-        }
+            return $proveedorData;
 
-        return null;
+        } catch (\Exception $e) {
+            \Log::error('Error en BuscarProveedor: ' . $e->getMessage());
+            return null;
+        }
     }
 
     public static function guardarGastosDiariosSucursal(CierreDiario $cierre, array $data, bool $esEdicion = false) 
