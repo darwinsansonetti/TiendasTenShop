@@ -3844,6 +3844,25 @@ class ProveedoresController extends Controller
                 $ventasPorProveedor[$proveedorId]['totalCantidad'] += $venta->Cantidad ?? 0;
             }
 
+            // ============================================
+            // OBTENER PAGOS REALIZADOS EN EL PERÍODO POR PROVEEDOR
+            // ============================================
+            $pagosEnPeriodo = DB::connection('sqlsrv')
+                ->table('Transacciones as t')
+                ->join('TransaccionesProveedor as tp', 't.ID', '=', 'tp.TransaccionId')
+                ->whereBetween('t.Fecha', [$fechaInicio, $fechaFin])
+                ->where('t.Tipo', 0) // 0 = PagoMercancia
+                ->where('t.Estatus', 2) // 2 = Pagada
+                ->select(
+                    'tp.ProveedorId',
+                    DB::raw('SUM(t.MontoDivisaAbonado) as TotalPagadoDivisa'),
+                    DB::raw('SUM(t.MontoAbonado) as TotalPagadoBs'),
+                    DB::raw('COUNT(*) as CantidadPagos')
+                )
+                ->groupBy('tp.ProveedorId')
+                ->get()
+                ->keyBy('ProveedorId');
+
             // --- CALCULAR ESTADÍSTICAS SOBRE TODOS LOS PROVEEDORES ---
             $datosRentabilidad = [];
             $estadisticasGenerales = $this->calcularEstadisticasGenerales($proveedoresMercancia, $ventasPorProveedor);
@@ -3883,32 +3902,49 @@ class ProveedoresController extends Controller
                     $cantidad = 0;
                 }
 
+                // ============================================
+                // CALCULAR UTILIDAD REAL DISPONIBLE
+                // ============================================
+                // Restar los pagos ya realizados en el período
+                $totalPagado = isset($pagosEnPeriodo[$proveedorId]) 
+                    ? $pagosEnPeriodo[$proveedorId]->TotalPagadoDivisa 
+                    : 0;
+                
+                $utilidadRealDisponible = $utilidad - $totalPagado;
+
                 $datosRentabilidad[$proveedorId] = (object) [
                     'compras' => $costo,
                     'ventas' => $ventas,
                     'utilidad' => $utilidad,
+                    'utilidadRealDisponible' => $utilidadRealDisponible,
+                    'totalPagado' => $totalPagado,
+                    'cantidadPagos' => isset($pagosEnPeriodo[$proveedorId]) 
+                        ? $pagosEnPeriodo[$proveedorId]->CantidadPagos 
+                        : 0,
                     'rentabilidad' => $rentabilidad,
                     'cantidad' => $cantidad
                 ];
             }
 
             // ============================================
-            // CALCULAR TOP PROVEEDORES
+            // CALCULAR TOP PROVEEDORES (CON UTILIDAD REAL)
             // ============================================
 
-            // 1. Top 3 por Utilidad ($)
+            // 1. Top 3 por Utilidad Real Disponible ($)
             $topPorUtilidad = collect($proveedoresMercancia)
                 ->map(function($proveedor) use ($datosRentabilidad) {
                     $id = $proveedor->ProveedorId;
                     return (object) [
                         'proveedor' => $proveedor,
                         'utilidad' => $datosRentabilidad[$id]->utilidad ?? 0,
+                        'utilidadRealDisponible' => $datosRentabilidad[$id]->utilidadRealDisponible ?? 0,
+                        'totalPagado' => $datosRentabilidad[$id]->totalPagado ?? 0,
                         'ventas' => $datosRentabilidad[$id]->ventas ?? 0,
                         'compras' => $datosRentabilidad[$id]->compras ?? 0,
                         'rentabilidad' => $datosRentabilidad[$id]->rentabilidad ?? 0
                     ];
                 })
-                ->sortByDesc('utilidad')
+                ->sortByDesc('utilidadRealDisponible')
                 ->take(3)
                 ->values();
 
@@ -3925,7 +3961,7 @@ class ProveedoresController extends Controller
                     ];
                 })
                 ->filter(function($item) {
-                    return $item->ventas > 0; // Solo proveedores con ventas
+                    return $item->ventas > 0;
                 })
                 ->sortByDesc('rentabilidad')
                 ->take(3)
@@ -4527,6 +4563,122 @@ class ProveedoresController extends Controller
         } catch (\Exception $e) {
             \Log::error('Error en estadisticasRentabilidadSucursal: ' . $e->getMessage());
             return back()->with('error', 'Error al cargar las estadísticas: ' . $e->getMessage());
+        }
+    }
+
+    public function pagarProveedorRentabilidad($id, Request $request)
+    {
+        try {
+            if (!$id) {
+                return redirect()->route('cpanel.proveedor.mercancia.registrar_pagos')
+                    ->with('error', 'Debe indicar un código de proveedor');
+            }
+            
+            // Buscar proveedor
+            $proveedor = DB::connection('sqlsrv')
+                ->table('Proveedores')
+                ->where('ProveedorId', $id)
+                ->first();
+            
+            if (!$proveedor) {
+                return redirect()->route('cpanel.proveedor.mercancia.registrar_pagos')
+                    ->with('error', 'No se pudo encontrar un proveedor');
+            }
+            
+            // Obtener fechas
+            $fechaInicio = $request->input('fecha_inicio') 
+                ? Carbon::parse($request->input('fecha_inicio'))->startOfDay()
+                : Carbon::now()->startOfMonth();
+
+            $fechaFin = $request->input('fecha_fin') 
+                ? Carbon::parse($request->input('fecha_fin'))->endOfDay()
+                : Carbon::now()->endOfDay();
+
+            // ============================================
+            // 1. UTILIDAD DEL PROVEEDOR EN EL PERÍODO
+            // ============================================
+            $ventasProveedor = DB::connection('sqlsrv')
+                ->table('VentaDiariaProveedorTotalizada')
+                ->where('ProveedorId', $id)
+                ->whereBetween('Fecha', [$fechaInicio, $fechaFin])
+                ->select(
+                    DB::raw('SUM(costodivisa) as TotalCosto'),
+                    DB::raw('SUM(totaldivisa) as TotalVentas')
+                )
+                ->first();
+
+            $utilidad = 0;
+            if ($ventasProveedor && $ventasProveedor->TotalVentas > 0) {
+                $utilidad = $ventasProveedor->TotalVentas - $ventasProveedor->TotalCosto;
+            }
+
+            // ============================================
+            // 2. PAGOS REALIZADOS EN EL PERÍODO
+            // ============================================
+            $pagosRealizados = DB::connection('sqlsrv')
+                ->table('Transacciones as t')
+                ->join('TransaccionesProveedor as tp', 't.ID', '=', 'tp.TransaccionId')
+                ->where('tp.ProveedorId', $id)
+                ->whereBetween('t.Fecha', [$fechaInicio, $fechaFin])
+                ->where('t.Tipo', 0)
+                ->where('t.Estatus', 2)
+                ->sum('t.MontoDivisaAbonado');
+
+            // ============================================
+            // 3. UTILIDAD REAL DISPONIBLE
+            // ============================================
+            $utilidadRealDisponible = $utilidad - $pagosRealizados;
+
+            // ============================================
+            // 4. FACTURAS VIGENTES
+            // ============================================
+            $facturasVigentes = $this->buscarFacturasActivas($id);
+
+            // BALANCE DE FACTURAS
+            $balanceFacturas = new \stdClass();
+            $balanceFacturas->totalFacturas = $facturasVigentes->sum('MontoDivisa');
+            $balanceFacturas->totalPagado = $facturasVigentes->sum('total_pagado');
+            $balanceFacturas->saldoPendiente = $balanceFacturas->totalFacturas - $balanceFacturas->totalPagado;
+
+            // ============================================
+            // 5. MÁXIMO PERMITIDO
+            // ============================================
+            $maximoPermitido = min($balanceFacturas->saldoPendiente, $utilidadRealDisponible);
+
+            // Obtener imagen
+            $imgSrc = FileHelper::getOrDownloadFile(
+                'images/proveedores/',
+                $proveedor->UrlImagen,
+                'assets/img/adminlte/img/proveedor_default.png'
+            );
+
+            // Obtener tasa de cambio actual
+            $tasaBcv = DivisaValor::orderBy('ID', 'desc')->first();
+            $tasaCambioActual = $tasaBcv->Valor ?? 40.00;
+            
+            session([
+                'menu_active' => 'Proveedor Mercancía',
+                'submenu_active' => 'Registrar Pagos'
+            ]);
+            
+            return view('cpanel.proveedores.pagar_proveedor_rentabilidad', compact(
+                'proveedor',
+                'imgSrc',
+                'facturasVigentes',
+                'balanceFacturas',
+                'tasaCambioActual',
+                'utilidadRealDisponible',
+                'utilidad',
+                'pagosRealizados',
+                'fechaInicio',
+                'fechaFin',
+                'maximoPermitido'
+            ));
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en pagarProveedorRentabilidad: ' . $e->getMessage());
+            return redirect()->route('cpanel.proveedor.mercancia.registrar_pagos')
+                ->with('error', 'Error al cargar informacion proveedor: ' . $e->getMessage());
         }
     }
 }

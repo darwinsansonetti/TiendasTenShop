@@ -20,6 +20,11 @@
     $totalCompras = 0;
     $totalVentas = 0;
     $totalUtilidad = 0;
+
+    // Condición para pagos
+    $fechaInicioComparar = Carbon::parse($fechaInicio);
+    $fechaLimite = Carbon::parse('2026-08-15');
+    $puedePagarGeneral = $fechaInicioComparar->gte($fechaLimite);
 @endphp
 
 @section('content')
@@ -429,6 +434,34 @@
         </div>
 
         {{-- ================================================ --}}
+        {{-- ALERTA DE CONDICIÓN PARA PAGOS --}}
+        {{-- ================================================ --}}
+        @if(!$puedePagarGeneral)
+            <div class="alert alert-warning border-0 shadow-sm mb-3" style="border-left:4px solid #f59e0b;">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center"
+                         style="width:40px;height:40px;background:rgba(245,158,11,0.15);">
+                        <i class="bi bi-info-circle text-warning" style="font-size:1.2rem;"></i>
+                    </div>
+                    <div>
+                        <h6 class="mb-0 fw-bold text-dark">
+                            <i class="bi bi-cash-stack me-1"></i> Pagos disponibles a partir del 15/08/2026
+                        </h6>
+                        <p class="mb-0 text-muted" style="font-size:0.9rem;">
+                            El botón de pago estará habilitado cuando la fecha de inicio del período sea 
+                            <strong>mayor o igual al 15/08/2026</strong>.
+                            <br>
+                            <span class="text-warning">
+                                <i class="bi bi-calendar me-1"></i>
+                                Período actual: {{ Carbon::parse($fechaInicio)->format('d/m/Y') }} - {{ Carbon::parse($fechaFin)->format('d/m/Y') }}
+                            </span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        {{-- ================================================ --}}
         {{-- TABLA DE PROVEEDORES CON RENTABILIDAD --}}
         {{-- ================================================ --}}
         @if($proveedoresMercancia && count($proveedoresMercancia) > 0)
@@ -443,8 +476,20 @@
                             {{ count($proveedoresMercancia) }}
                         </span>
                     </h6>
-                    <div>
-                        <span class="badge bg-white text-dark me-2" style="font-size:0.7rem;">
+                    <div class="d-flex gap-2">
+                        <button type="button"
+                                class="btn btn-sm fw-semibold"
+                                style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);font-size:0.78rem;"
+                                onclick="exportarExcelRentabilidad()">
+                            <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                        </button>
+                        <button type="button"
+                                class="btn btn-sm fw-semibold"
+                                style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);font-size:0.78rem;"
+                                onclick="pdfTablaRentabilidad()">
+                            <i class="bi bi-printer me-1"></i>PDF
+                        </button>
+                        <span class="badge bg-white text-dark ms-2" style="font-size:0.7rem;align-self:center;">
                             <i class="bi bi-calendar-range me-1"></i>
                             {{ Carbon::parse($fechaInicio)->format('d/m/Y') }} - {{ Carbon::parse($fechaFin)->format('d/m/Y') }}
                         </span>
@@ -453,7 +498,7 @@
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive" style="max-height:600px;overflow-y:auto;">
-                    <table class="table table-hover align-middle mb-0" id="tablaProveedores">
+                    <table class="table table-hover align-middle mb-0" id="tablaRentabilidad">
                         <thead>
                             <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;position:sticky;top:0;z-index:10;">
                                 <th class="ps-4 py-3 text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;width:70px;">LOGO</th>
@@ -473,12 +518,17 @@
                                     style="font-size:0.75rem;letter-spacing:.06em;cursor:pointer;width:130px;">
                                     UTILIDAD (USD) <i class="bi bi-chevron-expand ms-1" style="font-size:0.65rem;opacity:.5;"></i>
                                 </th>
+                                <th class="py-3 text-end text-muted fw-semibold" style="font-size:0.75rem;">
+                                    UTILIDAD REAL (USD)
+                                </th>
                                 <th class="py-3 text-end text-muted fw-semibold sortable" data-col="rentabilidad"
                                     style="font-size:0.75rem;letter-spacing:.06em;cursor:pointer;width:120px;">
                                     RENTABILIDAD <i class="bi bi-chevron-expand ms-1" style="font-size:0.65rem;opacity:.5;"></i>
                                 </th>
                                 <th class="py-3 text-center text-muted fw-semibold"
-                                    style="font-size:0.75rem;letter-spacing:.06em;width:80px;">ACCIÓN</th>
+                                    style="font-size:0.75rem;letter-spacing:.06em;width:120px;">
+                                    ACCIÓN
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
@@ -495,13 +545,17 @@
                                         'compras' => 0,
                                         'ventas' => 0,
                                         'utilidad' => 0,
-                                        'rentabilidad' => 0
+                                        'rentabilidad' => 0,
+                                        'utilidadRealDisponible' => 0,
+                                        'totalPagado' => 0
                                     ];
                                     
                                     $compras = $datos->compras ?? 0;
                                     $ventas = $datos->ventas ?? 0;
                                     $utilidad = $datos->utilidad ?? 0;
                                     $rentabilidad = $datos->rentabilidad ?? 0;
+                                    $utilidadRealDisponible = $datos->utilidadRealDisponible ?? 0;
+                                    $totalPagado = $datos->totalPagado ?? 0;
                                     
                                     // Acumular totales
                                     $totalCompras += $compras;
@@ -511,6 +565,21 @@
                                     // Color según rentabilidad
                                     $rentabilidadColor = $rentabilidad >= 30 ? '#22c55e' : ($rentabilidad >= 10 ? '#eab308' : '#ef4444');
                                     $rentabilidadText = $rentabilidad >= 30 ? 'Alta' : ($rentabilidad >= 10 ? 'Media' : 'Baja');
+
+                                    // Condición para mostrar botón de pago
+                                    $puedePagar = $utilidadRealDisponible > 0 && $puedePagarGeneral;
+                                    
+                                    // Mensaje para el tooltip
+                                    $tooltipMessage = '';
+                                    if (!$puedePagar) {
+                                        if ($utilidadRealDisponible <= 0) {
+                                            $tooltipMessage = 'No hay utilidad disponible para pagar';
+                                        } elseif (!$puedePagarGeneral) {
+                                            $tooltipMessage = 'El pago solo está disponible para períodos a partir del 15/08/2026';
+                                        }
+                                    } else {
+                                        $tooltipMessage = 'Registrar Pago (Disponible: $' . number_format($utilidadRealDisponible, 2) . ')';
+                                    }
 
                                     $imgSrc = FileHelper::getOrDownloadFile(
                                         'images/proveedores/',
@@ -562,6 +631,21 @@
                                         </span>
                                     </td>
 
+                                    {{-- Utilidad Real Disponible --}}
+                                    <td class="py-3 text-end">
+                                        <div>
+                                            <span class="fw-bold" style="color:{{ $utilidadRealDisponible >= 0 ? '#22c55e' : '#ef4444' }};">
+                                                ${{ number_format($utilidadRealDisponible, 2) }}
+                                            </span>
+                                            @if($totalPagado > 0)
+                                                <br>
+                                                <small class="text-muted" style="font-size:0.6rem;">
+                                                    Pagado: ${{ number_format($totalPagado, 2) }}
+                                                </small>
+                                            @endif
+                                        </div>
+                                    </td>
+
                                     {{-- Rentabilidad --}}
                                     <td class="py-3 text-end" data-order="{{ $rentabilidad }}">
                                         <div class="d-flex align-items-center justify-content-end gap-2">
@@ -577,16 +661,40 @@
 
                                     {{-- Acción --}}
                                     <td class="pe-4 py-3 text-center">
-                                        <a href="{{ route('cpanel.proveedor.mercancia.rentabilidad.detalle', [
-                                            'id' => $proveedorId,  // Cambiar de 'proveedorId' a 'id'
-                                            'fecha_inicio' => $fechaInicio,
-                                            'fecha_fin' => $fechaFin
-                                        ]) }}"
-                                            class="btn btn-sm rounded-2 d-inline-flex align-items-center justify-content-center"
-                                            style="width:30px;height:30px;background:rgba(20,184,166,0.1);color:#0d9488;border:1px solid rgba(20,184,166,0.25);"
-                                            title="Ver detalle" data-bs-toggle="tooltip">
-                                            <i class="bi bi-eye" style="font-size:0.8rem;"></i>
-                                        </a>
+                                        <div class="d-flex align-items-center justify-content-center gap-1">
+                                            <a href="{{ route('cpanel.proveedor.mercancia.rentabilidad.detalle', [
+                                                'id' => $proveedorId,
+                                                'fecha_inicio' => $fechaInicio,
+                                                'fecha_fin' => $fechaFin
+                                            ]) }}"
+                                                class="btn btn-sm rounded-2 d-inline-flex align-items-center justify-content-center"
+                                                style="width:30px;height:30px;background:rgba(20,184,166,0.1);color:#0d9488;border:1px solid rgba(20,184,166,0.25);"
+                                                title="Ver detalle" data-bs-toggle="tooltip">
+                                                <i class="bi bi-eye" style="font-size:0.8rem;"></i>
+                                            </a>
+
+                                            {{-- Mostrar botón de pago SOLO si la utilidad real disponible es mayor a 0 Y la fecha lo permite --}}
+                                            @if($puedePagar)
+                                                <a href="{{ route('cpanel.proveedores.pagar_rentabilidad', [
+                                                    'id' => $proveedorId,
+                                                    'fecha_inicio' => $fechaInicio,
+                                                    'fecha_fin' => $fechaFin
+                                                ]) }}"
+                                                    class="btn btn-sm rounded-2 d-inline-flex align-items-center justify-content-center"
+                                                    style="width:30px;height:30px;background:rgba(16,185,129,0.1);color:#059669;border:1px solid rgba(16,185,129,0.25);"
+                                                    title="{{ $tooltipMessage }}" 
+                                                    data-bs-toggle="tooltip">
+                                                    <i class="bi bi-cash-stack" style="font-size:0.8rem;"></i>
+                                                </a>
+                                            @else
+                                                <span class="d-inline-block" data-bs-toggle="tooltip" title="{{ $tooltipMessage }}">
+                                                    <span class="btn btn-sm rounded-2 d-inline-flex align-items-center justify-content-center"
+                                                          style="width:30px;height:30px;background:rgba(108,117,125,0.1);color:#6c757d;border:1px solid rgba(108,117,125,0.25);cursor:not-allowed;opacity:0.6;">
+                                                        <i class="bi bi-cash-stack" style="font-size:0.8rem;"></i>
+                                                    </span>
+                                                </span>
+                                            @endif
+                                        </div>
                                     </td>
                                 </tr>
                             @endforeach
@@ -636,6 +744,9 @@
 
 @section('js')
 
+<script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -656,7 +767,6 @@
         if (collapseElement && chevronIcon) {
             collapseElement.addEventListener('show.bs.collapse', function () {
                 chevronIcon.style.transform = 'rotate(180deg)';
-                // Cambiar texto del botón
                 const btnText = document.querySelector('#btnEstadisticas .text-white span.ms-2');
                 if (btnText) btnText.textContent = 'Ocultar estadísticas';
             });
@@ -672,7 +782,7 @@
         // BUSCADOR DE PROVEEDORES
         // ==========================
         const buscador = document.getElementById('buscadorProveedor');
-        const tabla = document.getElementById('tablaProveedores');
+        const tabla = document.getElementById('tablaRentabilidad');
         const limpiarBtn = document.getElementById('limpiarBuscador');
 
         if (buscador && tabla) {
@@ -731,7 +841,7 @@
         // ORDENAR TABLA POR CLIC EN TH
         // ==========================
         (function() {
-            const tabla = document.getElementById('tablaProveedores');
+            const tabla = document.getElementById('tablaRentabilidad');
             if (!tabla) return;
 
             const ths = tabla.querySelectorAll('thead th.sortable');
@@ -769,7 +879,6 @@
                     const valorA = tdA.dataset.order || tdA.innerText.trim();
                     const valorB = tdB.dataset.order || tdB.innerText.trim();
 
-                    // Detectar si es numérico (tiene $ o %)
                     const esNumero = !isNaN(parseFloat(valorA.replace(/[$,%]/g, ''))) && 
                                      !isNaN(parseFloat(valorB.replace(/[$,%]/g, '')));
                     
@@ -800,11 +909,9 @@
         // ==========================
         const ctx = document.getElementById('rentabilidadChart');
         if (ctx) {
-            // Preparar datos desde PHP
             const proveedores = @json($proveedoresMercancia);
             const datosRentabilidad = @json($datosRentabilidad);
             
-            // Extraer labels y data
             const labels = proveedores.map(function(p) {
                 return p.Nombre || 'N/A';
             });
@@ -901,12 +1008,54 @@
             }
         });
     }
+
+    // ==========================
+    // EXPORTAR EXCEL RENTABILIDAD
+    // ==========================
+    function exportarExcelRentabilidad() {
+        const tabla = document.getElementById('tablaRentabilidad');
+        if (!tabla) return;
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.table_to_sheet(tabla, { sheet: "Rentabilidad" });
+        XLSX.utils.book_append_sheet(wb, ws, 'Rentabilidad');
+        XLSX.writeFile(wb, `Rentabilidad_Proveedores_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+
+    // ==========================
+    // EXPORTAR PDF RENTABILIDAD
+    // ==========================
+    function pdfTablaRentabilidad() {
+        const tabla = document.getElementById('tablaRentabilidad');
+        if (!tabla) return;
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('landscape');
+
+        doc.setFontSize(16);
+        doc.setTextColor(41, 128, 185);
+        doc.text('Rentabilidad de Proveedores', 14, 15);
+
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Período: {{ Carbon::parse($fechaInicio)->format('d/m/Y') }} - {{ Carbon::parse($fechaFin)->format('d/m/Y') }}`, 14, 22);
+        doc.text(`Generado: ${new Date().toLocaleString('es-VE')}`, 14, 29);
+
+        doc.autoTable({
+            html: '#tablaRentabilidad',
+            startY: 35,
+            styles: { fontSize: 8 },
+            headStyles: { fillColor: [20, 184, 166] }
+        });
+
+        doc.save(`Rentabilidad_Proveedores_${new Date().toISOString().slice(0,10)}.pdf`);
+    }
 </script>
 @endsection
 
 @push('styles')
 <style>
-    #tablaProveedores tbody tr:hover { background-color: #f8fafc; }
+    #tablaRentabilidad tbody tr:hover { background-color: #f8fafc; }
     .img-zoomable { transition: transform 0.2s ease, box-shadow 0.2s ease; }
     .img-zoomable:hover { transform: scale(1.08); box-shadow: 0 4px 12px rgba(0,0,0,0.18); }
     thead th.sortable:hover { background-color: #f1f5f9; }
@@ -946,6 +1095,19 @@
     }
     .collapse .card-body::-webkit-scrollbar-thumb:hover {
         background: #0d9488;
+    }
+
+    /* Tooltip en botón deshabilitado */
+    .d-inline-block[data-bs-toggle="tooltip"] {
+        cursor: help;
+    }
+
+    /* Estilos para botones de exportación en el header */
+    .card-header .btn {
+        transition: background 0.3s ease;
+    }
+    .card-header .btn:hover {
+        background: rgba(255,255,255,0.25) !important;
     }
 </style>
 @endpush

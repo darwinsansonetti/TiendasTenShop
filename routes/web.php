@@ -392,9 +392,6 @@ Route::middleware('auth')->group(function() {
     // RUTAS DE RENTABILIDAD
     // ============================================
 
-    // Rentabilidad
-    Route::get('/proveedor/rentabilidad', [ProveedoresController::class, 'listaRentabilidad'])->name('cpanel.proveedor.mercancia.rentabilidad');
-
     // Lista principal de rentabilidad
     Route::get('/proveedor/rentabilidad', [ProveedoresController::class, 'listaRentabilidad'])
         ->name('cpanel.proveedor.mercancia.rentabilidad');
@@ -738,6 +735,10 @@ Route::middleware('auth')->group(function() {
     // ✅ Monitorear Conteo
     Route::get('/cpanel/inventario/monitorear-conteo/{id}', [InventarioController::class, 'monitorearConteo'])
         ->name('cpanel.inventario.monitorear-conteo');
+
+    // Proveedores - Registrar Pago desde Rentabilidad
+    Route::get('/cpanel/proveedores/registrar/pago/rentabilidad/{id}', [ProveedoresController::class, 'pagarProveedorRentabilidad'])
+        ->name('cpanel.proveedores.pagar_rentabilidad');
 });
 
 
