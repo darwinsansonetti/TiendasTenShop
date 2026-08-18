@@ -924,9 +924,12 @@ class ProveedoresController extends Controller
         }
     }
 
-    public function detalle($id)
+    public function detalle(Request $request, $id)
     {
         try {
+            // Obtener el origen (por defecto 'facturas')
+            $origen = $request->input('origen', 'facturas');    
+
             // Buscar factura seleccionada
             $facturaDTO = $this->buscarFacturaConDetalles($id);
             
@@ -985,7 +988,8 @@ class ProveedoresController extends Controller
                     'estadoFactura', 
                     'detalles', 
                     'pagos', 
-                    'totalPagado'
+                    'totalPagado',
+                    'origen'
                 ));
                 
             } else {
@@ -1590,9 +1594,12 @@ class ProveedoresController extends Controller
         }
     }
     
-    public function editar($id)
+    public function editar(Request $request, $id)
     {
         try {
+            // Obtener el origen (por defecto 'facturas')
+            $origen = $request->input('origen', 'facturas');    
+
             // Buscar factura seleccionada
             // $facturaDTO = $this->buscarDatosFactura($id);
             $facturaDTO = $this->buscarFacturaConDetalles($id);
@@ -1660,7 +1667,8 @@ class ProveedoresController extends Controller
                     'detalles', 
                     'pagos', 
                     'totalPagado',
-                    'contenedores'
+                    'contenedores',
+                    'origen'
                 ));
                 
             } else {
@@ -4679,6 +4687,179 @@ class ProveedoresController extends Controller
             \Log::error('Error en pagarProveedorRentabilidad: ' . $e->getMessage());
             return redirect()->route('cpanel.proveedor.mercancia.registrar_pagos')
                 ->with('error', 'Error al cargar informacion proveedor: ' . $e->getMessage());
+        }
+    }
+
+    public function cuentasPagarIndex()
+    {
+        try {   
+            session([
+                'menu_active' => 'Proveedor Mercancía',
+                'submenu_active' => 'Cuentas por pagar'
+            ]);
+
+            $listadoFacturas = $this->buscarListadoFacturasActivas();
+            
+            // Procesar cada factura y formatear datos
+            $totalGeneral = 0;
+            $totalPendiente = 0;
+            $totalPagado = 0;
+            $totalFacturas = $listadoFacturas->count();
+            $facturasVencidas = 0;
+            $facturasPorVencer = 0;
+
+            foreach ($listadoFacturas as $factura) {
+                // ✅ Formatear fecha usando date() de PHP (no requiere Carbon)
+                $factura->FechaCreacionFormateada = $factura->FechaCreacion 
+                    ? date('d/m/Y', strtotime($factura->FechaCreacion)) 
+                    : 'N/A';
+                
+                // Calcular totales
+                $totalGeneral += (float) ($factura->MontoDivisa ?? 0);
+                $totalPendiente += (float) ($factura->saldo_pendiente ?? 0);
+                $totalPagado += (float) ($factura->total_pagado ?? 0);
+                
+                $dias = (int) ($factura->DiasTranscurridos ?? 0);
+                $saldo = (float) ($factura->saldo_pendiente ?? 0);
+                
+                // Determinar color de días
+                if ($dias > 90) {
+                    $factura->dias_color = 'danger';
+                } elseif ($dias > 60) {
+                    $factura->dias_color = 'warning';
+                } elseif ($dias > 30) {
+                    $factura->dias_color = 'info';
+                } else {
+                    $factura->dias_color = 'secondary';
+                }
+                
+                // Determinar estado
+                if ($saldo <= 0) {
+                    $factura->estado = 'PAGADO';
+                    $factura->estado_badge = 'success';
+                } elseif ($dias > 30) {
+                    $factura->estado = 'VENCIDO';
+                    $factura->estado_badge = 'danger';
+                } elseif ($dias > 15) {
+                    $factura->estado = 'PRÓXIMO A VENCER';
+                    $factura->estado_badge = 'warning';
+                } else {
+                    $factura->estado = 'AL DÍA';
+                    $factura->estado_badge = 'info';
+                }
+                
+                // Facturas vencidas
+                if ($dias > 30 && $saldo > 0) {
+                    $facturasVencidas++;
+                }
+                
+                // Facturas por vencer
+                if ($dias <= 30 && $dias > 0 && $saldo > 0) {
+                    $facturasPorVencer++;
+                }
+            }
+
+            $estadisticas = [
+                'total_facturas_raw' => $totalFacturas,
+                'total_general_raw' => $totalGeneral,
+                'total_pendiente_raw' => $totalPendiente,
+                'total_pagado_raw' => $totalPagado,
+                'facturas_vencidas_raw' => $facturasVencidas,
+                'facturas_por_vencer_raw' => $facturasPorVencer,
+                
+                'total_facturas' => number_format($totalFacturas, 0),
+                'total_general' => '$' . number_format($totalGeneral, 2),
+                'total_pendiente' => '$' . number_format($totalPendiente, 2),
+                'total_pagado' => '$' . number_format($totalPagado, 2),
+                'facturas_vencidas' => number_format($facturasVencidas, 0),
+                'facturas_por_vencer' => number_format($facturasPorVencer, 0),
+            ];
+
+            // dd($listadoFacturas);
+            
+            return view('cpanel.proveedores.lista_cuentas_pagar', [
+                'listadoFacturas' => $listadoFacturas,
+                'estadisticas' => $estadisticas
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en cuentasPagarIndex: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar cuentas por pagar: ' . $e->getMessage());
+        }
+    }
+
+    private function buscarListadoFacturasActivas()
+    {
+        try {
+            $facturas = DB::connection('sqlsrv')
+                ->table('Facturas as f')
+                ->leftJoin('Proveedores as p', 'f.ProveedorId', '=', 'p.ProveedorId')
+                ->leftJoin('Sucursales as s', 'f.SucursalId', '=', 's.ID')
+                ->leftJoin('FacturaDetalles as fd', 'f.ID', '=', 'fd.FacturaId')
+                ->where('f.Tipo', 0)
+                ->whereIn('f.Estatus', [1, 2, 4])
+                ->groupBy(
+                    'f.ID', 'f.ProveedorId', 'f.Numero', 'f.Serie', 'f.FechaCreacion',
+                    'f.FechaDespacho', 'f.FechaCierre', 'f.Estatus', 'f.ContenedorId',
+                    'f.Traspaso', 'f.PorcentajeCosto', 'f.PorcentajeDescuento',
+                    'f.MontoDescuento', 'f.EsCargarFleteEnFactura', 'f.Tipo',
+                    'f.SucursalId', 'f.DivisaValorId', 'f.MontoDivisa', 'f.MontoBs',
+                    'f.Descripcion', 'f.TasaDeCambio', 'f.MonedaPrincipal',
+                    'p.Nombre', 's.Nombre'
+                )
+                ->orderBy('f.FechaCreacion', 'asc')
+                ->select([
+                    'f.ID',
+                    'f.ProveedorId',
+                    'f.Numero',
+                    'f.Serie',
+                    'f.FechaCreacion',
+                    'f.FechaDespacho',
+                    'f.FechaCierre',
+                    'f.Estatus',
+                    'f.ContenedorId',
+                    'f.Traspaso',
+                    'f.PorcentajeCosto',
+                    'f.PorcentajeDescuento',
+                    'f.MontoDescuento',
+                    'f.EsCargarFleteEnFactura',
+                    'f.Tipo',
+                    'f.SucursalId',
+                    'f.DivisaValorId',
+                    // MontoDivisa = detalles + traspaso
+                    DB::raw('COALESCE(SUM(fd.CantidadEmitida * fd.CostoDivisa), 0) + COALESCE(f.Traspaso, 0) as MontoDivisa'),
+                    DB::raw('COALESCE(SUM(fd.CantidadEmitida * fd.CostoBs), 0) as MontoBs'),
+                    'f.Descripcion',
+                    'f.TasaDeCambio',
+                    'f.MonedaPrincipal',
+                    'p.Nombre as proveedor_nombre',
+                    's.Nombre as sucursal_nombre',
+                    // ============================================
+                    // CÁLCULO DE DÍAS TRANSCURRIDOS
+                    // ============================================
+                    DB::raw('DATEDIFF(DAY, f.FechaCreacion, GETDATE()) as DiasTranscurridos')
+                ])
+                ->get();
+            
+            // Calcular pagos por factura y saldo pendiente
+            foreach ($facturas as $factura) {
+                // Sumar pagos desde TransaccionesProveedor
+                $pagos = DB::connection('sqlsrv')
+                    ->table('TransaccionesProveedor as tp')
+                    ->join('Transacciones as t', 'tp.TransaccionId', '=', 't.ID')
+                    ->where('tp.FacturaId', $factura->ID)
+                    ->sum('t.MontoDivisaAbonado');
+                
+                $factura->total_pagado = $pagos ?? 0;
+                // Saldo pendiente = MontoDivisa (incluye traspaso) - pagos
+                $factura->saldo_pendiente = max(0, ($factura->MontoDivisa ?? 0) - ($factura->total_pagado ?? 0));
+            }
+            
+            return $facturas;
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en buscarListadoFacturas: ' . $e->getMessage());
+            return collect();
         }
     }
 }

@@ -804,6 +804,12 @@
                     </a>
                   </li>
                   <li class="nav-item">
+                    <a href="{{ route('cpanel.proveedor.mercancia.cuentas_pagar') }}"
+                       class="nav-link {{ session('submenu_active') == 'Cuentas por pagar' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-wallet2"></i><p>Cuentas por pagar</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
                     <a href="{{ route('cpanel.proveedor.mercancia.contenedores') }}"
                        class="nav-link {{ session('submenu_active') == 'Contenedores' ? 'active' : '' }}">
                       <i class="nav-icon bi bi-archive"></i><p>Contenedores</p>

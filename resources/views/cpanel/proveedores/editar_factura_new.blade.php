@@ -71,10 +71,18 @@
                             <i class="bi bi-pencil me-1"></i>Editar
                         </a>
                         @endif
-                        <a href="{{ route('cpanel.proveedores.detalle', $facturaDTO->ProveedorId) }}"
-                           class="btn btn-light btn-sm fw-semibold" style="font-size:0.8rem;">
-                            <i class="bi bi-arrow-left me-1"></i>Volver
-                        </a>
+
+                        @if($origen == 'cuentas_pagar')
+                            <a href="{{ route('cpanel.proveedor.mercancia.cuentas_pagar') }}" 
+                            class="btn btn-light btn-sm fw-semibold" style="font-size:0.8rem;">
+                                <i class="bi bi-arrow-left me-1"></i>Volver
+                            </a>
+                        @else
+                            <a href="{{ route('cpanel.proveedores.detalle', $facturaDTO->ProveedorId) }}"
+                            class="btn btn-light btn-sm fw-semibold" style="font-size:0.8rem;">
+                                <i class="bi bi-arrow-left me-1"></i>Volver
+                            </a>
+                        @endif
                     </div>
                 </div>
             </div>

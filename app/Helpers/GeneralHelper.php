@@ -356,66 +356,12 @@ class GeneralHelper
             return $item;
         });
 
-        // ============================================
-        // 4. LOG PARA DEPURACIÓN
-        // ============================================
-        \Log::info('=== RANKING VENDEDORES CORREGIDO ===');
-        \Log::info('Total vendedores: ' . $ranking->count());
         if ($ranking->isNotEmpty()) {
             $primero = $ranking->first();
-            \Log::info('Primer vendedor - UsuarioId: ' . $primero->UsuarioId);
-            \Log::info('  - total_unidades: ' . $primero->total_unidades);
-            \Log::info('  - total_ventas: ' . $primero->total_ventas);
-            \Log::info('  - SucursalNombre: ' . $primero->SucursalNombre);
         }
 
         return $ranking;
     }
-
-    // public static function ObtenerRankingVendedoresSinAgrupar(ParametrosFiltroFecha $filtroFecha, $usuarioId = null, $sucursalId = null): Collection
-    // {
-    //     $sucursalId = $sucursalId ?: null;
-        
-    //     // Una SOLA consulta con joins (CORREGIDA)
-    //     $ranking = DB::connection('sqlsrv')->table('VentaVendedoresTotalizada as vt')
-    //         ->select([
-    //             'vt.*',
-    //             'u.NombreCompleto as vendedor_nombre',
-    //             'u.VendedorId',
-    //             'u.FotoPerfil',
-    //             's.Nombre as sucursal_nombre'
-    //         ])
-    //         ->leftJoin('Usuarios as u', function($join) {  // 👈 Cambiado a 'Usuarios'
-    //             $join->on('vt.UsuarioId', '=', 'u.UsuarioId')
-    //                 ->where('u.EsActivo', 1);
-    //         })
-    //         ->leftJoin('Sucursales as s', 'vt.SucursalId', '=', 's.ID')  // 👈 Cambiado a 'Sucursales' y 'ID'
-    //         ->whereBetween('vt.Fecha', [$filtroFecha->fechaInicio, $filtroFecha->fechaFin])
-    //         ->when($sucursalId, fn($q) => $q->where('vt.SucursalId', $sucursalId))
-    //         ->orderBy('vt.Fecha', 'desc')
-    //         ->get();
-
-    //     // Transformar al formato deseado
-    //     $ranking->transform(function ($item, $index) {
-    //         $item->Vendedor = $item->vendedor_nombre ? [
-    //             'UsuarioId' => $item->UsuarioId,
-    //             'NombreCompleto' => $item->vendedor_nombre,
-    //             'VendedorId' => $item->VendedorId,
-    //             'SucursalId' => $item->SucursalId,
-    //             'FotoPerfil' => $item->FotoPerfil
-    //         ] : null;
-
-    //         $item->SucursalNombre = $item->sucursal_nombre;
-    //         $item->ranking = $index + 1;
-
-    //         // Limpiar campos temporales
-    //         unset($item->vendedor_nombre, $item->VendedorId, $item->FotoPerfil, $item->sucursal_nombre);
-
-    //         return $item;
-    //     });
-
-    //     return $ranking;
-    // }
 
     public static function ObtenerRankingVendedoresSinAgrupar(ParametrosFiltroFecha $filtroFecha, $usuarioId = null, $sucursalId = null): Collection
     {

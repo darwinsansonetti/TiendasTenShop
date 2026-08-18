@@ -320,11 +320,6 @@ Route::middleware('auth')->group(function() {
     Route::get('/proveedor/{id}/facturas/pendientes', [ProveedoresController::class, 'getFacturasPendientes'])
         ->name('cpanel.proveedor.facturas.pendientes');
 
-    // // Registrar pago a proveedor
-    // Route::get('/proveedor/listar-proveedores', [ProveedoresController::class, 'registrarPagosIndex'])
-    //     ->defaults('modo', 'pagos')
-    //     ->name('cpanel.proveedor.mercancia.registrar_pagos');
-
     // Proveedores - Registrar Pago
     Route::get('/cpanel/proveedores/registrar/pago/{id}', [ProveedoresController::class, 'pagarProveedor'])
         ->name('cpanel.proveedores.pagar');
@@ -739,6 +734,10 @@ Route::middleware('auth')->group(function() {
     // Proveedores - Registrar Pago desde Rentabilidad
     Route::get('/cpanel/proveedores/registrar/pago/rentabilidad/{id}', [ProveedoresController::class, 'pagarProveedorRentabilidad'])
         ->name('cpanel.proveedores.pagar_rentabilidad');
+
+    //  Proveedores - Cuentas por pagar
+    Route::get('/cpanel/proveedor/cuentas-pagar', [ProveedoresController::class, 'cuentasPagarIndex'])
+        ->name('cpanel.proveedor.mercancia.cuentas_pagar');
 });
 
 
