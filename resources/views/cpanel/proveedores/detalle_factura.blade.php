@@ -83,9 +83,15 @@
                             class="btn btn-light btn-sm fw-semibold" style="font-size:0.8rem;">
                                 <i class="bi bi-arrow-left me-1"></i>Volver
                             </a>
+                        @elseif($origen == 'historial')
+                            {{-- Volver a Historial de facturas --}}
+                            <a href="{{ route('cpanel.proveedor.mercancia.historial_facturas') }}"
+                            class="btn btn-light btn-sm fw-semibold" style="font-size:0.8rem;">
+                                <i class="bi bi-arrow-left me-1"></i>Volver
+                            </a>
                         @else
                             {{-- Volver a Facturas (módulo original) --}}
-                            <a href="{{ route('cpanel.proveedores.detalle', $facturaDTO->ProveedorId) }}"
+                            <a href="{{ route('cpanel.facturas.index') }}"
                             class="btn btn-light btn-sm fw-semibold" style="font-size:0.8rem;">
                                 <i class="bi bi-arrow-left me-1"></i>Volver
                             </a>

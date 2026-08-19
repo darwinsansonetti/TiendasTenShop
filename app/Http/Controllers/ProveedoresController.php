@@ -4862,4 +4862,134 @@ class ProveedoresController extends Controller
             return collect();
         }
     }
+
+    public function listaHistorialFacturas(Request $request)
+    {
+        try {
+            session([
+                'menu_active' => 'Proveedor Mercancía',
+                'submenu_active' => 'Historial de facturas'
+            ]);
+
+            $tipo = 0;
+
+            // Obtener filtros
+            $fechaInicio = $request->input('fecha_inicio');
+            $fechaFin = $request->input('fecha_fin');
+            $busqueda = $request->input('busqueda', '');
+
+            // Si hay fechas seleccionadas, parsearlas; si no, null para que no filtre
+            $fechaInicioParsed = !empty($fechaInicio) 
+                ? Carbon::parse($fechaInicio)->startOfDay()
+                : null;
+
+            $fechaFinParsed = !empty($fechaFin) 
+                ? Carbon::parse($fechaFin)->endOfDay()
+                : null;
+
+            // Facturas PAGADAS (Estatus = 3) con filtros
+            $facturas = $this->buscarListadoFacturasPagadasTipo(
+                $tipo, 
+                3, 
+                $fechaInicioParsed, 
+                $fechaFinParsed, 
+                $busqueda
+            );
+
+            // Ordenar de más reciente a más antigua (descendente)
+            $facturas = $facturas->sortByDesc('FechaCreacion')->values();
+
+            return view('cpanel.proveedores.historial_facturas', compact(
+                'facturas',
+                'fechaInicio',
+                'fechaFin',
+                'busqueda'
+            ));
+
+        } catch (\Exception $e) {
+            \Log::error('Error en listaHistorialFacturas: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar Historial de facturas: ' . $e->getMessage());
+        }
+    }
+
+    private function buscarListadoFacturasPagadasTipo($tipo, $estatus, $fechaInicio = null, $fechaFin = null, $busqueda = '')
+    {
+        try {
+            $query = DB::connection('sqlsrv')
+                ->table('Facturas as f')
+                ->leftJoin('Proveedores as p', 'f.ProveedorId', '=', 'p.ProveedorId')
+                ->leftJoin('Sucursales as s', 'f.SucursalId', '=', 's.ID')
+                ->leftJoin('FacturaDetalles as fd', 'f.ID', '=', 'fd.FacturaId')
+                ->where('f.Tipo', $tipo)
+                ->where('f.Estatus', $estatus);
+
+            // Aplicar filtro de fechas SOLO si se enviaron
+            if ($fechaInicio && $fechaFin) {
+                $query->whereBetween('f.FechaCreacion', [$fechaInicio, $fechaFin]);
+            }
+
+            // Aplicar búsqueda por factura o proveedor
+            if (!empty($busqueda)) {
+                $query->where(function($q) use ($busqueda) {
+                    $q->where('f.Numero', 'LIKE', '%' . $busqueda . '%')
+                    ->orWhere('p.Nombre', 'LIKE', '%' . $busqueda . '%');
+                });
+            }
+
+            $facturas = $query->groupBy(
+                    'f.ID', 'f.ProveedorId', 'f.Numero', 'f.Serie', 'f.FechaCreacion',
+                    'f.FechaDespacho', 'f.FechaCierre', 'f.Estatus', 'f.ContenedorId',
+                    'f.Traspaso', 'f.PorcentajeCosto', 'f.PorcentajeDescuento',
+                    'f.MontoDescuento', 'f.EsCargarFleteEnFactura', 'f.Tipo',
+                    'f.SucursalId', 'f.DivisaValorId', 'f.MontoDivisa', 'f.MontoBs',
+                    'f.Descripcion', 'f.TasaDeCambio', 'f.MonedaPrincipal',
+                    'p.Nombre', 's.Nombre'
+                )
+                ->select([
+                    'f.ID',
+                    'f.ProveedorId',
+                    'f.Numero',
+                    'f.Serie',
+                    'f.FechaCreacion',
+                    'f.FechaDespacho',
+                    'f.FechaCierre',
+                    'f.Estatus',
+                    'f.ContenedorId',
+                    'f.Traspaso',
+                    'f.PorcentajeCosto',
+                    'f.PorcentajeDescuento',
+                    'f.MontoDescuento',
+                    'f.EsCargarFleteEnFactura',
+                    'f.Tipo',
+                    'f.SucursalId',
+                    'f.DivisaValorId',
+                    DB::raw('COALESCE(SUM(fd.CantidadEmitida * fd.CostoDivisa), 0) + COALESCE(f.Traspaso, 0) as MontoDivisa'),
+                    DB::raw('COALESCE(SUM(fd.CantidadEmitida * fd.CostoBs), 0) as MontoBs'),
+                    'f.Descripcion',
+                    'f.TasaDeCambio',
+                    'f.MonedaPrincipal',
+                    'p.Nombre as proveedor_nombre',
+                    's.Nombre as sucursal_nombre'
+                ])
+                ->get();
+            
+            // Calcular pagos por factura y saldo pendiente
+            foreach ($facturas as $factura) {
+                $pagos = DB::connection('sqlsrv')
+                    ->table('TransaccionesProveedor as tp')
+                    ->join('Transacciones as t', 'tp.TransaccionId', '=', 't.ID')
+                    ->where('tp.FacturaId', $factura->ID)
+                    ->sum('t.MontoDivisaAbonado');
+                
+                $factura->total_pagado = $pagos ?? 0;
+                $factura->saldo_pendiente = max(0, ($factura->MontoDivisa ?? 0) - ($factura->total_pagado ?? 0));
+            }
+            
+            return $facturas;
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en buscarListadoFacturasPagadasTipo: ' . $e->getMessage());
+            return collect();
+        }
+    }
 }

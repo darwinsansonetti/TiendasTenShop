@@ -738,6 +738,10 @@ Route::middleware('auth')->group(function() {
     //  Proveedores - Cuentas por pagar
     Route::get('/cpanel/proveedor/cuentas-pagar', [ProveedoresController::class, 'cuentasPagarIndex'])
         ->name('cpanel.proveedor.mercancia.cuentas_pagar');
+
+    // Lista Historial de Facturas
+    Route::get('/proveedor/historial/facturas', [ProveedoresController::class, 'listaHistorialFacturas'])
+        ->name('cpanel.proveedor.mercancia.historial_facturas'); 
 });
 
 
