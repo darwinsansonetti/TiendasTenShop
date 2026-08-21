@@ -5090,7 +5090,7 @@ class ProveedoresController extends Controller
         $productos = [];
         $productosData = DB::connection('sqlsrv')
             ->table('Productos')
-            ->select('ID', 'Codigo', 'Descripcion', 'Referencia')
+            ->select('ID', 'Codigo', 'Descripcion', 'Referencia', 'UrlFoto')
             ->get();
         
         foreach ($productosData as $producto) {
@@ -5148,7 +5148,8 @@ class ProveedoresController extends Controller
                             'CantidadPieInvertido' => $detalle->CantidadPieInvertido ?? 0,
                             'CantidadPieSolo' => $detalle->CantidadPieSolo ?? 0,
                             'CantidadPiezaDanada' => $detalle->CantidadPiezaDanada ?? 0,
-                            'Diferencia' => $diferencia
+                            'Diferencia' => $diferencia,
+                            'UrlFoto' => $producto->UrlFoto ?? '',
                         ]);
                         
                         if ($diferencia > 0) {
@@ -5180,7 +5181,8 @@ class ProveedoresController extends Controller
                                 'CantidadPieInvertido' => 0,
                                 'CantidadPieSolo' => 0,
                                 'CantidadPiezaDanada' => 0,
-                                'Diferencia' => $diferencia
+                                'Diferencia' => $diferencia,
+                                'UrlFoto' => $producto->UrlFoto ?? ''
                             ]);
                             $totalDiferencia += $diferencia;
                         }
