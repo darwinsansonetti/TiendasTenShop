@@ -4992,4 +4992,446 @@ class ProveedoresController extends Controller
             return collect();
         }
     }
+
+    public function indexDiferencia(Request $request)
+    {
+        try {
+            session([
+                'menu_active' => 'Proveedor Mercancía',
+                'submenu_active' => 'Diferencia en recepcion'
+            ]);
+
+            // Obtener filtros
+            $fechaInicio = $request->input('fecha_inicio');
+            $fechaFin = $request->input('fecha_fin');
+            $busqueda = $request->input('busqueda', '');
+
+            // Parsear fechas
+            $fechaInicioParsed = !empty($fechaInicio) 
+                ? Carbon::parse($fechaInicio)->startOfDay()
+                : null;
+            $fechaFinParsed = !empty($fechaFin) 
+                ? Carbon::parse($fechaFin)->endOfDay()
+                : null;
+
+            // Si el usuario seleccionó fecha fin futura, limitar a hoy
+            if ($fechaFinParsed && $fechaFinParsed->gt(Carbon::now())) {
+                $fechaFinParsed = Carbon::now()->endOfDay();
+                $fechaFin = Carbon::now()->endOfDay()->format('Y-m-d');
+            }
+
+            // Obtener facturas PAGADAS (Estatus = 3) y RECIBIDAS (Estatus = 4)
+            $facturasPagadas = $this->buscarFacturasDiferencias(
+                null, 3, 0, $fechaInicioParsed, $fechaFinParsed, $busqueda
+            );
+
+            $facturasRecibidas = $this->buscarFacturasDiferencias(
+                null, 4, 0, $fechaInicioParsed, $fechaFinParsed, $busqueda
+            );
+
+            // Buscar diferencias en recepción
+            $facturasPagadasConDiferencias = $this->buscarFaltantesEnRecepcion($facturasPagadas);
+            $facturasRecibidasConDiferencias = $this->buscarFaltantesEnRecepcion($facturasRecibidas);
+
+            // Combinar ambas listas
+            $facturas = collect();
+            
+            if ($facturasPagadasConDiferencias && $facturasPagadasConDiferencias->count() > 0) {
+                $facturas = $facturas->concat($facturasPagadasConDiferencias);
+            }
+            
+            if ($facturasRecibidasConDiferencias && $facturasRecibidasConDiferencias->count() > 0) {
+                $facturas = $facturas->concat($facturasRecibidasConDiferencias);
+            }
+
+            // Filtrar solo las que tienen diferencia
+            $facturasConDiferencia = $facturas->filter(function($factura) {
+                return $factura->tiene_diferencia ?? false;
+            })->values();
+
+            // Ordenar por días de emisión (más antiguos primero)
+            $facturasConDiferencia = $facturasConDiferencia->sortBy('dias_emision')->values();
+
+            // Calcular estadísticas
+            $estadisticas = $this->calcularEstadisticasDiferencia($facturasConDiferencia);
+
+            return view('cpanel.proveedores.lista_recepcion_diferencia', [
+                'facturas' => $facturasConDiferencia,
+                'estadisticas' => $estadisticas,
+                'fechaInicio' => $fechaInicio,
+                'fechaFin' => $fechaFin,
+                'busqueda' => $busqueda
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error en indexDiferencia: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar Diferencia en recepción: ' . $e->getMessage());
+        }
+    }
+
+    private function buscarFaltantesEnRecepcion($facturas)
+    {
+        if ($facturas->isEmpty()) {
+            return $facturas;
+        }
+
+        // 1️⃣ Obtener todos los IDs de facturas
+        $facturaIds = $facturas->pluck('ID')->toArray();
+
+        // 2️⃣ Obtener TODAS las recepciones de facturas
+        $recepcionesFacturas = DB::connection('sqlsrv')
+            ->table('RecepcionesFacturas')
+            ->whereIn('FacturaId', $facturaIds)
+            ->orderBy('RecepcionId', 'desc')
+            ->get()
+            ->groupBy('FacturaId');
+
+        // 3️⃣ Obtener información de productos
+        $productos = [];
+        $productosData = DB::connection('sqlsrv')
+            ->table('Productos')
+            ->select('ID', 'Codigo', 'Descripcion', 'Referencia')
+            ->get();
+        
+        foreach ($productosData as $producto) {
+            $productos[$producto->ID] = $producto;
+        }
+
+        // 4️⃣ Recorrer las facturas
+        foreach ($facturas as $factura) {
+            $erroresRecepcion = collect();
+            $totalDiferencia = 0;
+            $tieneRecepcion = false;
+
+            // Verificar si la factura tiene recepciones
+            if (isset($recepcionesFacturas[$factura->ID])) {
+                $tieneRecepcion = true;
+                $recepcionId = $recepcionesFacturas[$factura->ID]->first()->RecepcionId;
+                
+                // Buscar diferencias en RecepcionesDetalles
+                $detalles = DB::connection('sqlsrv')
+                    ->table('RecepcionesDetalles')
+                    ->where('RecepcionId', $recepcionId)
+                    ->where(function($query) {
+                        $query->whereRaw('CantidadRecibida < CantidadPedida')
+                            ->orWhere('CantidadCajaVacia', '!=', 0)
+                            ->orWhere('CantidadPieInvertido', '!=', 0)
+                            ->orWhere('CantidadPieSolo', '!=', 0)
+                            ->orWhere('CantidadPiezaDanada', '!=', 0);
+                    })
+                    ->get();
+                
+                foreach ($detalles as $detalle) {
+                    $producto = $productos[$detalle->ProductoId] ?? null;
+                    
+                    // Calcular diferencia REAL (solo cuando CantidadRecibida < CantidadPedida)
+                    $diferencia = 0;
+                    if (($detalle->CantidadRecibida ?? 0) < ($detalle->CantidadPedida ?? 0)) {
+                        $diferencia = ($detalle->CantidadPedida ?? 0) - ($detalle->CantidadRecibida ?? 0);
+                    }
+                    
+                    // Solo agregar si tiene alguna diferencia
+                    if ($diferencia > 0 || 
+                        ($detalle->CantidadPieInvertido ?? 0) > 0 || 
+                        ($detalle->CantidadPieSolo ?? 0) > 0 || 
+                        ($detalle->CantidadPiezaDanada ?? 0) > 0 || 
+                        ($detalle->CantidadCajaVacia ?? 0) > 0) {
+                        
+                        $erroresRecepcion->push((object) [
+                            'ProductoId' => $detalle->ProductoId,
+                            'ProductoCodigo' => $producto->Codigo ?? 'N/A',
+                            'ProductoDescripcion' => $producto->Descripcion ?? 'N/A',
+                            'ProductoReferencia' => $producto->Referencia ?? 'N/A',
+                            'CantidadPedida' => $detalle->CantidadPedida ?? 0,
+                            'CantidadRecibida' => $detalle->CantidadRecibida ?? 0,
+                            'CantidadCajaVacia' => $detalle->CantidadCajaVacia ?? 0,
+                            'CantidadPieInvertido' => $detalle->CantidadPieInvertido ?? 0,
+                            'CantidadPieSolo' => $detalle->CantidadPieSolo ?? 0,
+                            'CantidadPiezaDanada' => $detalle->CantidadPiezaDanada ?? 0,
+                            'Diferencia' => $diferencia
+                        ]);
+                        
+                        if ($diferencia > 0) {
+                            $totalDiferencia += $diferencia;
+                        }
+                    }
+                }
+            } else {
+                // 🔥 FACTURA SIN RECEPCIÓN: Solo si ContenedorId = 0 Y MontoDivisa IS NULL
+                if (isset($factura->ContenedorId) && $factura->ContenedorId == 0 && $factura->MontoDivisa === null) {
+                    $detallesFactura = DB::connection('sqlsrv')
+                        ->table('FacturaDetalles')
+                        ->where('FacturaId', $factura->ID)
+                        ->get();
+                    
+                    foreach ($detallesFactura as $detalle) {
+                        $producto = $productos[$detalle->ProductoId] ?? null;
+                        $diferencia = $detalle->CantidadEmitida ?? 0;
+                        
+                        if ($diferencia > 0) {
+                            $erroresRecepcion->push((object) [
+                                'ProductoId' => $detalle->ProductoId,
+                                'ProductoCodigo' => $producto->Codigo ?? 'N/A',
+                                'ProductoDescripcion' => $producto->Descripcion ?? 'N/A',
+                                'ProductoReferencia' => $producto->Referencia ?? 'N/A',
+                                'CantidadPedida' => $detalle->CantidadEmitida ?? 0,
+                                'CantidadRecibida' => 0,
+                                'CantidadCajaVacia' => 0,
+                                'CantidadPieInvertido' => 0,
+                                'CantidadPieSolo' => 0,
+                                'CantidadPiezaDanada' => 0,
+                                'Diferencia' => $diferencia
+                            ]);
+                            $totalDiferencia += $diferencia;
+                        }
+                    }
+                }
+            }
+
+            // Asignar errores de recepción a la factura
+            $factura->errores_recepcion = $erroresRecepcion;
+            $factura->tiene_diferencia = $erroresRecepcion->count() > 0;
+            $factura->total_diferencia = $totalDiferencia;
+            $factura->cantidad_productos_con_diferencia = $erroresRecepcion->count();
+            $factura->tiene_recepcion = $tieneRecepcion;
+        }
+
+        return $facturas;
+    }
+
+    private function calcularEstadisticasDiferencia($facturas)
+    {
+        $totalFacturas = $facturas->count();
+        $facturasConDiferencia = $facturas->filter(function($f) {
+            return $f->tiene_diferencia ?? false;
+        })->count();
+
+        $totalDiferencia = $facturas->sum('total_diferencia');
+        $totalProductosConDiferencia = $facturas->sum('cantidad_productos_con_diferencia');
+
+        return [
+            'total_facturas' => $totalFacturas,
+            'facturas_con_diferencia' => $facturasConDiferencia,
+            'facturas_sin_diferencia' => $totalFacturas - $facturasConDiferencia,
+            'total_diferencia' => $totalDiferencia,
+            'total_productos_con_diferencia' => $totalProductosConDiferencia,
+            'porcentaje_facturas_con_diferencia' => $totalFacturas > 0 
+                ? round(($facturasConDiferencia / $totalFacturas) * 100, 2) 
+                : 0
+        ];
+    }
+
+    private function buscarFacturasDiferencias($proveedorId = null, $estatus = null, $tipo = null, $fechaInicio = null, $fechaFin = null, $busqueda = null)
+    {
+        try {
+            $query = DB::connection('sqlsrv')
+                ->table('Facturas as f')
+                ->leftJoin('Proveedores as p', 'f.ProveedorId', '=', 'p.ProveedorId')
+                ->leftJoin('Sucursales as s', 'f.SucursalId', '=', 's.ID')
+                ->leftJoin('FacturaDetalles as fd', 'f.ID', '=', 'fd.FacturaId');
+
+            // Filtros
+            if ($proveedorId !== null) {
+                $query->where('f.ProveedorId', $proveedorId);
+            }
+
+            if ($estatus !== null) {
+                $query->where('f.Estatus', $estatus);
+            }
+
+            if ($tipo !== null) {
+                $query->where('f.Tipo', $tipo);
+            }
+
+            // 🔥 Filtro de fechas (solo si el usuario las seleccionó)
+            if ($fechaInicio !== null && $fechaFin !== null) {
+                $query->whereBetween('f.FechaCreacion', [$fechaInicio, $fechaFin]);
+            }
+
+            // 🔥 Excluir fechas futuras (mayores a hoy)
+            $query->where('f.FechaCreacion', '<=', Carbon::now()->endOfDay());
+
+            // Búsqueda
+            if ($busqueda !== null && !empty($busqueda)) {
+                $query->where(function($q) use ($busqueda) {
+                    $q->where('f.Numero', 'LIKE', '%' . $busqueda . '%')
+                    ->orWhere('p.Nombre', 'LIKE', '%' . $busqueda . '%');
+                });
+            }
+
+            $facturas = $query->groupBy(
+                    'f.ID', 'f.ProveedorId', 'f.Numero', 'f.Serie', 'f.FechaCreacion',
+                    'f.FechaDespacho', 'f.FechaCierre', 'f.Estatus', 'f.ContenedorId',
+                    'f.Traspaso', 'f.PorcentajeCosto', 'f.PorcentajeDescuento',
+                    'f.MontoDescuento', 'f.EsCargarFleteEnFactura', 'f.Tipo',
+                    'f.SucursalId', 'f.DivisaValorId', 'f.MontoDivisa', 'f.MontoBs',
+                    'f.Descripcion', 'f.TasaDeCambio', 'f.MonedaPrincipal',
+                    'p.Nombre', 's.Nombre'
+                )
+                ->orderBy('f.FechaCreacion', 'asc')
+                ->select([
+                    'f.ID',
+                    'f.ProveedorId',
+                    'f.Numero',
+                    'f.Serie',
+                    'f.FechaCreacion',
+                    'f.FechaDespacho',
+                    'f.FechaCierre',
+                    'f.Estatus',
+                    'f.ContenedorId',
+                    'f.Traspaso',
+                    'f.PorcentajeCosto',
+                    'f.PorcentajeDescuento',
+                    'f.MontoDescuento',
+                    'f.EsCargarFleteEnFactura',
+                    'f.Tipo',
+                    'f.SucursalId',
+                    'f.DivisaValorId',
+                    DB::raw('COALESCE(SUM(fd.CantidadEmitida * fd.CostoDivisa), 0) + COALESCE(f.Traspaso, 0) as MontoDivisa'),
+                    DB::raw('COALESCE(SUM(fd.CantidadEmitida * fd.CostoBs), 0) as MontoBs'),
+                    'f.Descripcion',
+                    'f.TasaDeCambio',
+                    'f.MonedaPrincipal',
+                    'p.Nombre as proveedor_nombre',
+                    's.Nombre as sucursal_nombre'
+                ])
+                ->get();
+            
+            // Calcular pagos, saldo y días de emisión
+            foreach ($facturas as $factura) {
+                // Sumar pagos desde TransaccionesProveedor
+                $pagos = DB::connection('sqlsrv')
+                    ->table('TransaccionesProveedor as tp')
+                    ->join('Transacciones as t', 'tp.TransaccionId', '=', 't.ID')
+                    ->where('tp.FacturaId', $factura->ID)
+                    ->sum('t.MontoDivisaAbonado');
+                
+                $factura->total_pagado = $pagos ?? 0;
+                $factura->saldo_pendiente = max(0, ($factura->MontoDivisa ?? 0) - ($factura->total_pagado ?? 0));
+                $factura->dias_emision = $factura->FechaCreacion 
+                    ? Carbon::parse($factura->FechaCreacion)->diffInDays(now())
+                    : 0;
+            }
+            
+            return $facturas;
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en buscarFacturasDiferencias: ' . $e->getMessage());
+            return collect();
+        }
+    }
+    
+    
+    private function buscarFacturasDiferenciasPorTipoEstatus($tipo, $estatus)
+    {
+        return $this->buscarFacturasDiferencias(null, $estatus, $tipo, null, null, null);
+    }
+
+    public function detalleDiferencia($id)
+    {
+        try {
+            session([
+                'menu_active' => 'Proveedor Mercancía',
+                'submenu_active' => 'Diferencia en recepcion'
+            ]);
+
+            // 1️⃣ Buscar la factura específica
+            $factura = DB::connection('sqlsrv')
+                ->table('Facturas as f')
+                ->leftJoin('Proveedores as p', 'f.ProveedorId', '=', 'p.ProveedorId')
+                ->leftJoin('Sucursales as s', 'f.SucursalId', '=', 's.ID')
+                ->leftJoin('FacturaDetalles as fd', 'f.ID', '=', 'fd.FacturaId')
+                ->where('f.ID', $id)
+                ->groupBy(
+                    'f.ID', 'f.ProveedorId', 'f.Numero', 'f.Serie', 'f.FechaCreacion',
+                    'f.FechaDespacho', 'f.FechaCierre', 'f.Estatus', 'f.ContenedorId',
+                    'f.Traspaso', 'f.PorcentajeCosto', 'f.PorcentajeDescuento',
+                    'f.MontoDescuento', 'f.EsCargarFleteEnFactura', 'f.Tipo',
+                    'f.SucursalId', 'f.DivisaValorId', 'f.MontoDivisa', 'f.MontoBs',
+                    'f.Descripcion', 'f.TasaDeCambio', 'f.MonedaPrincipal',
+                    'p.Nombre', 's.Nombre'
+                )
+                ->select([
+                    'f.ID',
+                    'f.ProveedorId',
+                    'f.Numero',
+                    'f.Serie',
+                    'f.FechaCreacion',
+                    'f.FechaDespacho',
+                    'f.FechaCierre',
+                    'f.Estatus',
+                    'f.ContenedorId',
+                    'f.Traspaso',
+                    'f.PorcentajeCosto',
+                    'f.PorcentajeDescuento',
+                    'f.MontoDescuento',
+                    'f.EsCargarFleteEnFactura',
+                    'f.Tipo',
+                    'f.SucursalId',
+                    'f.DivisaValorId',
+                    DB::raw('COALESCE(SUM(fd.CantidadEmitida * fd.CostoDivisa), 0) + COALESCE(f.Traspaso, 0) as MontoDivisa'),
+                    DB::raw('COALESCE(SUM(fd.CantidadEmitida * fd.CostoBs), 0) as MontoBs'),
+                    'f.Descripcion',
+                    'f.TasaDeCambio',
+                    'f.MonedaPrincipal',
+                    'p.Nombre as proveedor_nombre',
+                    's.Nombre as sucursal_nombre'
+                ])
+                ->first();
+
+            if (!$factura) {
+                return redirect()->route('cpanel.proveedor.mercancia.diferencia')
+                    ->with('error', 'Factura no encontrada');
+            }
+
+            // 2️⃣ Calcular pagos
+            $pagos = DB::connection('sqlsrv')
+                ->table('TransaccionesProveedor as tp')
+                ->join('Transacciones as t', 'tp.TransaccionId', '=', 't.ID')
+                ->where('tp.FacturaId', $factura->ID)
+                ->sum('t.MontoDivisaAbonado');
+
+            $factura->total_pagado = $pagos ?? 0;
+            $factura->saldo_pendiente = max(0, ($factura->MontoDivisa ?? 0) - ($factura->total_pagado ?? 0));
+
+            // 3️⃣ Buscar diferencias en recepción para esta factura
+            $facturas = collect([$factura]);
+            $facturasConDiferencias = $this->buscarFaltantesEnRecepcion($facturas);
+            $factura = $facturasConDiferencias->first();
+
+            // 4️⃣ Obtener los detalles de la factura
+            $detalles = DB::connection('sqlsrv')
+                ->table('FacturaDetalles as fd')
+                ->leftJoin('Productos as p', 'fd.ProductoId', '=', 'p.ID')
+                ->where('fd.FacturaId', $id)
+                ->select(
+                    'fd.*',
+                    'p.Codigo as producto_codigo',
+                    'p.Descripcion as producto_descripcion',
+                    'p.Referencia as producto_referencia'
+                )
+                ->get();
+
+            // 5️⃣ Obtener los errores de recepción
+            $erroresRecepcion = $factura->errores_recepcion ?? collect();
+
+            // 6️⃣ Verificar si tiene recepción
+            $tieneRecepcion = DB::connection('sqlsrv')
+                ->table('RecepcionesFacturas')
+                ->where('FacturaId', $id)
+                ->exists();
+
+            return view('cpanel.proveedores.detalle_diferencia', [
+                'factura' => $factura,
+                'detalles' => $detalles,
+                'erroresRecepcion' => $erroresRecepcion,
+                'tieneRecepcion' => $tieneRecepcion,
+                'origen' => 'diferencia'
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error en detalleDiferencia: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar el detalle: ' . $e->getMessage());
+        }
+    }
 }

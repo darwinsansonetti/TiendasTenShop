@@ -822,6 +822,12 @@
                     </a>
                   </li>
                   <li class="nav-item">
+                    <a href="{{ route('cpanel.proveedor.mercancia.diferencia') }}"
+                       class="nav-link {{ session('submenu_active') == 'Diferencia en recepcion' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-arrow-left-right"></i><p>Diferencia en recepcion</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
                     <a href="{{ route('cpanel.proveedor.mercancia.historial_facturas') }}"
                        class="nav-link {{ session('submenu_active') == 'Historial de facturas' ? 'active' : '' }}">
                       <i class="nav-icon bi bi-file-earmark-text"></i><p>Historial de facturas</p>

@@ -742,6 +742,14 @@ Route::middleware('auth')->group(function() {
     // Lista Historial de Facturas
     Route::get('/proveedor/historial/facturas', [ProveedoresController::class, 'listaHistorialFacturas'])
         ->name('cpanel.proveedor.mercancia.historial_facturas'); 
+
+    // Lista de diferencias en recepcion
+    Route::get('/cpanel/proveedor/diferencia/recepcion', [ProveedoresController::class, 'indexDiferencia'])
+        ->name('cpanel.proveedor.mercancia.diferencia');
+
+    // Detalles con diferencia
+    Route::get('/cpanel/proveedor/mercancia/diferencia/detalle/{id}', [ProveedoresController::class, 'detalleDiferencia'])
+        ->name('cpanel.proveedor.mercancia.diferencia.detalle');
 });
 
 
