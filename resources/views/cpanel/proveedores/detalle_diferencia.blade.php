@@ -113,7 +113,7 @@
                         <button type="button"
                                 class="btn btn-sm fw-semibold"
                                 style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);font-size:0.78rem;"
-                                onclick="exportarPDFErrores()">
+                                onclick="exportarPDFErroresConImagenes()">
                             <i class="bi bi-printer me-1"></i>PDF
                         </button>
                     </div>
@@ -125,7 +125,7 @@
                         <table class="table table-hover align-middle mb-0" id="tablaErrores">
                             <thead>
                                 <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">
-                                    <th class="ps-4 py-3 text-muted fw-semibold" style="font-size:0.75rem;width:60px;">FOTO</th>
+                                    <th class="ps-4 py-3 text-muted fw-semibold" style="font-size:0.75rem;width:90px;">FOTO</th>  {{-- 🔥 Aumentar de 60px a 90px --}}
                                     <th class="py-3 text-muted fw-semibold" style="font-size:0.75rem;">CÓDIGO</th>
                                     <th class="py-3 text-muted fw-semibold" style="font-size:0.75rem;">PRODUCTO</th>
                                     <th class="py-3 text-muted fw-semibold" style="font-size:0.75rem;">REFERENCIA</th>
@@ -157,14 +157,14 @@
                                     <tr style="border-bottom:1px solid #f1f5f9;">
                                         <td class="ps-4 text-center">
                                             <img src="{{ $imgSrc }}"
-                                                 loading="lazy"
-                                                 alt="{{ $error->ProductoCodigo ?? 'Producto' }}"
-                                                 class="img-thumbnail img-zoomable"
-                                                 style="object-fit:cover;cursor:pointer;"
-                                                 onclick="zoomImagen(this)"
-                                                 data-full-image="{{ $imgFull }}"
-                                                 data-description="{{ $error->ProductoCodigo ?? 'Producto' }} - {{ $error->ProductoReferencia ?? '' }}"
-                                                 onerror="this.src='{{ asset('assets/img/adminlte/img/produc_default.jfif') }}'">
+                                                loading="lazy"
+                                                alt="{{ $error->ProductoCodigo ?? 'Producto' }}"
+                                                class="img-thumbnail img-zoomable"
+                                                style="width:70px;height:70px;object-fit:cover;cursor:pointer;border-radius:4px;"
+                                                onclick="zoomImagen(this)"
+                                                data-full-image="{{ $imgFull }}"
+                                                data-description="{{ $error->ProductoCodigo ?? 'Producto' }} - {{ $error->ProductoReferencia ?? '' }}"
+                                                onerror="this.src='{{ asset('assets/img/adminlte/img/produc_default.jfif') }}'">
                                         </td>
                                         <td>
                                             <code class="px-2 py-1 rounded-2" style="background:#f1f5f9;font-size:0.8rem;color:#d97706;font-weight:bold;">
@@ -233,6 +233,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 <script>
     document.addEventListener("DOMContentLoaded", function() {
@@ -325,6 +326,68 @@
                 doc.save(`Errores_recepcion_${new Date().toISOString().slice(0,10)}.pdf`);
                 
                 Swal.fire('¡Éxito!', 'Archivo exportado correctamente', 'success');
+            }
+        });
+    }
+
+    // ==========================
+    // EXPORTAR PDF CON IMÁGENES (usando html2canvas)
+    // ==========================
+    function exportarPDFErroresConImagenes() {
+        const tabla = document.getElementById('tablaErrores');
+        if (!tabla) return;
+
+        Swal.fire({
+            title: 'Exportando a PDF',
+            text: 'Este proceso puede tomar unos segundos',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, exportar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire({
+                    title: 'Generando PDF...',
+                    text: 'Por favor espera',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+
+                // Usar html2canvas para capturar la tabla como imagen
+                html2canvas(tabla, {
+                    scale: 4,
+                    useCORS: true,
+                    allowTaint: true,
+                    backgroundColor: '#ffffff'
+                }).then((canvas) => {
+                    const imgData = canvas.toDataURL('image/png');
+                    const { jsPDF } = window.jspdf;
+                    const doc = new jsPDF('landscape');
+
+                    doc.setFontSize(16);
+                    doc.setTextColor(245, 158, 11);
+                    doc.text('Diferencias de recepcion', 14, 15);
+
+                    doc.setFontSize(10);
+                    doc.setTextColor(100, 100, 100);
+                    doc.text(`Factura: {{ trim($factura->Numero ?? 'N/A') }}`, 14, 22);
+                    doc.text(`Generado: ${new Date().toLocaleString('es-VE')}`, 14, 29);
+
+                    // Agregar la imagen de la tabla
+                    const imgWidth = doc.internal.pageSize.getWidth() - 20;
+                    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                    doc.addImage(imgData, 'PNG', 10, 35, imgWidth, imgHeight);
+
+                    doc.save(`Diferencias_recepcion_${new Date().toISOString().slice(0,10)}.pdf`);
+                    
+                    Swal.fire('¡Éxito!', 'Archivo exportado correctamente', 'success');
+                }).catch((error) => {
+                    Swal.fire('Error', 'Error al generar el PDF: ' + error.message, 'error');
+                });
             }
         });
     }
