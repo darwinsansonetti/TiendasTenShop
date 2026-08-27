@@ -1,9 +1,16 @@
 @extends('layout.layout_dashboard')
 
-@section('title', 'Agregar Proveedor')
+@section('title', 'Agregar Proveedor de Mercancía')
 
 @php
     use App\Helpers\FileHelper;
+    
+    // Colores para Mercancía (Verde)
+    $hdrBg = 'linear-gradient(135deg,#10b981,#059669)';
+    $hdrIcon = 'truck';
+    $hdrTitle = 'Agregar Proveedor de Mercancía';
+    $hdrSubtitle = 'Registrar nuevo proveedor de mercancía';
+    $btnColor = '#059669';
 @endphp
 
 @section('content')
@@ -14,12 +21,12 @@
             <div class="col-sm-6">
               <div class="d-flex align-items-center gap-2">
                 <div class="d-flex align-items-center justify-content-center rounded-2 me-1"
-                     style="width:36px;height:36px;background:linear-gradient(135deg,#10b981,#059669);">
-                  <i class="bi bi-truck text-white" style="font-size:1.1rem;"></i>
+                     style="width:36px;height:36px;background:{{ $hdrBg }};">
+                  <i class="bi bi-{{ $hdrIcon }} text-white" style="font-size:1.1rem;"></i>
                 </div>
                 <div>
-                  <h4 class="mb-0 fw-bold text-dark" style="font-size:1.1rem;">Agregar Proveedor</h4>
-                  <p class="mb-0 text-muted" style="font-size:0.78rem;">Registrar nuevo proveedor de mercancía</p>
+                  <h4 class="mb-0 fw-bold text-dark" style="font-size:1.1rem;">{{ $hdrTitle }}</h4>
+                  <p class="mb-0 text-muted" style="font-size:0.78rem;">{{ $hdrSubtitle }}</p>
                 </div>
               </div>
             </div>
@@ -48,6 +55,9 @@
             <form action="{{ route('cpanel.proveedores.guardar') }}" method="POST" id="proveedorForm" enctype="multipart/form-data">
                 @csrf
                 
+                {{-- 🔥 CAMPO TIPO OCULTO - Siempre Mercancía (0) --}}
+                <input type="hidden" name="Tipo" value="0">
+                
                 <div class="card-body">
                     <div class="row">
                         <!-- Columna izquierda - Logo/Imagen -->
@@ -70,22 +80,9 @@
                         
                         <!-- Columna derecha - Datos -->
                         <div class="col-md-9">
-                            <!-- Fila 1: Tipo y Nombre -->
+                            <!-- Fila 1: Nombre -->
                             <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <label for="Tipo" class="form-label">
-                                        <i class="fas fa-tag me-2"></i>Tipo *
-                                    </label>
-                                    <select name="Tipo" id="SelectTipoProveedor" class="form-control @error('Tipo') is-invalid @enderror" required>
-                                        <option value="">Seleccione un valor</option>
-                                        <option value="0" {{ old('Tipo') == '0' ? 'selected' : '' }}>Mercancía</option>
-                                        <option value="1" {{ old('Tipo') == '1' ? 'selected' : '' }}>Servicio</option>
-                                    </select>
-                                    @error('Tipo')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
-                                </div>
-                                <div class="col-md-6">
+                                <div class="col-md-12">
                                     <label for="Nombre" class="form-label">
                                         <i class="fas fa-building me-2"></i>Nombre *
                                     </label>
@@ -221,52 +218,15 @@
                                 </div>
                             </div>
                             
-                            <!-- Datos Bancarios (solo para Servicios) -->
-                            <div id="divBancoProveedor" style="display: none;">
-                                <hr>
-                                <h5 class="mb-3"><i class="fas fa-university me-2"></i>Datos Bancarios</h5>
-                                
-                                <!-- Fila: Banco y Número de Cuenta -->
-                                <div class="row mb-3">
-                                    <div class="col-md-6">
-                                        <label for="BancoId" class="form-label">
-                                            <i class="fas fa-building me-2"></i>Banco
-                                        </label>
-                                        <select name="BancoId" id="BancoId" class="form-control @error('BancoId') is-invalid @enderror">
-                                            <option value="">Seleccione un banco</option>
-                                            @foreach($bancos as $banco)
-                                                <option value="{{ $banco->ID }}" {{ old('BancoId') == $banco->ID ? 'selected' : '' }}>
-                                                    {{ $banco->Nombre }}
-                                                </option>
-                                            @endforeach
-                                        </select>
-                                        @error('BancoId')
-                                            <div class="invalid-feedback">{{ $message }}</div>
-                                        @enderror
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label for="NumeroDeCuenta" class="form-label">
-                                            <i class="fas fa-credit-card me-2"></i>Número de Cuenta
-                                        </label>
-                                        <input type="text" 
-                                               name="NumeroDeCuenta" 
-                                               id="NumeroDeCuenta" 
-                                               class="form-control @error('NumeroDeCuenta') is-invalid @enderror" 
-                                               value="{{ old('NumeroDeCuenta') }}"
-                                               placeholder="Número de cuenta bancaria"
-                                               maxlength="50">
-                                        @error('NumeroDeCuenta')
-                                            <div class="invalid-feedback">{{ $message }}</div>
-                                        @enderror
-                                    </div>
-                                </div>
-                            </div>
+                            {{-- 🔥 ELIMINADO: Datos Bancarios (solo para Servicios) --}}
+                            {{-- Ya no se muestra porque este formulario es solo para Mercancía --}}
+                            
                         </div>
                     </div>
                 </div>
                 
                 <div class="card-footer">
-                    <button type="submit" class="btn btn-primary">
+                    <button type="submit" class="btn" style="background:{{ $hdrBg }};color:#fff;border:none;">
                         <i class="fas fa-save me-2"></i>Guardar Proveedor
                     </button>
                     <a href="{{ route('cpanel.proveedor.mercancia.listado') }}" class="btn btn-secondary">
@@ -283,20 +243,6 @@
 @section('js')
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        const selectTipo = document.getElementById('SelectTipoProveedor');
-        const divBanco = document.getElementById('divBancoProveedor');
-        
-        function toggleBancoDiv() {
-            if (selectTipo.value === '1') {
-                divBanco.style.display = 'block';
-            } else {
-                divBanco.style.display = 'none';
-            }
-        }
-        
-        selectTipo.addEventListener('change', toggleBancoDiv);
-        toggleBancoDiv(); // Ejecutar al cargar
-        
         // ==========================
         // PREVISUALIZACIÓN DE LOGO
         // ==========================

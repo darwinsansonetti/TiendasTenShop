@@ -750,6 +750,85 @@ Route::middleware('auth')->group(function() {
     // Detalles con diferencia
     Route::get('/cpanel/proveedor/mercancia/diferencia/detalle/{id}', [ProveedoresController::class, 'detalleDiferencia'])
         ->name('cpanel.proveedor.mercancia.diferencia.detalle');
+
+    // ============================================
+    // PROVEEDORES DE SERVICIOS
+    // ============================================
+    
+    // Listado de proveedores de servicios
+    Route::get('/cpanel/proveedores/servicios/listado', [ProveedoresController::class, 'listado_proveedores_servicios'])
+        ->name('cpanel.proveedor.servicios.listado');
+
+    // Proveedores Servicio - Crear nuevo
+    Route::get('/cpanel/proveedores/servicios/crear', [ProveedoresController::class, 'crearProveedorServicio'])->name('cpanel.proveedores.servicios.crear');
+
+    // Proveedores Servicio - Editar
+    Route::get('/cpanel/proveedores/servicios/editar/{id}', [ProveedoresController::class, 'editarProveedorServicios'])
+        ->name('cpanel.proveedores.servicios.editar');
+
+    // Proveedores Servicio - Detalle
+    Route::get('/cpanel/proveedores/servicios/detalle/{id}', [ProveedoresController::class, 'detalleProveedorServicios'])
+        ->name('cpanel.proveedores.servicios.detalle');
+
+    // Registrar Servicio
+    Route::get('/cpanel/proveedor/servicios/registrar-servicio', [ProveedoresController::class, 'registrarServicio'])
+        ->name('cpanel.proveedor.servicio.registrar_servicio');
+
+    // Seleccionar Servicio - Detalle
+    Route::get('/cpanel/proveedores/servicios/seleccion/detalle/{id}', [ProveedoresController::class, 'detalleProveedorServiciosSeleccion'])
+        ->name('cpanel.proveedores.servicios.detalle.seleccion');
+
+    // Llamada a la vista Nuevo Servicio
+    Route::get('/cpanel/proveedores/servicios/nuevo/{proveedorId}', [ProveedoresController::class, 'nuevoServicio'])->name('cpanel.servicios.nuevo');
+
+    // Guardar Nuevo Servicio
+    Route::post('/crear', [ProveedoresController::class, 'crearServicio'])->name('cpanel.servicios.crear');
+
+    //Editar servicio
+    Route::get('/editar/{id}', [ProveedoresController::class, 'editarServicio'])->name('cpanel.servicios.editar');
+
+    //Actualizar servicio
+    Route::put('/actualizar/{id}', [ProveedoresController::class, 'actualizarServicio'])->name('cpanel.servicios.actualizar');
+
+    // Eliminar servicio
+    Route::delete('/eliminar', [ProveedoresController::class, 'eliminarServicio'])->name('cpanel.servicios.eliminar');
+
+    Route::put('/cambiar-estatus', [ProveedoresController::class, 'cambiarEstatusServicio'])->name('cpanel.servicios.cambiar.estatus');
+
+    // Detalles del servicio
+    Route::get('/detalle/{id}', [ProveedoresController::class, 'detalleServicio'])->name('cpanel.servicios.detalle');
+
+    // Registrar Pagos - Listado de proveedores Servicios
+    Route::get('/proveedor/servicios/registrar-pagos', [ProveedoresController::class, 'registrarPagosServiciosIndex'])
+        ->name('cpanel.proveedor.servicios.registrar_pagos');
+
+    // Proveedores Servicios - Registrar Pago
+    Route::get('/cpanel/proveedores/servicios/registrar/pago/{id}', [ProveedoresController::class, 'pagarProveedorServicios'])
+        ->name('cpanel.proveedores.servicios.pagar');
+
+    // Registrar Facturas Servicios
+    Route::get('/proveedor/servicios/registrar-facturas', [ProveedoresController::class, 'registrarPagosServiciosIndex'])
+        ->defaults('modo', 'facturas')
+        ->name('cpanel.proveedor.servicios.registrar_facturas');
+
+    // Proveedores Servicios - Registrar Factura
+    Route::get('/cpanel/proveedores/servicios/registrar/factura/{id}', [ProveedoresController::class, 'facturaRegistroProveedorServicios'])
+        ->name('cpanel.proveedores.servicios.nueva.factura');
+
+    // Guardar Factura Servicio
+    Route::post('/cpanel/facturas/servicio/guardar', [ProveedoresController::class, 'generarFacturaServicio'])->name('cpanel.facturas.servicios.guardar');
+
+    Route::get('/servicios/pagos/{id}/detalle', [ProveedoresController::class, 'detallePagoServicio'])->name('cpanel.pagos.detalle.servicios');
+    
+    Route::get('/servicios/pagos/{id}/editar', [ProveedoresController::class, 'editarPagoServicio'])->name('cpanel.pagos.servicio.editar');
+
+    Route::put('/servicio/pagos/{id}', [ProveedoresController::class, 'actualizarPagoServicio'])->name('cpanel.pagos.actualizar.servicio');
+
+    Route::get('/cpanel/facturas/{id}/detalle/servicio', [ProveedoresController::class, 'detalleFacturaServicio'])->name('cpanel.facturas.detalle.servicio');
+
+    Route::get('/cpanel/facturas/servicio/{id}/editar', [ProveedoresController::class, 'editarFacturaServicio'])->name('cpanel.facturas.editar.servicio');
+
+    Route::put('/cpanel/actualizar-servicio/{id}', [ProveedoresController::class, 'actualizarFacturaServicio'])->name('cpanel.facturas.actualizar.servicio');
 });
 
 

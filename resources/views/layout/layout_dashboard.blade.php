@@ -836,6 +836,39 @@
                 </ul>
               </li>
 
+              <li class="nav-item {{ session('menu_active') == 'Proveedor Servicios' ? 'menu-open' : '' }}">
+                <a href="#" class="nav-link">
+                  <i class="nav-icon bi bi-tools"></i>
+                  <p>Proveedor Servicios<i class="nav-arrow bi bi-chevron-right"></i></p>
+                </a>
+                <ul class="nav nav-treeview">
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.proveedor.servicios.listado') }}"
+                       class="nav-link {{ session('submenu_active') == 'Listado Proveedores' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-list-ul"></i><p>Listado Proveedores</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.proveedor.servicios.registrar_pagos') }}"
+                       class="nav-link {{ session('submenu_active') == 'Registrar Pagos' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-credit-card"></i><p>Registrar Pagos</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.proveedor.servicios.registrar_facturas') }}"
+                       class="nav-link {{ session('submenu_active') == 'Registrar Facturas' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-file-text"></i><p>Registrar Facturas</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.proveedor.servicio.registrar_servicio') }}"
+                       class="nav-link {{ session('submenu_active') == 'Registrar Servicio' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-file-text"></i><p>Registrar Servicio</p>
+                    </a>
+                  </li>
+                </ul>
+              </li>
+
               <li class="nav-item {{ session('menu_active') == 'Inventario' ? 'menu-open' : '' }}">
                 <a href="#" class="nav-link">
                   <i class="nav-icon bi bi-clipboard-data"></i>

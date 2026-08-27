@@ -1,15 +1,15 @@
 @extends('layout.layout_dashboard')
 
-@section('title', 'Editar Proveedor de Mercancía')
+@section('title', 'Editar Proveedor de Servicios')
 
 @php
     use App\Helpers\FileHelper;
     
-    // Colores para Mercancía (Verde)
-    $hdrBg = 'linear-gradient(135deg,#10b981,#059669)';
-    $hdrIcon = 'truck';
-    $hdrTitle = 'Editar Proveedor de Mercancía';
-    $hdrSubtitle = 'Actualizar información del proveedor de mercancía';
+    // Colores para Servicios (Naranja)
+    $hdrBg = 'linear-gradient(135deg,#f59e0b,#d97706)';
+    $hdrIcon = 'tools';
+    $hdrTitle = 'Editar Proveedor de Servicios';
+    $hdrSubtitle = 'Actualizar información del proveedor de servicios';
 @endphp
 
 @section('content')
@@ -33,7 +33,7 @@
                 <ol class="breadcrumb float-sm-end">
                     <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
                     <li class="breadcrumb-item">
-                        <a href="{{ route('cpanel.proveedor.mercancia.listado') }}">Proveedores</a>
+                        <a href="{{ route('cpanel.proveedor.servicios.listado') }}">Proveedores</a>
                     </li>
                     <li class="breadcrumb-item active">Editar</li>
                 </ol>
@@ -58,8 +58,8 @@
                 @csrf
                 @method('PUT')
                 
-                {{-- 🔥 CAMPO TIPO OCULTO - Siempre Mercancía (0) --}}
-                <input type="hidden" name="Tipo" value="0">
+                {{-- 🔥 CAMPO TIPO OCULTO - Siempre Servicios (1) --}}
+                <input type="hidden" name="Tipo" value="1">
                 
                 <div class="card-body">
                     <div class="row">
@@ -221,8 +221,45 @@
                                 </div>
                             </div>
                             
-                            {{-- 🔥 ELIMINADO: Datos Bancarios (no aplica para Mercancía) --}}
-                            
+                            <!-- 🔥 Datos Bancarios (VISIBLE para Servicios) -->
+                            <div id="divBancoProveedor" style="display: block;">
+                                <hr>
+                                <h5 class="mb-3"><i class="fas fa-university me-2"></i>Datos Bancarios</h5>
+                                
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label for="BancoId" class="form-label">
+                                            <i class="fas fa-building me-2"></i>Banco
+                                        </label>
+                                        <select name="BancoId" id="BancoId" class="form-control @error('BancoId') is-invalid @enderror">
+                                            <option value="">Seleccione un banco</option>
+                                            @foreach($bancos as $banco)
+                                                <option value="{{ $banco->ID }}" {{ old('BancoId', $proveedor->BancoId) == $banco->ID ? 'selected' : '' }}>
+                                                    {{ $banco->Nombre }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                        @error('BancoId')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="NumeroDeCuenta" class="form-label">
+                                            <i class="fas fa-credit-card me-2"></i>Número de Cuenta
+                                        </label>
+                                        <input type="text" 
+                                               name="NumeroDeCuenta" 
+                                               id="NumeroDeCuenta" 
+                                               class="form-control @error('NumeroDeCuenta') is-invalid @enderror" 
+                                               value="{{ old('NumeroDeCuenta', $proveedor->NumeroDeCuenta) }}"
+                                               placeholder="Número de cuenta bancaria"
+                                               maxlength="50">
+                                        @error('NumeroDeCuenta')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -231,7 +268,7 @@
                     <button type="submit" class="btn" style="background:{{ $hdrBg }};color:#fff;border:none;">
                         <i class="fas fa-save me-2"></i>Actualizar Proveedor
                     </button>
-                    <a href="{{ route('cpanel.proveedor.mercancia.listado') }}" class="btn btn-secondary">
+                    <a href="{{ route('cpanel.proveedor.servicios.listado') }}" class="btn btn-secondary">
                         <i class="fas fa-times me-2"></i>Cancelar
                     </a>
                 </div>

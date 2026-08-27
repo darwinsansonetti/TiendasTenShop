@@ -1,15 +1,15 @@
 @extends('layout.layout_dashboard')
 
-@section('title', 'Editar Proveedor de Mercancía')
+@section('title', 'Agregar Proveedor de Servicios')
 
 @php
     use App\Helpers\FileHelper;
     
-    // Colores para Mercancía (Verde)
-    $hdrBg = 'linear-gradient(135deg,#10b981,#059669)';
-    $hdrIcon = 'truck';
-    $hdrTitle = 'Editar Proveedor de Mercancía';
-    $hdrSubtitle = 'Actualizar información del proveedor de mercancía';
+    // Colores para Servicios (Naranja)
+    $hdrBg = 'linear-gradient(135deg,#f59e0b,#d97706)';
+    $hdrIcon = 'tools';
+    $hdrTitle = 'Agregar Proveedor de Servicios';
+    $hdrSubtitle = 'Registrar nuevo proveedor de servicios';
 @endphp
 
 @section('content')
@@ -33,9 +33,9 @@
                 <ol class="breadcrumb float-sm-end">
                     <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
                     <li class="breadcrumb-item">
-                        <a href="{{ route('cpanel.proveedor.mercancia.listado') }}">Proveedores</a>
+                        <a href="{{ route('cpanel.proveedor.servicios.listado') }}">Proveedores</a>
                     </li>
-                    <li class="breadcrumb-item active">Editar</li>
+                    <li class="breadcrumb-item active">Agregar</li>
                 </ol>
             </div>
         </div>
@@ -44,36 +44,32 @@
 
 <div class="app-content">
     <div class="container-fluid">
-        <div class="card card-warning card-outline">
+        <div class="card card-primary card-outline">
             <div class="card-header">
                 <h3 class="card-title">
-                    <i class="fas fa-edit me-2"></i>Formulario de Edición
+                    <i class="fas fa-plus-circle me-2"></i>Formulario de Registro
                 </h3>
             </div>
             
-            <form action="{{ route('cpanel.proveedores.actualizar', $proveedor->ProveedorId) }}" 
-                  method="POST" 
-                  id="proveedorForm" 
-                  enctype="multipart/form-data">
+            <form action="{{ route('cpanel.proveedores.guardar') }}" method="POST" id="proveedorForm" enctype="multipart/form-data">
                 @csrf
-                @method('PUT')
                 
-                {{-- 🔥 CAMPO TIPO OCULTO - Siempre Mercancía (0) --}}
-                <input type="hidden" name="Tipo" value="0">
+                {{-- 🔥 CAMPO TIPO OCULTO - Siempre Servicios (1) --}}
+                <input type="hidden" name="Tipo" value="1">
                 
                 <div class="card-body">
                     <div class="row">
                         <!-- Columna izquierda - Logo/Imagen -->
                         <div class="col-md-3 text-center">
                             <div class="mb-3">
-                                <img src="{{ $imgSrc }}" 
-                                     class="img-fluid rounded-circle mb-3 border border-warning shadow"
-                                     style="width: 150px; height: 150px; object-fit: cover;"
-                                     id="previewLogo">
+                                <img src="{{ asset('assets/img/adminlte/img/proveedor_default.png') }}" 
+                                    class="img-fluid rounded-circle mb-3 border border-primary shadow"
+                                    style="width: 150px; height: 150px; object-fit: cover;"
+                                    id="previewLogo">
                                 
                                 <div>
-                                    <label for="logo" class="btn btn-outline-warning btn-sm">
-                                        <i class="fas fa-camera me-1"></i>Cambiar logo
+                                    <label for="logo" class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-camera me-1"></i>Subir logo
                                     </label>
                                     <input type="file" class="d-none" id="logo" name="logo" accept="image/*">
                                 </div>
@@ -93,7 +89,7 @@
                                            name="Nombre" 
                                            id="Nombre" 
                                            class="form-control @error('Nombre') is-invalid @enderror" 
-                                           value="{{ old('Nombre', $proveedor->Nombre) }}"
+                                           value="{{ old('Nombre') }}"
                                            placeholder="Nombre del proveedor"
                                            maxlength="150"
                                            required>
@@ -113,7 +109,7 @@
                                            name="RifCedula" 
                                            id="RifCedula" 
                                            class="form-control @error('RifCedula') is-invalid @enderror" 
-                                           value="{{ old('Rif_Cedula', $proveedor->Rif_Cedula) }}"
+                                           value="{{ old('RifCedula') }}"
                                            placeholder="Cédula o Rif"
                                            maxlength="50">
                                     @error('RifCedula')
@@ -128,7 +124,7 @@
                                            name="FechaCreacion" 
                                            id="FechaCreacion" 
                                            class="form-control @error('FechaCreacion') is-invalid @enderror" 
-                                           value="{{ old('FechaCreacion', \Carbon\Carbon::parse($proveedor->FechaCreacion)->format('Y-m-d')) }}"
+                                           value="{{ old('FechaCreacion', date('Y-m-d')) }}"
                                            required>
                                     @error('FechaCreacion')
                                         <div class="invalid-feedback">{{ $message }}</div>
@@ -146,7 +142,7 @@
                                            name="TelefonoMovil" 
                                            id="TelefonoMovil" 
                                            class="form-control @error('TelefonoMovil') is-invalid @enderror" 
-                                           value="{{ old('TelefonoMovil', $proveedor->TelefonoMovil) }}"
+                                           value="{{ old('TelefonoMovil') }}"
                                            placeholder="Teléfono móvil o celular"
                                            maxlength="20"
                                            required>
@@ -162,7 +158,7 @@
                                            name="TelefonoFijo" 
                                            id="TelefonoFijo" 
                                            class="form-control @error('TelefonoFijo') is-invalid @enderror" 
-                                           value="{{ old('TelefonoFijo', $proveedor->TelefonoFijo) }}"
+                                           value="{{ old('TelefonoFijo') }}"
                                            placeholder="Teléfono fijo"
                                            maxlength="20">
                                     @error('TelefonoFijo')
@@ -181,7 +177,7 @@
                                            name="CorreoElectronico" 
                                            id="CorreoElectronico" 
                                            class="form-control @error('CorreoElectronico') is-invalid @enderror" 
-                                           value="{{ old('CorreoElectronico', $proveedor->CorreoElectronico) }}"
+                                           value="{{ old('CorreoElectronico') }}"
                                            placeholder="correo@ejemplo.com"
                                            maxlength="100">
                                     @error('CorreoElectronico')
@@ -194,8 +190,8 @@
                                     </label>
                                     <select name="Estatus" id="Estatus" class="form-control @error('Estatus') is-invalid @enderror" required>
                                         <option value="">Seleccione un valor</option>
-                                        <option value="0" {{ old('Estatus', $proveedor->Estatus) == '0' ? 'selected' : '' }}>Activo</option>
-                                        <option value="1" {{ old('Estatus', $proveedor->Estatus) == '1' ? 'selected' : '' }}>Inactivo</option>
+                                        <option value="1" {{ old('Estatus') == '1' ? 'selected' : '' }}>Activo</option>
+                                        <option value="0" {{ old('Estatus') == '0' ? 'selected' : '' }}>Inactivo</option>
                                     </select>
                                     @error('Estatus')
                                         <div class="invalid-feedback">{{ $message }}</div>
@@ -214,24 +210,62 @@
                                               class="form-control @error('Direccion') is-invalid @enderror" 
                                               rows="2"
                                               placeholder="Escriba la dirección..."
-                                              maxlength="500">{{ old('Direccion', $proveedor->Direccion) }}</textarea>
+                                              maxlength="500">{{ old('Direccion') }}</textarea>
                                     @error('Direccion')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
                                 </div>
                             </div>
                             
-                            {{-- 🔥 ELIMINADO: Datos Bancarios (no aplica para Mercancía) --}}
-                            
+                            <!-- 🔥 Datos Bancarios (VISIBLE para Servicios) -->
+                            <div id="divBancoProveedor" style="display: block;">
+                                <hr>
+                                <h5 class="mb-3"><i class="fas fa-university me-2"></i>Datos Bancarios</h5>
+                                
+                                <!-- Fila: Banco y Número de Cuenta -->
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label for="BancoId" class="form-label">
+                                            <i class="fas fa-building me-2"></i>Banco
+                                        </label>
+                                        <select name="BancoId" id="BancoId" class="form-control @error('BancoId') is-invalid @enderror">
+                                            <option value="">Seleccione un banco</option>
+                                            @foreach($bancos as $banco)
+                                                <option value="{{ $banco->ID }}" {{ old('BancoId') == $banco->ID ? 'selected' : '' }}>
+                                                    {{ $banco->Nombre }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                        @error('BancoId')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="NumeroDeCuenta" class="form-label">
+                                            <i class="fas fa-credit-card me-2"></i>Número de Cuenta
+                                        </label>
+                                        <input type="text" 
+                                               name="NumeroDeCuenta" 
+                                               id="NumeroDeCuenta" 
+                                               class="form-control @error('NumeroDeCuenta') is-invalid @enderror" 
+                                               value="{{ old('NumeroDeCuenta') }}"
+                                               placeholder="Número de cuenta bancaria"
+                                               maxlength="50">
+                                        @error('NumeroDeCuenta')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
                 
                 <div class="card-footer">
                     <button type="submit" class="btn" style="background:{{ $hdrBg }};color:#fff;border:none;">
-                        <i class="fas fa-save me-2"></i>Actualizar Proveedor
+                        <i class="fas fa-save me-2"></i>Guardar Proveedor
                     </button>
-                    <a href="{{ route('cpanel.proveedor.mercancia.listado') }}" class="btn btn-secondary">
+                    <a href="{{ route('cpanel.proveedor.servicios.listado') }}" class="btn btn-secondary">
                         <i class="fas fa-times me-2"></i>Cancelar
                     </a>
                 </div>

@@ -27,10 +27,10 @@
                 <ol class="breadcrumb float-sm-end">
                     <li class="breadcrumb-item"><a href="{{ route('cpanel.dashboard') }}">Inicio</a></li>
                     <li class="breadcrumb-item">
-                        <a href="{{ route('cpanel.proveedor.mercancia.listado') }}">Proveedores</a>
+                        <a href="{{ route('cpanel.proveedor.servicios.listado') }}">Proveedores</a>
                     </li>
                     <li class="breadcrumb-item">
-                        <a href="{{ route('cpanel.proveedores.detalle', $facturaDTO->ProveedorId) }}">
+                        <a href="{{ route('cpanel.proveedores.servicios.detalle', $facturaDTO->ProveedorId) }}">
                             Detalle Proveedor
                         </a>
                     </li>
@@ -69,34 +69,6 @@
                     <h6 class="mb-0 fw-bold text-white">
                         <i class="bi bi-info-circle me-2"></i>Información de la Factura
                     </h6>
-                    <div class="d-flex gap-2">
-                        @if($facturaDTO->Estatus == 1)
-                        <a href="{{ route('cpanel.facturas.editar', $facturaDTO->ID) }}"
-                           class="btn btn-light btn-sm fw-semibold" style="font-size:0.8rem;">
-                            <i class="bi bi-pencil me-1"></i>Editar
-                        </a>
-                        @endif
-
-                        @if($origen == 'cuentas_pagar')
-                            {{-- Volver a Cuentas por pagar --}}
-                            <a href="{{ route('cpanel.proveedor.mercancia.cuentas_pagar') }}"
-                            class="btn btn-light btn-sm fw-semibold" style="font-size:0.8rem;">
-                                <i class="bi bi-arrow-left me-1"></i>Volver
-                            </a>
-                        @elseif($origen == 'historial')
-                            {{-- Volver a Historial de facturas --}}
-                            <a href="{{ route('cpanel.proveedor.mercancia.historial_facturas') }}"
-                            class="btn btn-light btn-sm fw-semibold" style="font-size:0.8rem;">
-                                <i class="bi bi-arrow-left me-1"></i>Volver
-                            </a>
-                        @else
-                            {{-- Volver a Facturas (módulo original) --}}
-                            <a href="{{ route('cpanel.proveedores.detalle', $facturaDTO->ProveedorId) }}"
-                            class="btn btn-light btn-sm fw-semibold" style="font-size:0.8rem;">
-                                <i class="bi bi-arrow-left me-1"></i>Volver
-                            </a>
-                        @endif
-                    </div>
                 </div>
             </div>
             <div class="card-body py-4">
@@ -159,103 +131,11 @@
         </div>
 
         {{-- ================================================ --}}
-        {{-- CARD 2: RESUMEN FINANCIERO (mini KPI blocks) --}}
-        {{-- ================================================ --}}
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header border-0 py-3" style="background:linear-gradient(135deg,#10b981 0%,#059669 100%);">
-                <h6 class="mb-0 fw-bold text-white">
-                    <i class="bi bi-calculator me-2"></i>Resumen Financiero
-                </h6>
-            </div>
-            <div class="card-body py-4">
-                <div class="row g-3">
-                    {{-- Subtotal --}}
-                    <div class="col-lg col-md-4 col-6">
-                        <div class="rounded-3 p-3 h-100" style="background:#f8fafc;border:1px solid #e2e8f0;">
-                            <div class="d-flex align-items-center gap-2 mb-1">
-                                <div class="rounded-2 d-flex align-items-center justify-content-center"
-                                     style="width:28px;height:28px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);">
-                                    <i class="bi bi-receipt text-white" style="font-size:0.75rem;"></i>
-                                </div>
-                                <p class="text-uppercase text-muted mb-0" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Subtotal</p>
-                            </div>
-                            <h5 class="mb-0 fw-bold text-dark">$ {{ number_format($facturaDTO->Subtotal ?? 0, 2) }}</h5>
-                        </div>
-                    </div>
-                    {{-- Flete --}}
-                    <div class="col-lg col-md-4 col-6">
-                        <div class="rounded-3 p-3 h-100" style="background:#f8fafc;border:1px solid #e2e8f0;">
-                            <div class="d-flex align-items-center gap-2 mb-1">
-                                <div class="rounded-2 d-flex align-items-center justify-content-center"
-                                     style="width:28px;height:28px;background:linear-gradient(135deg,#10b981,#059669);">
-                                    <i class="bi bi-truck text-white" style="font-size:0.75rem;"></i>
-                                </div>
-                                <p class="text-uppercase text-muted mb-0" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Flete</p>
-                            </div>
-                            <h5 class="mb-0 fw-bold text-dark">$ {{ number_format($facturaDTO->Flete ?? 0, 2) }}</h5>
-                        </div>
-                    </div>
-                    {{-- Costo Traspaso --}}
-                    <div class="col-lg col-md-4 col-6">
-                        <div class="rounded-3 p-3 h-100" style="background:#f8fafc;border:1px solid #e2e8f0;">
-                            <div class="d-flex align-items-center gap-2 mb-1">
-                                <div class="rounded-2 d-flex align-items-center justify-content-center"
-                                     style="width:28px;height:28px;background:linear-gradient(135deg,#8b5cf6,#7c3aed);">
-                                    <i class="bi bi-arrow-left-right text-white" style="font-size:0.75rem;"></i>
-                                </div>
-                                <p class="text-uppercase text-muted mb-0" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Costo Traspaso</p>
-                            </div>
-                            <h5 class="mb-0 fw-bold text-dark">$ {{ number_format($facturaDTO->CostoTraspaso ?? 0, 2) }}</h5>
-                        </div>
-                    </div>
-                    {{-- Aduana --}}
-                    <div class="col-lg col-md-6 col-6">
-                        <div class="rounded-3 p-3 h-100" style="background:#f8fafc;border:1px solid #e2e8f0;">
-                            <div class="d-flex align-items-center gap-2 mb-1">
-                                <div class="rounded-2 d-flex align-items-center justify-content-center"
-                                     style="width:28px;height:28px;background:linear-gradient(135deg,#f59e0b,#d97706);">
-                                    <i class="bi bi-building text-white" style="font-size:0.75rem;"></i>
-                                </div>
-                                <p class="text-uppercase text-muted mb-0" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;">Aduana</p>
-                            </div>
-                            <h5 class="mb-0 fw-bold text-dark">$ {{ number_format($facturaDTO->Aduana ?? 0, 2) }}</h5>
-                        </div>
-                    </div>
-                    {{-- Total Factura (destacado con gradiente) --}}
-                    <div class="col-lg col-md-6 col-12">
-                        <div class="rounded-3 p-3 h-100" style="background:linear-gradient(135deg,#10b981,#059669);border:1px solid #059669;">
-                            <div class="d-flex align-items-center gap-2 mb-1">
-                                <div class="rounded-2 d-flex align-items-center justify-content-center"
-                                     style="width:28px;height:28px;background:rgba(255,255,255,0.2);">
-                                    <i class="bi bi-check-circle text-white" style="font-size:0.75rem;"></i>
-                                </div>
-                                <p class="text-uppercase mb-0" style="font-size:0.7rem;letter-spacing:.05em;font-weight:600;color:rgba(255,255,255,0.85);">Total Factura</p>
-                            </div>
-                            <h5 class="mb-0 fw-bold text-white">$ {{ number_format($facturaDTO->TotalFactura ?? 0, 2) }}</h5>
-                            <small style="color:rgba(255,255,255,0.7);font-size:0.7rem;">{{ number_format($facturaDTO->PorcentajeGastos ?? 0, 2) }}% gastos</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        {{-- ================================================ --}}
         {{-- CARD 3: TABS — PRODUCTOS | PAGOS --}}
         {{-- ================================================ --}}
         <div class="card border-0 shadow-sm">
             <div class="card-header border-0 py-0 px-0" style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">
                 <ul class="nav nav-tabs border-0 px-4 pt-3" id="facturaTabs" role="tablist">
-                    <li class="nav-item">
-                        <button class="nav-link active pb-3 fw-semibold" id="productos-tab"
-                                data-bs-toggle="tab" data-bs-target="#productos" type="button"
-                                style="font-size:0.85rem;border:none;background:transparent;">
-                            <i class="bi bi-box-seam me-1"></i>Productos
-                            <span class="badge ms-1 rounded-pill"
-                                  style="background:rgba(59,130,246,0.1);color:#1d4ed8;font-size:0.7rem;">
-                                {{ $facturaDTO->Detalles->count() }}
-                            </span>
-                        </button>
-                    </li>
                     <li class="nav-item">
                         <button class="nav-link pb-3 fw-semibold" id="pagos-tab"
                                 data-bs-toggle="tab" data-bs-target="#pagos" type="button"
@@ -272,86 +152,7 @@
             <div class="card-body p-0">
                 <div class="tab-content">
 
-                    {{-- TAB: PRODUCTOS --}}
-                    <div class="tab-pane fade show active" id="productos">
-                        <div class="d-flex justify-content-end p-3 gap-2" style="border-bottom:1px solid #f1f5f9;">
-                            <button type="button" class="btn btn-sm rounded-2"
-                                    style="background:rgba(239,68,68,0.1);color:#dc2626;border:1px solid rgba(239,68,68,0.25);font-size:0.8rem;"
-                                    onclick="exportarPDFProductos()">
-                                <i class="bi bi-file-pdf me-1"></i>PDF
-                            </button>
-                            <button type="button" class="btn btn-sm rounded-2"
-                                    style="background:rgba(16,185,129,0.1);color:#059669;border:1px solid rgba(16,185,129,0.25);font-size:0.8rem;"
-                                    onclick="exportarExcelProductos()">
-                                <i class="bi bi-file-excel me-1"></i>Excel
-                            </button>
-                        </div>
-
-                        <div class="table-responsive" style="max-height:500px;overflow-y:auto;">
-                            <table class="table table-hover align-middle mb-0" id="tablaProductos">
-                                <thead>
-                                    <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;position:sticky;top:0;z-index:10;">
-                                        <th class="ps-4 py-3 text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;width:80px;">IMAGEN</th>
-                                        <th class="py-3 text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">CÓDIGO</th>
-                                        <th class="py-3 text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">REFERENCIA</th>
-                                        <th class="py-3 text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">PRODUCTO</th>
-                                        <th class="py-3 text-end text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">CANTIDAD</th>
-                                        <th class="py-3 text-end text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">COSTO USD</th>
-                                        <th class="pe-4 py-3 text-end text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;">TOTAL USD</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @forelse($facturaDTO->Detalles as $detalle)
-                                    @php
-                                        $imgSrc = FileHelper::getOrDownloadFile(
-                                            'images/items/thumbs/',
-                                            $detalle->UrlFoto ?? '',
-                                            'assets/img/adminlte/img/produc_default.jfif'
-                                        );
-
-                                        // ✅ Calcular correctamente
-                                        $totalUnidades = $detalle->CantidadEmitida ?? 0;
-                                        $costoUnitario = $detalle->CostoDivisa ?? 0;
-                                        $totalUSD = $costoUnitario * $totalUnidades * $detalle->UxE;
-                                    @endphp
-                                    <tr style="border-bottom:1px solid #f1f5f9;">
-                                        <td class="ps-4 py-3 text-center">
-                                            <img src="{{ $imgSrc }}"
-                                                 loading="lazy" 
-                                                 alt="{{ $detalle->Codigo ?? 'producto' }}"
-                                                 class="img-thumbnail img-zoomable"
-                                                 style="width:50px;height:50px;object-fit:cover;cursor:pointer;"
-                                                 data-full-image="{{ $imgSrc }}"
-                                                 data-description="{{ $detalle->producto_nombre ?? 'Sin descripción' }}"
-                                                 onclick="zoomImagen(this)">
-                                        </td>
-                                        <td class="py-3">
-                                            <code class="px-2 py-1 rounded-2"
-                                                  style="background:#f1f5f9;color:#3b82f6;font-size:0.78rem;">{{ $detalle->Codigo ?? 'N/A' }}</code>
-                                        </td>
-                                        <td class="py-3 text-muted" style="font-size:0.88rem;">{{ $detalle->Referencia ?? 'N/A' }}</td>
-                                        <td class="py-3 fw-semibold text-dark">{{ $detalle->producto_nombre ?? 'N/A' }}</td>
-                                        <td class="py-3 text-end fw-semibold text-dark">{{ number_format($detalle->CantidadEmitida * $detalle->UxE, 2) }}</td>
-                                        <td class="py-3 text-end fw-semibold" style="color:#059669;">$ {{ number_format($detalle->CostoDivisa, 2) }}</td>
-                                        <td class="pe-4 py-3 text-end fw-bold text-dark">$ {{ number_format($totalUSD, 2) }}</td>
-                                    </tr>
-                                    @empty
-                                    <tr>
-                                        <td colspan="7" class="text-center py-5">
-                                            <div class="d-flex flex-column align-items-center gap-2">
-                                                <div class="rounded-3 d-flex align-items-center justify-content-center"
-                                                     style="width:56px;height:56px;background:rgba(59,130,246,0.08);">
-                                                    <i class="bi bi-box-seam text-primary" style="font-size:1.6rem;opacity:.5;"></i>
-                                                </div>
-                                                <p class="text-muted mb-0" style="font-size:0.9rem;">No hay productos registrados en esta factura</p>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+                    
 
                     {{-- TAB: PAGOS --}}
                     <div class="tab-pane fade" id="pagos">
@@ -363,11 +164,6 @@
                                     <i class="bi bi-check-circle-fill" style="color:#059669;"></i>
                                     <span class="fw-semibold text-dark" style="font-size:0.88rem;">Pagado:</span>
                                     <span class="fw-bold" style="color:#059669;">$ {{ number_format($facturaDTO->TotalPagado ?? 0, 2) }}</span>
-                                </div>
-                                <div class="d-flex align-items-center gap-1">
-                                    <i class="bi bi-clock-fill" style="color:#dc2626;"></i>
-                                    <span class="fw-semibold text-dark" style="font-size:0.88rem;">Pendiente:</span>
-                                    <span class="fw-bold" style="color:#dc2626;">$ {{ number_format($facturaDTO->SaldoPendiente ?? 0, 2) }}</span>
                                 </div>
                             </div>
                             <div class="d-flex gap-2">
@@ -381,7 +177,7 @@
                                         onclick="exportarExcelPagos()">
                                     <i class="bi bi-file-excel me-1"></i>Excel
                                 </button>
-                                <a href="{{ route('cpanel.proveedores.pagar', $facturaDTO->ProveedorId) }}"
+                                <a href="{{ route('cpanel.proveedores.servicios.pagar', $facturaDTO->ProveedorId) }}"
                                    class="btn btn-sm rounded-2"
                                    style="background:rgba(59,130,246,0.1);color:#1d4ed8;border:1px solid rgba(59,130,246,0.25);font-size:0.8rem;">
                                     <i class="bi bi-plus-circle me-1"></i>Registrar Pago
@@ -428,7 +224,7 @@
                                         </td>
                                         <td class="pe-4 py-3 text-center">
                                             <div class="d-flex justify-content-center gap-1">
-                                                <a href="{{ route('cpanel.pagos.detalle', $pago->ID) }}"
+                                                <a href="{{ route('cpanel.pagos.detalle.servicios', $pago->ID) }}"
                                                    class="btn btn-sm rounded-2 d-flex align-items-center justify-content-center"
                                                    style="width:30px;height:30px;background:rgba(6,182,212,0.1);color:#0891b2;border:1px solid rgba(6,182,212,0.25);"
                                                    title="Ver detalle" data-bs-toggle="tooltip">
@@ -436,7 +232,7 @@
                                                 </a>
 
                                                 @if(in_array((int)$pago->Estatus, [1, 2]))
-                                                <a href="{{ route('cpanel.pagos.editar', $pago->ID) }}"
+                                                <a href="{{ route('cpanel.pagos.servicio.editar', $pago->ID) }}"
                                                    class="btn btn-sm rounded-2 d-flex align-items-center justify-content-center"
                                                    style="width:30px;height:30px;background:rgba(245,158,11,0.1);color:#d97706;border:1px solid rgba(245,158,11,0.25);"
                                                    title="Editar" data-bs-toggle="tooltip">
@@ -492,7 +288,7 @@
                                     <i class="bi bi-cash-stack text-success" style="font-size:1.6rem;opacity:.5;"></i>
                                 </div>
                                 <p class="text-muted mb-0" style="font-size:0.9rem;">No hay pagos registrados para esta factura</p>
-                                <a href="{{ route('cpanel.proveedores.pagar', $facturaDTO->ProveedorId) }}"
+                                <a href="{{ route('cpanel.proveedores.servicios.pagar', $facturaDTO->ProveedorId) }}"
                                    class="btn btn-sm btn-primary mt-1">
                                     <i class="bi bi-plus-circle me-1"></i>Registrar primer pago
                                 </a>

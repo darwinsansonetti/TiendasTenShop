@@ -63,8 +63,8 @@ class ProveedoresController extends Controller
                 ->get();
             
             session([
-                'menu_active' => 'Proveedores',
-                'submenu_active' => 'Mercancia'
+                'menu_active' => 'Proveedor Mercancía',
+                'submenu_active' => 'Listado Proveedores'
             ]);
             
             return view('cpanel.proveedores.crear_proveedor', compact('bancos'));
@@ -141,7 +141,7 @@ class ProveedoresController extends Controller
                 return redirect()->route('cpanel.proveedor.mercancia.listado')
                     ->with('success', 'Proveedor de mercancía creado correctamente');
             } else {
-                return redirect()->route('cpanel.proveedores.servicios')
+                return redirect()->route('cpanel.proveedor.servicios.listado')
                     ->with('success', 'Proveedor de servicios creado correctamente');
             }
             
@@ -180,8 +180,8 @@ class ProveedoresController extends Controller
             );
             
             session([
-                'menu_active' => 'Proveedores',
-                'submenu_active' => 'Mercancia'
+                'menu_active' => 'Proveedor Servicios',
+                'submenu_active' => 'Listado Proveedores'
             ]);
             
             return view('cpanel.proveedores.editar_proveedor', compact('proveedor', 'bancos', 'imgSrc'));
@@ -276,7 +276,7 @@ class ProveedoresController extends Controller
                 return redirect()->route('cpanel.proveedor.mercancia.listado')
                     ->with('success', 'Proveedor actualizado correctamente');
             } else {
-                return redirect()->route('cpanel.proveedores.servicios')
+                return redirect()->route('cpanel.proveedor.servicios.listado')
                     ->with('success', 'Proveedor actualizado correctamente');
             }
             
@@ -576,9 +576,10 @@ class ProveedoresController extends Controller
                     'f.Tipo',
                     'f.SucursalId',
                     'f.DivisaValorId',
-                    // MontoDivisa = detalles + traspaso
-                    DB::raw('COALESCE(SUM(fd.CantidadEmitida * fd.CostoDivisa), 0) + COALESCE(f.Traspaso, 0) as MontoDivisa'),
-                    DB::raw('COALESCE(SUM(fd.CantidadEmitida * fd.CostoBs), 0) as MontoBs'),
+                    'f.MontoDivisa',
+                    'f.MontoBs',
+                    // DB::raw('COALESCE(SUM(fd.CantidadEmitida * fd.CostoDivisa), 0) + COALESCE(f.Traspaso, 0) as MontoDivisa'),
+                    // DB::raw('COALESCE(SUM(fd.CantidadEmitida * fd.CostoBs), 0) as MontoBs'),
                     'f.Descripcion',
                     'f.TasaDeCambio',
                     'f.MonedaPrincipal',
@@ -749,7 +750,7 @@ class ProveedoresController extends Controller
             $submenuActivo = ($modo == 'pagos') ? 'Registrar Pagos' : 'Registrar Facturas';
             
             session([
-                'menu_active' => 'Compras',
+                'menu_active' => 'Proveedor Mercancía',
                 'submenu_active' => $submenuActivo
             ]);
             
@@ -2844,9 +2845,8 @@ class ProveedoresController extends Controller
             
             // Mapear forma de pago
             $formaPagoMap = [
-                0 => 'Efectivo',
-                1 => 'Transferencia',
-                2 => 'Tarjeta',
+                1 => 'Efectivo',
+                2 => 'Transferencia',
                 3 => 'Cheque',
                 4 => 'Otros'
             ];
@@ -2905,9 +2905,8 @@ class ProveedoresController extends Controller
             
             // Mapeo de forma de pago
             $formaPagoMap = [
-                0 => 'Efectivo',
-                1 => 'Transferencia',
-                2 => 'Tarjeta',
+                1 => 'Efectivo',
+                2 => 'Transferencia',
                 3 => 'Cheque',
                 4 => 'Otros'
             ];
@@ -3218,9 +3217,8 @@ class ProveedoresController extends Controller
             
             // Forma de pago
             $formaPagoMap = [
-                0 => 'Efectivo',
-                1 => 'Transferencia',
-                2 => 'Tarjeta de Crédito',
+                1 => 'Efectivo',
+                2 => 'Transferencia',
                 3 => 'Cheque',
                 4 => 'Otros'
             ];
@@ -3394,9 +3392,8 @@ class ProveedoresController extends Controller
             }
             
             $formaPagoMap = [
-                0 => 'Efectivo',
-                1 => 'Transferencia',
-                2 => 'Tarjeta',
+                1 => 'Efectivo',
+                2 => 'Transferencia',
                 3 => 'Cheque',
                 4 => 'Otros'
             ];
@@ -5434,6 +5431,1565 @@ class ProveedoresController extends Controller
         } catch (\Exception $e) {
             \Log::error('Error en detalleDiferencia: ' . $e->getMessage());
             return back()->with('error', 'Error al cargar el detalle: ' . $e->getMessage());
+        }
+    }
+
+    public function listado_proveedores_servicios(Request $request)
+    {
+        try {
+            // Tipo Servicios = 1
+            $tipo = 1;
+            
+            // Obtener listado de proveedores
+            $proveedoresServicios = GeneralHelper::BuscarListadoProveedores($tipo);
+            
+            // Configurar menú activo
+            session([
+                'menu_active' => 'Proveedor Servicios',
+                'submenu_active' => 'Listado Proveedores'
+            ]);
+            
+            return view('cpanel.proveedores.listado_servicios', compact('proveedoresServicios'));
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en listado_proveedores_servicios: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar el listado de proveedores: ' . $e->getMessage());
+        }
+    }
+
+    public function crearProveedorServicio()
+    {
+        try {
+            // Obtener lista de bancos para el select
+            $bancos = DB::connection('sqlsrv')
+                ->table('Bancos')
+                ->where('EsActivo', 1)
+                ->orderBy('Nombre', 'asc')
+                ->get();
+            
+            session([
+                'menu_active' => 'Proveedor Servicios',
+                'submenu_active' => 'Listado Proveedores'
+            ]);
+            
+            return view('cpanel.proveedores.crear_proveedor_servicios', compact('bancos'));
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en crear_proveedor_servicios: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar el formulario: ' . $e->getMessage());
+        }
+    }
+
+    public function editarProveedorServicios($id)
+    {
+        try {
+            // Buscar proveedor
+            $proveedor = DB::connection('sqlsrv')
+                ->table('Proveedores')
+                ->where('ProveedorId', $id)
+                ->first();
+            
+            if (!$proveedor) {
+                return redirect()->route('cpanel.proveedor.servicios.listado')
+                    ->with('error', 'Proveedor no encontrado');
+            }
+            
+            // Obtener lista de bancos
+            $bancos = DB::connection('sqlsrv')
+                ->table('Bancos')
+                ->where('EsActivo', 1)
+                ->orderBy('Nombre', 'asc')
+                ->get();
+            
+            // Obtener imagen del proveedor
+            $imgSrc = FileHelper::getOrDownloadFile(
+                'images/proveedores/',
+                $proveedor->UrlImagen,
+                'assets/img/adminlte/img/proveedor_default.png'
+            );
+            
+            session([
+                'menu_active' => 'Proveedor Servicios',
+                'submenu_active' => 'Listado Proveedores'
+            ]);
+            
+            return view('cpanel.proveedores.editar_proveedor_servicios', compact('proveedor', 'bancos', 'imgSrc'));
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en editarProveedor: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar el formulario: ' . $e->getMessage());
+        }
+    }
+    
+    public function detalleProveedorServicios($id)
+    {
+        try {
+            if (!$id) {
+                return redirect()->route('cpanel.proveedor.servicios.listado')
+                    ->with('error', 'Debe indicar un código de proveedor');
+            }
+            
+            // Buscar proveedor
+            $proveedor = DB::connection('sqlsrv')
+                ->table('Proveedores')
+                ->where('ProveedorId', $id)
+                ->first();
+            
+            if (!$proveedor) {
+                return redirect()->route('cpanel.proveedor.servicios.listado')
+                    ->with('error', 'No se pudo encontrar un proveedor');
+            }
+            
+            // Obtener imagen
+            $imgSrc = FileHelper::getOrDownloadFile(
+                'images/proveedores/',
+                $proveedor->UrlImagen,
+                'assets/img/adminlte/img/proveedor_default.png'
+            );
+            
+            // ============================================
+            // FACTURAS VIGENTES (En Proceso + Recibiendo + Recibida)
+            // ============================================
+            $facturasVigentes = $this->buscarFacturasActivas($id);
+            
+            // ============================================
+            // PAGOS VIGENTES
+            // ============================================
+            $transaccionesVigentes = $this->buscarPagosVigentesProveedores($id);
+            
+            // ============================================
+            // PRODUCTOS (si es Mercancía)
+            // ============================================
+            $productos = null;
+            if ($proveedor->Tipo == 0) {
+                $sucursalId = session('sucursal_id'); // Ajusta según tu lógica
+                $productos = $this->buscarProductosDelProveedor($sucursalId, $id);
+            }
+            
+            // ============================================
+            // ESTADO DE CUENTA DEL PROVEEDOR
+            // ============================================
+            $estadoCuenta = $this->generarEstadoCuentaProveedor($id, $facturasVigentes);
+
+            // ============================================
+            // BANCO
+            // ============================================
+            $banco = null;
+            if ($proveedor->BancoId) {
+                $banco = DB::connection('sqlsrv')
+                    ->table('Bancos')
+                    ->where('Id', $proveedor->BancoId)
+                    ->first();
+            }
+
+            // BALANCE DE FACTURAS
+            $balanceFacturas = new \stdClass();
+            $balanceFacturas->totalFacturas = $facturasVigentes->sum('MontoDivisa');
+            $balanceFacturas->totalPagado = $facturasVigentes->sum('total_pagado');
+            $balanceFacturas->saldoPendiente = $balanceFacturas->totalFacturas - $balanceFacturas->totalPagado;
+            $balanceFacturas->porcentajePagado = $balanceFacturas->totalFacturas > 0 
+                ? round(($balanceFacturas->totalPagado * 100) / $balanceFacturas->totalFacturas, 2) 
+                : 0;
+            
+            session([
+                'menu_active' => 'Proveedor Servicios',
+                'submenu_active' => 'Listado Proveedores'
+            ]);
+            
+            return view('cpanel.proveedores.detalle_proveedor_servicios', compact(
+                'proveedor',
+                'imgSrc',
+                'facturasVigentes',
+                'transaccionesVigentes',
+                'productos',
+                'banco',
+                'estadoCuenta',
+                'balanceFacturas'
+            ));
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en detalleProveedor: ' . $e->getMessage());
+            return redirect()->route('cpanel.proveedor.mercancia.listado')
+                ->with('error', 'Error al cargar el detalle: ' . $e->getMessage());
+        }
+    }
+
+    public function registrarServicio()
+    {
+        try {
+            session([
+                'menu_active' => 'Proveedor Servicios',
+                'submenu_active' => 'Registrar Servicio'
+            ]);
+            
+            // Tipo Servicios = 1
+            $tipo = 1;
+            
+            // Obtener listado de proveedores
+            $proveedoresServicios = GeneralHelper::BuscarListadoProveedores($tipo);
+
+            return view('cpanel.proveedores.listado_proveedores_servicios_seleccion', compact('proveedoresServicios'));
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en registrarServicio: ' . $e->getMessage());
+            return back()->with('error', 'Error al registrarServicio: ' . $e->getMessage());
+        }
+    }    
+    
+    public function detalleProveedorServiciosSeleccion($id)
+    {
+        try {
+            if (!$id) {
+                return redirect()->route('cpanel.proveedor.servicios.listado')
+                    ->with('error', 'Debe indicar un código de proveedor');
+            }
+            
+            // Buscar proveedor
+            $proveedor = DB::connection('sqlsrv')
+                ->table('Proveedores')
+                ->where('ProveedorId', $id)
+                ->first();
+            
+            if (!$proveedor) {
+                return redirect()->route('cpanel.proveedor.servicios.listado')
+                    ->with('error', 'No se pudo encontrar un proveedor');
+            }
+            
+            // Obtener imagen
+            $imgSrc = FileHelper::getOrDownloadFile(
+                'images/proveedores/',
+                $proveedor->UrlImagen,
+                'assets/img/adminlte/img/proveedor_default.png'
+            );
+
+            // Obtener todos los servicios del proveedor
+            $servicios = $this->buscarListaPlantillaServicios($id);
+            
+            session([
+                'menu_active' => 'Proveedor Servicios',
+                'submenu_active' => 'Registrar Servicio'
+            ]);
+            
+            // Obtener proveedores para el filtro (solo servicios)
+            $proveedores = DB::connection('sqlsrv')
+                ->table('Proveedores')
+                ->where('Tipo', 1) // Solo proveedores de servicios
+                ->where('Estatus', 0) // Activos
+                ->select('ProveedorId', 'Nombre')
+                ->orderBy('Nombre')
+                ->get();
+
+            return view('cpanel.servicios.lista_servicios_plantilla', [
+                'proveedor' => $proveedor,  // <-- Corregido: asignar la variable
+                'imgSrc' => $imgSrc,        // <-- Corregido: asignar la variable
+                'servicios' => $servicios,
+                'proveedores' => $proveedores,
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en detalleProveedor: ' . $e->getMessage());
+            return redirect()->route('cpanel.proveedor.mercancia.listado')
+                ->with('error', 'Error al cargar el detalle: ' . $e->getMessage());
+        }
+    }
+
+    private function buscarListaPlantillaServicios($id)
+    {
+        try {
+            $servicios = DB::connection('sqlsrv')
+                ->table('ServiciosPlantilla as sp')
+                ->leftJoin('Proveedores as p', 'sp.ProveedorId', '=', 'p.ProveedorId')
+                ->leftJoin('Sucursales as s', 'sp.SucursalId', '=', 's.ID')
+                ->where('sp.ProveedorId', $id)  // <-- El where debe ir después de los joins
+                ->select(
+                    'sp.*',
+                    'p.Nombre as proveedor_nombre',
+                    's.Nombre as sucursal_nombre'
+                )
+                ->orderBy('sp.ProveedorId')
+                ->orderBy('sp.FechaCreacion', 'asc')
+                ->get();
+
+            return $servicios;
+
+        } catch (\Exception $e) {
+            \Log::error('Error en buscarListaPlantillaServicios: ' . $e->getMessage());
+            return collect();
+        }
+    }
+
+    public function nuevoServicio($proveedorId)
+    {
+        try {
+            // Obtener el proveedor
+            $proveedor = DB::connection('sqlsrv')
+                ->table('Proveedores')
+                ->where('ProveedorId', $proveedorId)
+                ->first();
+
+            if (!$proveedor) {
+                return redirect()->route('cpanel.proveedor.servicios.listado')
+                    ->with('error', 'Proveedor no encontrado');
+            }
+
+            // Obtener sucursales activas
+            $sucursales = DB::connection('sqlsrv')
+                ->table('Sucursales')
+                ->where('EsActiva', 1)
+                ->select('ID', 'Nombre')
+                ->orderBy('Nombre')
+                ->get();
+
+            // Obtener imagen del proveedor
+            $imgSrc = FileHelper::getOrDownloadFile(
+                'images/proveedores/',
+                $proveedor->UrlImagen,
+                'assets/img/adminlte/img/proveedor_default.png'
+            );
+
+            // Generar número automáticamente (igual que en .NET)
+            $numero = 'PSER' . Carbon::now()->format('YmdHi') . '-' . $proveedorId;
+
+            session([
+                'menu_active' => 'Proveedor Servicios',
+                'submenu_active' => 'Registrar Servicio'
+            ]);
+
+            return view('cpanel.servicios.crear_servicio', [
+                'proveedor' => $proveedor,
+                'imgSrc' => $imgSrc,
+                'sucursales' => $sucursales,
+                'modo' => 'crear',
+                'servicio' => null,
+                'numeroGenerado' => $numero // Pasamos el número generado
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en nuevoServicio: ' . $e->getMessage());
+            return redirect()->route('cpanel.proveedor.servicios.detalle', $proveedorId)
+                ->with('error', 'Error al cargar el formulario: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Mostrar formulario para editar servicio
+     */
+    public function editarServicio($id)
+    {
+        try {
+            // Obtener el servicio
+            $servicio = DB::connection('sqlsrv')
+                ->table('ServiciosPlantilla as sp')
+                ->leftJoin('Proveedores as p', 'sp.ProveedorId', '=', 'p.ProveedorId')
+                ->leftJoin('Sucursales as s', 'sp.SucursalId', '=', 's.ID')
+                ->select(
+                    'sp.*',
+                    'p.Nombre as proveedor_nombre',
+                    's.Nombre as sucursal_nombre'
+                )
+                ->where('sp.ServiciosPlantillaId', $id)
+                ->first();
+
+            if (!$servicio) {
+                return redirect()->route('cpanel.proveedor.servicios.listado')
+                    ->with('error', 'Servicio no encontrado');
+            }
+
+            // Obtener datos del proveedor
+            $proveedor = DB::connection('sqlsrv')
+                ->table('Proveedores')
+                ->where('ProveedorId', $servicio->ProveedorId)
+                ->first();
+
+            // Obtener sucursales activas
+            $sucursales = DB::connection('sqlsrv')
+                ->table('Sucursales')
+                ->where('EsActiva', 1)
+                ->select('ID', 'Nombre')
+                ->orderBy('Nombre')
+                ->get();
+
+            // Obtener imagen del proveedor
+            $imgSrc = FileHelper::getOrDownloadFile(
+                'images/proveedores/',
+                $proveedor->UrlImagen,
+                'assets/img/adminlte/img/proveedor_default.png'
+            );
+
+            session([
+                'menu_active' => 'Proveedor Servicios',
+                'submenu_active' => 'Registrar Servicio'
+            ]);
+
+            return view('cpanel.servicios.crear_servicio', [
+                'proveedor' => $proveedor,
+                'imgSrc' => $imgSrc,
+                'sucursales' => $sucursales,
+                'modo' => 'editar',
+                'servicio' => $servicio,
+                'numeroGenerado' => null // No se necesita en edición
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en editarServicio: ' . $e->getMessage());
+            return redirect()->route('cpanel.proveedor.servicios.detalle', $servicio->ProveedorId ?? 0)
+                ->with('error', 'Error al cargar el formulario: ' . $e->getMessage());
+        }
+    }
+
+    public function crearServicio(Request $request)
+    {
+        try {
+            $request->validate([
+                'Descripcion' => 'required|string',
+                'SucursalId' => 'nullable|exists:Sucursales,ID',
+                'MonedaPrincipal' => 'required|in:0,1',
+                'MontoDivisa' => 'required|numeric|min:0',
+                'Monto' => 'nullable|numeric|min:0',
+                'ProveedorId' => 'required|exists:Proveedores,ProveedorId'
+            ]);
+
+            // Generar número automáticamente (igual que en .NET)
+            $numero = 'PSER' . Carbon::now()->format('YmdHi') . '-' . $request->ProveedorId;
+
+            // Verificar si el número ya existe
+            $existe = DB::connection('sqlsrv')
+                ->table('ServiciosPlantilla')
+                ->where('Numero', $numero)
+                ->exists();
+
+            if ($existe) {
+                $numero = 'PSER' . Carbon::now()->format('YmdHi') . '-' . $request->ProveedorId . '-' . rand(1, 999);
+            }
+
+            // Datos para insertar (SOLO los campos que existen en la tabla)
+            $data = [
+                'Numero' => $numero,
+                'Descripcion' => $request->Descripcion,
+                'SucursalId' => $request->SucursalId ?? null,
+                'ProveedorId' => $request->ProveedorId,
+                'MonedaPrincipal' => $request->MonedaPrincipal,
+                'MontoDivisa' => $request->MontoDivisa,
+                'Monto' => $request->Monto ?? 0,
+                'Estatus' => 0, // Activo (enumServicio.Activo = 0)
+                'FechaCreacion' => Carbon::now(),
+                'TipoRecurrencia' => null,
+                'FechaRecurrencia' => null
+            ];
+
+            $id = DB::connection('sqlsrv')
+                ->table('ServiciosPlantilla')
+                ->insertGetId($data);
+
+            Log::info('Servicio creado exitosamente', ['id' => $id, 'numero' => $numero]);
+
+            // Redirigir a la vista de detalle (igual que en .NET)
+            return redirect()->route('cpanel.proveedores.servicios.detalle.seleccion', $id)
+                ->with('success', 'El servicio se ha creado exitosamente');
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Hay errores en los datos introducidos. Por favor corrija los datos errados e intente de nuevo');
+        } catch (\Exception $e) {
+            Log::error('Error en crearServicio: ' . $e->getMessage());
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Ha ocurrido un error procesando su solicitud. Por favor intente más tarde');
+        }
+    }
+
+    public function actualizarServicio(Request $request, $id)
+    {
+        try {
+            $request->validate([
+                'Descripcion' => 'required|string',
+                'SucursalId' => 'nullable|exists:Sucursales,ID',
+                'MonedaPrincipal' => 'required|in:0,1',
+                'MontoDivisa' => 'required|numeric|min:0',
+                'Monto' => 'nullable|numeric|min:0',
+                'Estatus' => 'required|in:0,1',
+                'ProveedorId' => 'required|exists:Proveedores,ProveedorId'
+            ]);
+
+            $servicio = DB::connection('sqlsrv')
+                ->table('ServiciosPlantilla')
+                ->where('ServiciosPlantillaId', $id)
+                ->first();
+
+            if (!$servicio) {
+                return redirect()->back()
+                    ->with('error', 'Servicio no encontrado');
+            }
+
+            // Datos para actualizar (SOLO los campos que existen en la tabla)
+            $data = [
+                'Descripcion' => $request->Descripcion,
+                'SucursalId' => $request->SucursalId ?? null,
+                'ProveedorId' => $request->ProveedorId,
+                'MonedaPrincipal' => $request->MonedaPrincipal,
+                'MontoDivisa' => $request->MontoDivisa,
+                'Monto' => $request->Monto ?? 0,
+                'Estatus' => $request->Estatus
+                // 'FechaModificacion' => Carbon::now() // ELIMINADO - No existe en la tabla
+            ];
+
+            DB::connection('sqlsrv')
+                ->table('ServiciosPlantilla')
+                ->where('ServiciosPlantillaId', $id)
+                ->update($data);
+
+            Log::info('Servicio actualizado exitosamente', ['id' => $id]);
+
+            return redirect()->route('cpanel.proveedores.servicios.detalle.seleccion', $request->ProveedorId)
+                ->with('success', 'El servicio se ha actualizado exitosamente');
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Hay errores en los datos introducidos. Por favor corrija los datos errados e intente de nuevo');
+        } catch (\Exception $e) {
+            Log::error('Error en actualizarServicio: ' . $e->getMessage());
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Ha ocurrido un error procesando su solicitud. Por favor intente más tarde');
+        }
+    }
+
+    public function detalleServicio($id)
+    {
+        try {
+            $servicio = DB::connection('sqlsrv')
+                ->table('ServiciosPlantilla as sp')
+                ->leftJoin('Proveedores as p', 'sp.ProveedorId', '=', 'p.ProveedorId')
+                ->leftJoin('Sucursales as s', 'sp.SucursalId', '=', 's.ID')
+                ->select(
+                    'sp.*',
+                    'p.Nombre as proveedor_nombre',
+                    's.Nombre as sucursal_nombre'
+                )
+                ->where('sp.ServiciosPlantillaId', $id)
+                ->first();
+
+            if (!$servicio) {
+                return redirect()->route('cpanel.proveedor.servicios.listado')
+                    ->with('error', 'Servicio no encontrado');
+            }
+
+            // Obtener datos del proveedor
+            $proveedor = DB::connection('sqlsrv')
+                ->table('Proveedores')
+                ->where('ProveedorId', $servicio->ProveedorId)
+                ->first();
+
+            // Obtener imagen del proveedor
+            $imgSrc = FileHelper::getOrDownloadFile(
+                'images/proveedores/',
+                $proveedor->UrlImagen,
+                'assets/img/adminlte/img/proveedor_default.png'
+            );
+
+            session([
+                'menu_active' => 'Proveedor Servicios',
+                'submenu_active' => 'Registrar Servicio'
+            ]);
+
+            return view('cpanel.servicios.detalle_servicio', [
+                'servicio' => $servicio,
+                'proveedor' => $proveedor,
+                'imgSrc' => $imgSrc
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en detalleServicio: ' . $e->getMessage());
+            return redirect()->route('cpanel.proveedor.servicios.listado')
+                ->with('error', 'Error al cargar el detalle: ' . $e->getMessage());
+        }
+    }
+
+    public function eliminarServicio(Request $request)
+    {
+        try {
+            // Obtener el ID del body (igual que en eliminarProveedor)
+            $id = $request->input('id');
+            
+            if (!$id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'ID de servicio no proporcionado'
+                ], 400);
+            }
+
+            Log::info('Intentando eliminar servicio ID: ' . $id);
+            
+            // Verificar que el servicio existe
+            $servicio = DB::connection('sqlsrv')
+                ->table('ServiciosPlantilla')
+                ->where('ServiciosPlantillaId', $id)
+                ->first();
+
+            if (!$servicio) {
+                Log::warning('Servicio no encontrado ID: ' . $id);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Servicio no encontrado'
+                ], 404);
+            }
+
+            // Borrado lógico (Estatus = 1 = Inactivo)
+            DB::connection('sqlsrv')
+                ->table('ServiciosPlantilla')
+                ->where('ServiciosPlantillaId', $id)
+                ->update(['Estatus' => 1]);
+
+            Log::info('Servicio desactivado exitosamente', ['id' => $id]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Servicio desactivado exitosamente'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en eliminarServicio: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al desactivar el servicio: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function cambiarEstatusServicio(Request $request)
+    {
+        try {
+            // Validar que llegue el ID y el estatus
+            $request->validate([
+                'id' => 'required|integer|exists:ServiciosPlantilla,ServiciosPlantillaId',
+                'estatus' => 'required|in:0,1'
+            ]);
+
+            $id = $request->input('id');
+            $estatus = $request->input('estatus');
+            
+            // Obtener el servicio para verificar que existe
+            $servicio = DB::connection('sqlsrv')
+                ->table('ServiciosPlantilla')
+                ->where('ServiciosPlantillaId', $id)
+                ->first();
+
+            if (!$servicio) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Servicio no encontrado'
+                ], 404);
+            }
+
+            // Actualizar el estatus
+            DB::connection('sqlsrv')
+                ->table('ServiciosPlantilla')
+                ->where('ServiciosPlantillaId', $id)
+                ->update(['Estatus' => $estatus]);
+
+            $mensaje = $estatus == 0 ? 'activado' : 'desactivado';
+            $titulo = $estatus == 0 ? '¡Activado!' : '¡Desactivado!';
+            
+            Log::info("Servicio $mensaje exitosamente", ['id' => $id, 'estatus' => $estatus]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Servicio $mensaje exitosamente",
+                'titulo' => $titulo
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Datos inválidos: ' . implode(', ', $e->errors())
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Error en cambiarEstatusServicio: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cambiar el estatus del servicio: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function registrarPagosServiciosIndex($modo = 'pagos')
+    {
+        try {
+            // Tipo Mercancia = 0
+            $tipo = 1;
+            
+            // Obtener listado de proveedores
+            $proveedoresServicios = GeneralHelper::BuscarListadoProveedores($tipo);
+            
+            // Configurar menú activo según el modo
+            $submenuActivo = ($modo == 'pagos') ? 'Registrar Pagos' : 'Registrar Facturas';
+            
+            session([
+                'menu_active' => 'Proveedor Servicios',
+                'submenu_active' => $submenuActivo
+            ]);
+            
+            return view('cpanel.servicios.registrar_pagos', compact('proveedoresServicios', 'modo'));
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en registrarPagosServiciosIndex: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar proveedores: ' . $e->getMessage());
+        }
+    }
+
+    public function pagarProveedorServicios($id)
+    {
+        try {
+            if (!$id) {
+                return redirect()->route('cpanel.proveedor.servicios.registrar_pagos')
+                    ->with('error', 'Debe indicar un código de proveedor');
+            }
+            
+            // Buscar proveedor
+            $proveedor = DB::connection('sqlsrv')
+                ->table('Proveedores')
+                ->where('ProveedorId', $id)
+                ->first();
+            
+            if (!$proveedor) {
+                return redirect()->route('cpanel.proveedor.servicios.registrar_pagos')
+                    ->with('error', 'No se pudo encontrar un proveedor');
+            }
+            
+            // Obtener imagen
+            $imgSrc = FileHelper::getOrDownloadFile(
+                'images/proveedores/',
+                $proveedor->UrlImagen,
+                'assets/img/adminlte/img/proveedor_default.png'
+            );
+            
+            // ============================================
+            // FACTURAS VIGENTES (En Proceso + Recibiendo + Recibida)
+            // ============================================
+            $facturasVigentes = $this->buscarFacturasActivas($id);
+
+            // BALANCE DE FACTURAS
+            $balanceFacturas = new \stdClass();
+            $balanceFacturas->totalFacturas = $facturasVigentes->sum('MontoDivisa');
+            $balanceFacturas->totalPagado = $facturasVigentes->sum('total_pagado');
+            $balanceFacturas->saldoPendiente = $balanceFacturas->totalFacturas - $balanceFacturas->totalPagado;
+            $balanceFacturas->porcentajePagado = $balanceFacturas->totalFacturas > 0 
+                ? round(($balanceFacturas->totalPagado * 100) / $balanceFacturas->totalFacturas, 2) 
+                : 0;
+
+            // Obtener tasa de cambio actual
+            $tasaBcv = DivisaValor::orderBy('ID', 'desc')->first();
+            $tasaCambioActual = $tasaBcv->Valor;
+            
+            session([
+                'menu_active' => 'Proveedor Servicios',
+                'submenu_active' => 'Registrar Pagos'
+            ]);
+            
+            return view('cpanel.servicios.pagar_proveedor', compact(
+                'proveedor',
+                'imgSrc',
+                'facturasVigentes',
+                'balanceFacturas',
+                'tasaCambioActual'
+            ));
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en pagarProveedor: ' . $e->getMessage());
+            return redirect()->route('cpanel.proveedor.mercancia.registrar_pagos')
+                ->with('error', 'Error al cargar informacion proveedor: ' . $e->getMessage());
+        }
+    }
+
+    public function facturaRegistroProveedorServicios($id)
+    {
+        try {
+            if (!$id) {
+                return redirect()->route('cpanel.proveedor.servicios.registrar_facturas')
+                    ->with('error', 'Debe indicar un código de proveedor');
+            }
+            
+            // Buscar proveedor
+            $proveedor = DB::connection('sqlsrv')
+                ->table('Proveedores')
+                ->where('ProveedorId', $id)
+                ->first();
+            
+            if (!$proveedor) {
+                return redirect()->route('cpanel.proveedor.servicios.registrar_facturas')
+                    ->with('error', 'No se pudo encontrar un proveedor');
+            }
+            
+            // Obtener imagen
+            $imgSrc = FileHelper::getOrDownloadFile(
+                'images/proveedores/',
+                $proveedor->UrlImagen ?? '',
+                'assets/img/adminlte/img/proveedor_default.png'
+            );
+            
+            // Obtener todos los servicios del proveedor
+            $servicios = $this->buscarListaPlantillaServicios($id);
+
+            // Obtener sucursales activas
+            $sucursales = DB::connection('sqlsrv')
+                ->table('Sucursales')
+                ->where('EsActiva', 1)
+                ->select('ID', 'Nombre')
+                ->orderBy('Nombre')
+                ->get();
+            
+            // Obtener tasa de cambio actual
+            $tasaBcv = DivisaValor::orderBy('ID', 'desc')->first();
+            $tasaCambioActual = $tasaBcv->Valor;
+            
+            session([
+                'menu_active' => 'Proveedor Servicios',
+                'submenu_active' => 'Registrar Factura'
+            ]);
+            
+            return view('cpanel.servicios.registrar_factura', compact(
+                'proveedor',
+                'imgSrc',
+                'sucursales',
+                'servicios',
+                'tasaCambioActual'
+            ));
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en facturaRegistroProveedor: ' . $e->getMessage());
+            return redirect()->route('cpanel.proveedor.mercancia.registrar_facturas')
+                ->with('error', 'Error al cargar información: ' . $e->getMessage());
+        }
+    }
+
+    public function generarFacturaServicio(Request $request)
+    {
+        try {
+
+            $request->validate([
+                'proveedor_id' => 'required|exists:Proveedores,ProveedorId',
+                'tipo' => 'required|in:0,1',
+                'sucursal_id' => 'nullable|exists:Sucursales,ID',
+                'servicio_id' => 'required|exists:ServiciosPlantilla,ServiciosPlantillaId',
+                'fecha_creacion' => 'required|date',
+                'moneda_principal' => 'required|in:0,1',
+                'tasa_cambio' => 'required|numeric|min:0.01',
+                'monto_divisa' => 'required|numeric|min:0.01',
+                'monto_bs' => 'nullable|numeric|min:0',
+                'estatus' => 'required|in:0,1,2,3,4'
+            ]);
+
+            $proveedorSession = DB::connection('sqlsrv')
+                ->table('Proveedores')
+                ->where('ProveedorId', $request->proveedor_id)
+                ->first();
+
+            if (!$proveedorSession) {
+                return redirect()->back()
+                    ->withInput()
+                    ->with('error', 'Proveedor no encontrado');
+            }
+
+            // Obtener la descripción del servicio
+            $servicio = DB::connection('sqlsrv')
+                ->table('ServiciosPlantilla')
+                ->where('ServiciosPlantillaId', $request->servicio_id)
+                ->first();
+
+            $descripcionServicio = $servicio->Descripcion ?? 'Factura de servicio';
+
+            $factura = (object) [
+                'ProveedorId' => $request->proveedor_id,
+                'Numero' => null, // Se genera en GuardarFactura
+                'Descripcion' => $descripcionServicio, // <-- Descripción del servicio
+                'FechaCreacion' => Carbon::parse($request->fecha_creacion),
+                'Estatus' => $request->estatus,
+                'SucursalId' => $request->sucursal_id ?? 0,
+                'MontoDivisa' => $request->monto_divisa,
+                'MontoBs' => $request->monto_bs ?? ($request->monto_divisa * $request->tasa_cambio),
+                'TasaDeCambio' => $request->tasa_cambio,
+                'MonedaPrincipal' => $request->moneda_principal,
+                'Tipo' => 1, // EnumTipoFactura.Servicio
+                'Id' => 0,
+                'ServiciosPlantillaId' => $request->servicio_id
+            ];
+
+            $numeroGenerado = 'FSV' . Carbon::now()->format('YmdHi') . '-' . $proveedorSession->ProveedorId;
+            
+            $existeFactura = $this->existeFactura(
+                $proveedorSession->ProveedorId,
+                $numeroGenerado
+            );
+
+            if ($existeFactura) {
+                return redirect()->back()
+                    ->withInput()
+                    ->with('error', 'La factura ya existe en sistema. No pueden existir dos facturas con igual número para un mismo proveedor');
+            }
+
+            $facturaGuardada = $this->guardarFactura($factura, $proveedorSession);
+
+            if (!$facturaGuardada) {
+                throw new \Exception('Error al guardar la factura');
+            }
+
+            return redirect()->route('cpanel.facturas.detalle', $facturaGuardada->Id)
+                ->with('success', 'La factura se ha creado exitosamente');
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('Error de validación', ['errors' => $e->errors()]);
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Hay errores en los datos introducidos. Por favor corrija los datos errados e intente de nuevo');
+        } catch (\Exception $e) {
+            Log::error('Error en generarFacturaServicio', [
+                'error' => $e->getMessage(),
+                'line' => $e->getLine(),
+                'file' => $e->getFile()
+            ]);
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Ha ocurrido un error procesando su solicitud. Por favor intente más tarde');
+        }
+    }
+
+    private function existeFactura($id, $numeroFactura)
+    {
+        try {
+            $facturaExiste = DB::connection('sqlsrv')
+                ->table('Facturas')
+                ->where('ProveedorId', $id)
+                ->where('Numero', $numeroFactura)
+                ->exists();
+
+
+            return $facturaExiste;
+
+        } catch (\Exception $e) {
+            throw $e;
+        }
+    }
+
+    private function guardarFactura($factura, $proveedorSession)
+    {
+        try {
+
+            if ($proveedorSession == null) {
+                throw new \Exception('ProveedorSession es nulo');
+            }
+
+            $factura->ProveedorId = $proveedorSession->ProveedorId;
+
+            if ($factura->Id == 0) {
+                $factura->Numero = 'FSV' . Carbon::now()->format('YmdHi') . '-' . $proveedorSession->ProveedorId;
+            }
+
+            $factura = $this->guardarFacturaService($factura);
+
+            $proveedorSession->FacturaActiva = $factura;
+
+            session([
+                'proveedor_activo' => $proveedorSession,
+                'factura_activa' => $factura
+            ]);
+
+            return $factura;
+
+        } catch (\Exception $e) {
+            throw $e;
+        }
+    }
+
+    private function guardarFacturaService($facturaDTO)
+    {
+        DB::connection('sqlsrv')->beginTransaction();
+
+        try {
+
+            if ($facturaDTO == null) {
+                throw new \Exception('FacturaDTO es nulo');
+            }
+
+            // Buscar sucursal Oficina si SucursalId = 0
+            if ($facturaDTO->SucursalId == 0 || empty($facturaDTO->SucursalId)) {
+                
+                $oficina = DB::connection('sqlsrv')
+                    ->table('Sucursales')
+                    ->where('Tipo', 0)
+                    ->first();
+                
+                if ($oficina) {
+                    $facturaDTO->SucursalId = $oficina->ID;
+                } else {
+                    throw new \Exception('No se encontró una sucursal tipo Oficina');
+                }
+            }
+
+            // Preparar datos para insertar
+            $data = [
+                'ProveedorId' => $facturaDTO->ProveedorId,
+                'Numero' => $facturaDTO->Numero,
+                'Descripcion' => $facturaDTO->Descripcion ?? 'Factura de servicio',
+                'FechaCreacion' => $facturaDTO->FechaCreacion ?? Carbon::now(),
+                'Estatus' => $facturaDTO->Estatus ?? 1,
+                'SucursalId' => $facturaDTO->SucursalId,
+                'MontoDivisa' => $facturaDTO->MontoDivisa,
+                'MontoBs' => $facturaDTO->MontoBs ?? ($facturaDTO->MontoDivisa * $facturaDTO->TasaDeCambio),
+                'TasaDeCambio' => $facturaDTO->TasaDeCambio,
+                'MonedaPrincipal' => $facturaDTO->MonedaPrincipal ?? 0,
+                'Tipo' => 1 // Servicio
+            ];
+
+            // Insertar la factura
+            $id = DB::connection('sqlsrv')
+                ->table('Facturas')
+                ->insertGetId($data);
+            
+            $facturaDTO->Id = $id;
+
+            // Confirmar transacción
+            DB::connection('sqlsrv')->commit();
+
+            return $facturaDTO;
+
+        } catch (\Exception $e) {
+            DB::connection('sqlsrv')->rollBack();
+            throw $e;
+        }
+    }
+
+    /**
+     * Mostrar detalle de un pago Servicios
+     */
+    public function detallePagoServicio($id)
+    {
+        try {
+            // Buscar el pago en Transacciones
+            $pago = DB::connection('sqlsrv')
+                ->table('Transacciones')
+                ->where('ID', $id)
+                ->first();
+            
+            if (!$pago) {
+                return redirect()->route('cpanel.proveedor.servicios.listado')
+                    ->with('error', 'Pago no encontrado');
+            }
+            
+            // Buscar la relación con proveedor y factura
+            $relacion = DB::connection('sqlsrv')
+                ->table('TransaccionesProveedor')
+                ->where('TransaccionId', $id)
+                ->first();
+            
+            if ($relacion) {
+                // Buscar datos del proveedor
+                $proveedor = DB::connection('sqlsrv')
+                    ->table('Proveedores')
+                    ->where('ProveedorId', $relacion->ProveedorId)
+                    ->first();
+                
+                // Buscar la factura relacionada
+                $factura = DB::connection('sqlsrv')
+                    ->table('Facturas')
+                    ->where('ID', $relacion->FacturaId)
+                    ->first();
+            }
+            
+            // Mapear estatus del pago
+            $estatusMap = [
+                1 => ['texto' => 'Pendiente', 'clase' => 'warning'],
+                2 => ['texto' => 'Pagada', 'clase' => 'success'],
+                4 => ['texto' => 'Cerrada', 'clase' => 'secondary'],
+                5 => ['texto' => 'Anulada', 'clase' => 'danger']
+            ];
+            
+            $estatusPago = $estatusMap[$pago->Estatus] ?? ['texto' => 'Desconocido', 'clase' => 'secondary'];
+            
+            // Mapear forma de pago
+            $formaPagoMap = [
+                1 => 'Efectivo',
+                2 => 'Transferencia',
+                3 => 'Cheque',
+                4 => 'Otros'
+            ];
+            
+            $formaPagoTexto = $formaPagoMap[$pago->FormaDePago] ?? 'Desconocido';
+            
+            session([
+                'menu_active' => 'Proveedor Servicios',
+                'submenu_active' => 'Listado Proveedores'
+            ]);
+            
+            return view('cpanel.pagos.detalle_pago_servicio', compact(
+                'pago',
+                'relacion',
+                'proveedor',
+                'factura',
+                'estatusPago',
+                'formaPagoTexto'
+            ));
+            
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Error al cargar el detalle del pago: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Mostrar formulario de edición de pago (solo comprobante)
+     */
+    public function editarPagoServicio($id)
+    {
+        try {
+            // Buscar el pago en Transacciones
+            $pago = DB::connection('sqlsrv')
+                ->table('Transacciones')
+                ->where('ID', $id)
+                ->first();
+            
+            if (!$pago) {
+                return redirect()->route('cpanel.proveedor.servicios.listado')
+                    ->with('error', 'Pago no encontrado');
+            }
+            
+            // Buscar la relación con proveedor
+            $relacion = DB::connection('sqlsrv')
+                ->table('TransaccionesProveedor')
+                ->where('TransaccionId', $id)
+                ->first();
+            
+            if ($relacion) {
+                $proveedor = DB::connection('sqlsrv')
+                    ->table('Proveedores')
+                    ->where('ProveedorId', $relacion->ProveedorId)
+                    ->first();
+            }
+            
+            // Mapeo de forma de pago
+            $formaPagoMap = [
+                1 => 'Efectivo',
+                2 => 'Transferencia',
+                3 => 'Cheque',
+                4 => 'Otros'
+            ];
+            
+            session([
+                'menu_active' => 'Proveedor Servicios',
+                'submenu_active' => 'Listado Proveedores'
+            ]);
+            
+            return view('cpanel.pagos.editar_pago_servicios', compact('pago', 'relacion', 'proveedor', 'formaPagoMap'));
+            
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Error al cargar el formulario: ' . $e->getMessage());
+        }
+    }
+
+    public function actualizarPagoServicio(Request $request, $id)
+    {
+        try {
+            DB::connection('sqlsrv')->beginTransaction();
+            
+            // Validar datos
+            $request->validate([
+                'monto_divisa' => 'required|numeric|min:0.01',
+                'tasa_cambio' => 'required|numeric|min:0',
+                'fecha' => 'required|date',
+                'descripcion' => 'nullable|string|max:500',
+                'numero_operacion' => 'nullable|string|max:100',
+                'comprobante' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120'
+            ]);
+            
+            // 1. Buscar el pago original
+            $pagoOriginal = DB::connection('sqlsrv')
+                ->table('Transacciones')
+                ->where('ID', $id)
+                ->first();
+            
+            if (!$pagoOriginal) {
+                throw new \Exception('Pago no encontrado');
+            }
+            
+            // 2. Buscar la relación original
+            $relacionOriginal = DB::connection('sqlsrv')
+                ->table('TransaccionesProveedor')
+                ->where('TransaccionId', $id)
+                ->first();
+            
+            if (!$relacionOriginal) {
+                throw new \Exception('Relación del pago no encontrada');
+            }
+            
+            $proveedorId = $relacionOriginal->ProveedorId;
+            
+            // 3. ELIMINAR la transacción original y su relación (para recrearla)
+            DB::connection('sqlsrv')->table('TransaccionesProveedor')
+                ->where('TransaccionId', $id)
+                ->delete();
+            
+            DB::connection('sqlsrv')->table('Transacciones')
+                ->where('ID', $id)
+                ->delete();
+            
+            // 4. Subir nuevo comprobante si existe, si no conservar el anterior
+            $urlComprobante = null;
+            if ($request->hasFile('comprobante')) {
+                $comprobante = $request->file('comprobante');
+                $extension = $comprobante->getClientOriginalExtension();
+                $fileName = 'PAG' . date('YmdHi') . '-' . $proveedorId . '.' . $extension;
+                
+                // ✅ DETECTAR ENTORNO (como en guardarFotoVendedor)
+                $environment = app()->environment();
+                
+                if ($environment === 'production') {
+                    // ✅ LÓGICA PARA SMARTERASP (PRODUCCIÓN)
+                    $folder = 'images/comprobantes/';
+                    $physicalPath = base_path('public/' . $folder);
+                    
+                    if (!is_dir($physicalPath)) {
+                        mkdir($physicalPath, 0777, true);
+                    }
+                    
+                    // Mover archivo directamente a public/
+                    $comprobante->move($physicalPath, $fileName);
+                    
+                } else {
+                    // ✅ LÓGICA PARA LOCAL (USANDO STORAGE)
+                    $folder = 'images/comprobantes/';
+                    $storagePath = 'public/' . $folder;
+                    
+                    if (!Storage::exists($storagePath)) {
+                        Storage::makeDirectory($storagePath, 0755, true);
+                    }
+                    
+                    // Guardar en storage
+                    Storage::putFileAs($storagePath, $comprobante, $fileName);
+                }
+                
+                $urlComprobante = $fileName;
+            } else {
+                $urlComprobante = $pagoOriginal->UrlComprobante;
+            }
+            
+            // 5. Calcular el nuevo monto en Bs
+            $montoBs = $request->monto_divisa * $request->tasa_cambio;
+            
+            // 6. Crear nuevo objeto pago con los datos actualizados
+            $pago = new \stdClass();
+            $pago->Id = 0;
+            $pago->Descripcion = $request->descripcion ?? $pagoOriginal->Descripcion;
+            $pago->MontoDivisaAbonado = $request->monto_divisa;
+            $pago->MontoAbonado = $montoBs;
+            $pago->NumeroOperacion = $request->numero_operacion ?? $pagoOriginal->NumeroOperacion;
+            $pago->TasaDeCambio = $request->tasa_cambio;
+            $pago->FormaDePago = $pagoOriginal->FormaDePago;
+            $pago->Fecha = $request->fecha;
+            $pago->Estatus = $pagoOriginal->Estatus;
+            $pago->Tipo = $pagoOriginal->Tipo;
+            $pago->UrlComprobante = $urlComprobante;
+            
+            // 7. Obtener facturas vigentes del proveedor
+            $facturasVigentes = $this->buscarFacturasActivas($proveedorId);
+            
+            // 8. Distribuir el nuevo monto entre las facturas
+            $montoRestante = $pago->MontoDivisaAbonado;
+            $transaccionCreada = null;
+            $facturasAfectadas = [];
+            
+            foreach ($facturasVigentes as $factura) {
+                if ($montoRestante <= 0) break;
+                
+                if ($factura->saldo_pendiente <= 0) continue;
+                
+                $montoAPagar = 0;
+                $cerrarFactura = false;
+                
+                if ($montoRestante >= $factura->saldo_pendiente) {
+                    $montoAPagar = $factura->saldo_pendiente;
+                    $montoRestante -= $montoAPagar;
+                    $cerrarFactura = true;
+                } else {
+                    $montoAPagar = $montoRestante;
+                    $montoRestante = 0;
+                }
+                
+                $descripcionAuto = 'Auto.' . ($pago->Descripcion ?? 'Pago registrado');
+                $sucursalId = $factura->SucursalId ?? 8;
+                
+                // Crear nueva transacción
+                $transaccionId = DB::connection('sqlsrv')->table('Transacciones')->insertGetId([
+                    'Descripcion' => $descripcionAuto,
+                    'MontoAbonado' => $montoAPagar * $pago->TasaDeCambio,
+                    'MontoDivisaAbonado' => $montoAPagar,
+                    'NumeroOperacion' => $pago->NumeroOperacion,
+                    'DivisaId' => null,
+                    'TasaDeCambio' => $pago->TasaDeCambio,
+                    'Tipo' => $pago->Tipo,
+                    'FormaDePago' => $pago->FormaDePago,
+                    'Estatus' => $pago->Estatus,
+                    'Fecha' => $pago->Fecha,
+                    'UrlComprobante' => $pago->UrlComprobante,
+                    'SucursalOrigenId' => $sucursalId,
+                    'SucursalId' => $sucursalId,
+                    'Observacion' => $descripcionAuto,
+                    'Nombre' => '',
+                    'Cedula' => '',
+                    'CategoriaId' => 0
+                ]);
+                
+                // Guardar relación
+                DB::connection('sqlsrv')->table('TransaccionesProveedor')->insert([
+                    'ProveedorId' => $proveedorId,
+                    'TransaccionId' => $transaccionId,
+                    'FacturaId' => $factura->ID
+                ]);
+                
+                $facturasAfectadas[] = [
+                    'factura_id' => $factura->ID,
+                    'factura_numero' => $factura->Numero,
+                    'monto_pagado' => $montoAPagar,
+                    'factura_cerrada' => $cerrarFactura
+                ];
+                
+                $transaccionCreada = $transaccionId;
+            }
+            
+            DB::connection('sqlsrv')->commit();
+            
+            return redirect()->route('cpanel.pagos.detalle.servicios', $transaccionCreada)
+                ->with('success', 'Pago actualizado correctamente. Se redistribuyó $' . number_format($request->monto_divisa, 2) . ' entre las facturas pendientes.');
+            
+        } catch (\Exception $e) {
+            DB::connection('sqlsrv')->rollBack();
+            return redirect()->back()->with('error', 'Error al actualizar el pago: ' . $e->getMessage());
+        }
+    }
+
+    public function detalleFacturaServicio(Request $request, $id)
+    {
+        try {
+            // Obtener el origen (por defecto 'facturas')
+            $origen = $request->input('origen', 'facturas');
+
+            // Buscar factura seleccionada
+            $facturaDTO = $this->buscarFacturaConDetalles($id);  
+            
+            // Validar que exista la factura
+            if (!$facturaDTO) {
+                return redirect()->route('cpanel.proveedor.servicios.listado')
+                    ->with('error', 'Factura no encontrada');
+            }
+            
+            // Redirigir según el tipo de factura
+            if ($facturaDTO->Tipo == 0) {
+
+                // ✅ Obtener el contenedor y su porcentaje de gastos
+                $porcentajeGastos = 0;
+                if ($facturaDTO->ContenedorId && $facturaDTO->ContenedorId != 0) {
+                    $contenedor = DB::connection('sqlsrv')
+                        ->table('Contenedor')
+                        ->where('Id', $facturaDTO->ContenedorId)
+                        ->first();
+                    
+                    if ($contenedor) {
+                        // Si el contenedor tiene PorcentajeGastos, usarlo
+                        if (isset($contenedor->PorcentajeGastos) && $contenedor->PorcentajeGastos > 0) {
+                            $porcentajeGastos = $contenedor->PorcentajeGastos;
+                        } else {
+                            // Si no, calcularlo con el SP
+                            $porcentajeGastos = $this->uspObtenerPorcentajeGastosFlete($facturaDTO->ContenedorId);
+                        }
+                    }
+                }
+                
+                // ✅ Asignar el porcentaje de gastos al facturaDTO
+                $facturaDTO->PorcentajeGastos = $porcentajeGastos;
+                
+                // Preparar variables para la vista (mapear de $facturaDTO a lo que espera la vista)
+                $factura = $facturaDTO;  // ← Mapear a $factura
+                
+                // Obtener estado de la factura (texto y clase)
+                $estados = [
+                    1 => ['texto' => 'En Proceso', 'clase' => 'warning'],
+                    2 => ['texto' => 'Recibiendo', 'clase' => 'info'],
+                    4 => ['texto' => 'Recibida', 'clase' => 'success'],
+                    0 => ['texto' => 'Anulada', 'clase' => 'danger']
+                ];
+                $estadoFactura = $estados[$facturaDTO->Estatus] ?? ['texto' => 'Desconocido', 'clase' => 'secondary'];
+                
+                // Detalles de productos
+                $detalles = $facturaDTO->Detalles ?? collect([]);
+                
+                // Pagos
+                $pagos = $facturaDTO->Pagos ?? collect([]);
+                $totalPagado = $facturaDTO->TotalPagado ?? 0;
+                
+                return view('cpanel.proveedores.detalle_factura', compact(
+                    'facturaDTO', 
+                    'estadoFactura', 
+                    'detalles', 
+                    'pagos', 
+                    'totalPagado',
+                    'origen'
+                ));
+                
+            } else {
+                // ✅ Obtener el contenedor y su porcentaje de gastos
+                $porcentajeGastos = 0;
+                
+                // ✅ Asignar el porcentaje de gastos al facturaDTO
+                $facturaDTO->PorcentajeGastos = $porcentajeGastos;
+                
+                // Preparar variables para la vista (mapear de $facturaDTO a lo que espera la vista)
+                $factura = $facturaDTO;  // ← Mapear a $factura
+                
+                // Obtener estado de la factura (texto y clase)
+                $estados = [
+                    1 => ['texto' => 'En Proceso', 'clase' => 'warning'],
+                    2 => ['texto' => 'Recibiendo', 'clase' => 'info'],
+                    4 => ['texto' => 'Recibida', 'clase' => 'success'],
+                    0 => ['texto' => 'Anulada', 'clase' => 'danger']
+                ];
+                $estadoFactura = $estados[$facturaDTO->Estatus] ?? ['texto' => 'Desconocido', 'clase' => 'secondary'];
+                
+                // Detalles de productos
+                $detalles = $facturaDTO->Detalles ?? collect([]);
+                
+                // Pagos
+                $pagos = $facturaDTO->Pagos ?? collect([]);
+                $totalPagado = $facturaDTO->TotalPagado ?? 0;
+                
+                return view('cpanel.proveedores.detalle_factura_servicio', compact(
+                    'facturaDTO', 
+                    'estadoFactura', 
+                    'detalles', 
+                    'pagos', 
+                    'totalPagado',
+                    'origen'
+                ));
+            }
+            
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Error al cargar el detalle de la factura');
+        }
+    }    
+    
+    public function editarFacturaServicio($id)
+    {
+        try {
+
+            // ================================================
+            // 1. VERIFICAR QUE LA FACTURA EXISTA
+            // ================================================
+            $factura = DB::connection('sqlsrv')
+                ->table('Facturas as f')
+                ->leftJoin('Proveedores as p', 'f.ProveedorId', '=', 'p.ProveedorId')
+                ->leftJoin('Sucursales as s', 'f.SucursalId', '=', 's.ID')
+                ->select(
+                    'f.*',
+                    'p.Nombre as proveedor_nombre',
+                    's.Nombre as sucursal_nombre'
+                )
+                ->where('f.ID', $id)
+                ->first();
+
+            if (!$factura) {
+                return redirect()->route('cpanel.proveedor.servicios.listado')
+                    ->with('error', 'Factura no encontrada');
+            }
+
+            // ================================================
+            // 2. VERIFICAR QUE SEA UNA FACTURA DE SERVICIO (Tipo = 1)
+            // ================================================
+            if ($factura->Tipo != 1) {
+                return redirect()->route('cpanel.proveedor.servicios.listado')
+                    ->with('error', 'Esta factura no es de servicios');
+            }
+
+            // ================================================
+            // 3. ESTATUS DISPONIBLES
+            // ================================================
+            $estatusOptions = [
+                0 => 'Anulada',
+                1 => 'En Proceso',
+                2 => 'Recibiendo',
+                3 => 'Pagada',
+                4 => 'Recibida'
+            ];
+
+            // ================================================
+            // 4. RETORNAR VISTA
+            // ================================================
+            return view('cpanel.servicios.editar_servicio', [
+                'factura' => $factura,
+                'estatusOptions' => $estatusOptions,
+                'titulo' => 'Editar Estatus de Factura',
+                'subtitulo' => 'Factura: ' . $factura->Numero
+            ]);
+
+        } catch (\Exception $e) {
+            return redirect()->route('cpanel.proveedor.servicios.listado')
+                ->with('error', 'Error al cargar el formulario de edición');
+        }
+    }
+
+    public function actualizarFacturaServicio(Request $request, $id)
+    {
+        try {
+
+            // ================================================
+            // 1. VALIDAR LOS DATOS
+            // ================================================
+            $request->validate([
+                'estatus' => 'required|in:0,1,2,3,4'
+            ]);
+
+            // ================================================
+            // 2. VERIFICAR QUE LA FACTURA EXISTA
+            // ================================================
+            $factura = DB::connection('sqlsrv')
+                ->table('Facturas')
+                ->where('ID', $id)
+                ->first();
+
+            if (!$factura) {
+                return redirect()->back()
+                    ->with('error', 'Factura no encontrada');
+            }
+
+            // ================================================
+            // 3. VERIFICAR QUE SEA UNA FACTURA DE SERVICIO (Tipo = 1)
+            // ================================================
+            if ($factura->Tipo != 1) {
+                return redirect()->back()
+                    ->with('error', 'Esta factura no es de servicios');
+            }
+
+            // ================================================
+            // 4. ACTUALIZAR SOLO EL ESTATUS
+            // ================================================
+            DB::connection('sqlsrv')
+                ->table('Facturas')
+                ->where('ID', $id)
+                ->update([
+                    'Estatus' => $request->estatus
+                ]);
+
+            // ================================================
+            // 5. REDIRIGIR AL DETALLE CON MENSAJE DE ÉXITO
+            // ================================================
+            return redirect()->route('cpanel.proveedores.servicios.detalle', $id);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Error de validación: ' . implode(', ', array_map(function($err) {
+                    return implode(', ', $err);
+                }, $e->errors())));
+        } catch (\Exception $e) {
+            return redirect()->back()
+                ->with('error', 'Error al actualizar la factura: ' . $e->getMessage());
         }
     }
 }
