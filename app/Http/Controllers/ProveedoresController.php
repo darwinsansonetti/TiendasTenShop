@@ -328,99 +328,6 @@ class ProveedoresController extends Controller
         }
     }
     
-    public function detalleProveedor($id)
-    {
-        try {
-            if (!$id) {
-                return redirect()->route('cpanel.proveedor.mercancia.listado')
-                    ->with('error', 'Debe indicar un código de proveedor');
-            }
-            
-            // Buscar proveedor
-            $proveedor = DB::connection('sqlsrv')
-                ->table('Proveedores')
-                ->where('ProveedorId', $id)
-                ->first();
-            
-            if (!$proveedor) {
-                return redirect()->route('cpanel.proveedor.mercancia.listado')
-                    ->with('error', 'No se pudo encontrar un proveedor');
-            }
-            
-            // Obtener imagen
-            $imgSrc = FileHelper::getOrDownloadFile(
-                'images/proveedores/',
-                $proveedor->UrlImagen,
-                'assets/img/adminlte/img/proveedor_default.png'
-            );
-            
-            // ============================================
-            // FACTURAS VIGENTES (En Proceso + Recibiendo + Recibida)
-            // ============================================
-            $facturasVigentes = $this->buscarFacturasActivas($id);
-            
-            // ============================================
-            // PAGOS VIGENTES
-            // ============================================
-            $transaccionesVigentes = $this->buscarPagosVigentesProveedores($id);
-            
-            // ============================================
-            // PRODUCTOS (si es Mercancía)
-            // ============================================
-            $productos = null;
-            if ($proveedor->Tipo == 0) {
-                $sucursalId = session('sucursal_id'); // Ajusta según tu lógica
-                $productos = $this->buscarProductosDelProveedor($sucursalId, $id);
-            }
-            
-            // ============================================
-            // ESTADO DE CUENTA DEL PROVEEDOR
-            // ============================================
-            $estadoCuenta = $this->generarEstadoCuentaProveedor($id, $facturasVigentes);
-
-            // ============================================
-            // BANCO
-            // ============================================
-            $banco = null;
-            if ($proveedor->BancoId) {
-                $banco = DB::connection('sqlsrv')
-                    ->table('Bancos')
-                    ->where('Id', $proveedor->BancoId)
-                    ->first();
-            }
-
-            // BALANCE DE FACTURAS
-            $balanceFacturas = new \stdClass();
-            $balanceFacturas->totalFacturas = $facturasVigentes->sum('MontoDivisa');
-            $balanceFacturas->totalPagado = $facturasVigentes->sum('total_pagado');
-            $balanceFacturas->saldoPendiente = $balanceFacturas->totalFacturas - $balanceFacturas->totalPagado;
-            $balanceFacturas->porcentajePagado = $balanceFacturas->totalFacturas > 0 
-                ? round(($balanceFacturas->totalPagado * 100) / $balanceFacturas->totalFacturas, 2) 
-                : 0;
-            
-            session([
-                'menu_active' => 'Proveedor Mercancía',
-                'submenu_active' => 'Listado Proveedores'
-            ]);
-            
-            return view('cpanel.proveedores.detalle_proveedor', compact(
-                'proveedor',
-                'imgSrc',
-                'facturasVigentes',
-                'transaccionesVigentes',
-                'productos',
-                'banco',
-                'estadoCuenta',
-                'balanceFacturas'
-            ));
-            
-        } catch (\Exception $e) {
-            \Log::error('Error en detalleProveedor: ' . $e->getMessage());
-            return redirect()->route('cpanel.proveedor.mercancia.listado')
-                ->with('error', 'Error al cargar el detalle: ' . $e->getMessage());
-        }
-    }
-    
     private function generarEstadoCuentaProveedor($proveedorId, $facturasVigentes)
     {
         try {
@@ -541,52 +448,111 @@ class ProveedoresController extends Controller
     private function buscarListadoFacturas($proveedorId, $estatus)
     {
         try {
-            $facturas = DB::connection('sqlsrv')
-                ->table('Facturas as f')
-                ->leftJoin('Proveedores as p', 'f.ProveedorId', '=', 'p.ProveedorId')
-                ->leftJoin('Sucursales as s', 'f.SucursalId', '=', 's.ID')
-                ->leftJoin('FacturaDetalles as fd', 'f.ID', '=', 'fd.FacturaId')
-                ->where('f.ProveedorId', $proveedorId)
-                ->where('f.Estatus', $estatus)
-                ->groupBy(
-                    'f.ID', 'f.ProveedorId', 'f.Numero', 'f.Serie', 'f.FechaCreacion',
-                    'f.FechaDespacho', 'f.FechaCierre', 'f.Estatus', 'f.ContenedorId',
-                    'f.Traspaso', 'f.PorcentajeCosto', 'f.PorcentajeDescuento',
-                    'f.MontoDescuento', 'f.EsCargarFleteEnFactura', 'f.Tipo',
-                    'f.SucursalId', 'f.DivisaValorId', 'f.MontoDivisa', 'f.MontoBs',
-                    'f.Descripcion', 'f.TasaDeCambio', 'f.MonedaPrincipal',
-                    'p.Nombre', 's.Nombre'
-                )
-                ->orderBy('f.FechaCreacion', 'asc')
-                ->select([
-                    'f.ID',
-                    'f.ProveedorId',
-                    'f.Numero',
-                    'f.Serie',
-                    'f.FechaCreacion',
-                    'f.FechaDespacho',
-                    'f.FechaCierre',
-                    'f.Estatus',
-                    'f.ContenedorId',
-                    'f.Traspaso',
-                    'f.PorcentajeCosto',
-                    'f.PorcentajeDescuento',
-                    'f.MontoDescuento',
-                    'f.EsCargarFleteEnFactura',
-                    'f.Tipo',
-                    'f.SucursalId',
-                    'f.DivisaValorId',
-                    'f.MontoDivisa',
-                    'f.MontoBs',
-                    // DB::raw('COALESCE(SUM(fd.CantidadEmitida * fd.CostoDivisa), 0) + COALESCE(f.Traspaso, 0) as MontoDivisa'),
-                    // DB::raw('COALESCE(SUM(fd.CantidadEmitida * fd.CostoBs), 0) as MontoBs'),
-                    'f.Descripcion',
-                    'f.TasaDeCambio',
-                    'f.MonedaPrincipal',
-                    'p.Nombre as proveedor_nombre',
-                    's.Nombre as sucursal_nombre'
-                ])
-                ->get();
+
+            // Verificar si el proveedor existe
+            $proveedor = DB::connection('sqlsrv')
+                ->table('Proveedores')
+                ->where('ProveedorId', $proveedorId)
+                ->first();
+
+            // Proveedor de Mercancia
+            if($proveedor->Tipo == 0){
+                $facturas = DB::connection('sqlsrv')
+                    ->table('Facturas as f')
+                    ->leftJoin('Proveedores as p', 'f.ProveedorId', '=', 'p.ProveedorId')
+                    ->leftJoin('Sucursales as s', 'f.SucursalId', '=', 's.ID')
+                    ->leftJoin('FacturaDetalles as fd', 'f.ID', '=', 'fd.FacturaId')
+                    ->where('f.ProveedorId', $proveedorId)
+                    ->where('f.Estatus', $estatus)
+                    ->groupBy(
+                        'f.ID', 'f.ProveedorId', 'f.Numero', 'f.Serie', 'f.FechaCreacion',
+                        'f.FechaDespacho', 'f.FechaCierre', 'f.Estatus', 'f.ContenedorId',
+                        'f.Traspaso', 'f.PorcentajeCosto', 'f.PorcentajeDescuento',
+                        'f.MontoDescuento', 'f.EsCargarFleteEnFactura', 'f.Tipo',
+                        'f.SucursalId', 'f.DivisaValorId', 'f.MontoDivisa', 'f.MontoBs',
+                        'f.Descripcion', 'f.TasaDeCambio', 'f.MonedaPrincipal',
+                        'p.Nombre', 's.Nombre'
+                    )
+                    ->orderBy('f.FechaCreacion', 'asc')
+                    ->select([
+                        'f.ID',
+                        'f.ProveedorId',
+                        'f.Numero',
+                        'f.Serie',
+                        'f.FechaCreacion',
+                        'f.FechaDespacho',
+                        'f.FechaCierre',
+                        'f.Estatus',
+                        'f.ContenedorId',
+                        'f.Traspaso',
+                        'f.PorcentajeCosto',
+                        'f.PorcentajeDescuento',
+                        'f.MontoDescuento',
+                        'f.EsCargarFleteEnFactura',
+                        'f.Tipo',
+                        'f.SucursalId',
+                        'f.DivisaValorId',
+                        // 'f.MontoDivisa',
+                        // 'f.MontoBs',
+                        DB::raw('COALESCE(SUM(fd.CantidadEmitida * fd.CostoDivisa), 0) + COALESCE(f.Traspaso, 0) as MontoDivisa'),
+                        DB::raw('COALESCE(SUM(fd.CantidadEmitida * fd.CostoBs), 0) as MontoBs'),
+                        'f.Descripcion',
+                        'f.TasaDeCambio',
+                        'f.MonedaPrincipal',
+                        'p.Nombre as proveedor_nombre',
+                        's.Nombre as sucursal_nombre'
+                    ])
+                    ->get();
+            }else{
+                $facturas = DB::connection('sqlsrv')
+                    ->table('Facturas as f')
+                    ->leftJoin('Proveedores as p', 'f.ProveedorId', '=', 'p.ProveedorId')
+                    ->leftJoin('Sucursales as s', 'f.SucursalId', '=', 's.ID')
+                    ->leftJoin('FacturaDetalles as fd', 'f.ID', '=', 'fd.FacturaId')
+                    ->where('f.ProveedorId', $proveedorId)
+                    ->where('f.Estatus', $estatus)
+                    ->groupBy(
+                        'f.ID', 'f.ProveedorId', 'f.Numero', 'f.Serie', 'f.FechaCreacion',
+                        'f.FechaDespacho', 'f.FechaCierre', 'f.Estatus', 'f.ContenedorId',
+                        'f.Traspaso', 'f.PorcentajeCosto', 'f.PorcentajeDescuento',
+                        'f.MontoDescuento', 'f.EsCargarFleteEnFactura', 'f.Tipo',
+                        'f.SucursalId', 'f.DivisaValorId', 'f.MontoDivisa', 'f.MontoBs',
+                        'f.Descripcion', 'f.TasaDeCambio', 'f.MonedaPrincipal',
+                        'p.Nombre', 's.Nombre'
+                    )
+                    ->orderBy('f.FechaCreacion', 'asc')
+                    ->select([
+                        'f.ID',
+                        'f.ProveedorId',
+                        'f.Numero',
+                        'f.Serie',
+                        'f.FechaCreacion',
+                        'f.FechaDespacho',
+                        'f.FechaCierre',
+                        'f.Estatus',
+                        'f.ContenedorId',
+                        'f.Traspaso',
+                        'f.PorcentajeCosto',
+                        'f.PorcentajeDescuento',
+                        'f.MontoDescuento',
+                        'f.EsCargarFleteEnFactura',
+                        'f.Tipo',
+                        'f.SucursalId',
+                        'f.DivisaValorId',
+                        'f.MontoDivisa',
+                        'f.MontoBs',
+                        // DB::raw('COALESCE(SUM(fd.CantidadEmitida * fd.CostoDivisa), 0) + COALESCE(f.Traspaso, 0) as MontoDivisa'),
+                        // DB::raw('COALESCE(SUM(fd.CantidadEmitida * fd.CostoBs), 0) as MontoBs'),
+                        'f.Descripcion',
+                        'f.TasaDeCambio',
+                        'f.MonedaPrincipal',
+                        'p.Nombre as proveedor_nombre',
+                        's.Nombre as sucursal_nombre'
+                    ])
+                    ->get();
+            }
+
+            
             
             // Calcular pagos por factura y saldo pendiente
             foreach ($facturas as $factura) {
@@ -5518,6 +5484,99 @@ class ProveedoresController extends Controller
         } catch (\Exception $e) {
             \Log::error('Error en editarProveedor: ' . $e->getMessage());
             return back()->with('error', 'Error al cargar el formulario: ' . $e->getMessage());
+        }
+    }
+    
+    public function detalleProveedor($id)
+    {
+        try {
+            if (!$id) {
+                return redirect()->route('cpanel.proveedor.mercancia.listado')
+                    ->with('error', 'Debe indicar un código de proveedor');
+            }
+            
+            // Buscar proveedor
+            $proveedor = DB::connection('sqlsrv')
+                ->table('Proveedores')
+                ->where('ProveedorId', $id)
+                ->first();
+            
+            if (!$proveedor) {
+                return redirect()->route('cpanel.proveedor.mercancia.listado')
+                    ->with('error', 'No se pudo encontrar un proveedor');
+            }
+            
+            // Obtener imagen
+            $imgSrc = FileHelper::getOrDownloadFile(
+                'images/proveedores/',
+                $proveedor->UrlImagen,
+                'assets/img/adminlte/img/proveedor_default.png'
+            );
+            
+            // ============================================
+            // FACTURAS VIGENTES (En Proceso + Recibiendo + Recibida)
+            // ============================================
+            $facturasVigentes = $this->buscarFacturasActivas($id);
+            
+            // ============================================
+            // PAGOS VIGENTES
+            // ============================================
+            $transaccionesVigentes = $this->buscarPagosVigentesProveedores($id);
+            
+            // ============================================
+            // PRODUCTOS (si es Mercancía)
+            // ============================================
+            $productos = null;
+            if ($proveedor->Tipo == 0) {
+                $sucursalId = session('sucursal_id'); // Ajusta según tu lógica
+                $productos = $this->buscarProductosDelProveedor($sucursalId, $id);
+            }
+            
+            // ============================================
+            // ESTADO DE CUENTA DEL PROVEEDOR
+            // ============================================
+            $estadoCuenta = $this->generarEstadoCuentaProveedor($id, $facturasVigentes);
+
+            // ============================================
+            // BANCO
+            // ============================================
+            $banco = null;
+            if ($proveedor->BancoId) {
+                $banco = DB::connection('sqlsrv')
+                    ->table('Bancos')
+                    ->where('Id', $proveedor->BancoId)
+                    ->first();
+            }
+
+            // BALANCE DE FACTURAS
+            $balanceFacturas = new \stdClass();
+            $balanceFacturas->totalFacturas = $facturasVigentes->sum('MontoDivisa');
+            $balanceFacturas->totalPagado = $facturasVigentes->sum('total_pagado');
+            $balanceFacturas->saldoPendiente = $balanceFacturas->totalFacturas - $balanceFacturas->totalPagado;
+            $balanceFacturas->porcentajePagado = $balanceFacturas->totalFacturas > 0 
+                ? round(($balanceFacturas->totalPagado * 100) / $balanceFacturas->totalFacturas, 2) 
+                : 0;
+            
+            session([
+                'menu_active' => 'Proveedor Mercancía',
+                'submenu_active' => 'Listado Proveedores'
+            ]);
+            
+            return view('cpanel.proveedores.detalle_proveedor', compact(
+                'proveedor',
+                'imgSrc',
+                'facturasVigentes',
+                'transaccionesVigentes',
+                'productos',
+                'banco',
+                'estadoCuenta',
+                'balanceFacturas'
+            ));
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en detalleProveedor: ' . $e->getMessage());
+            return redirect()->route('cpanel.proveedor.mercancia.listado')
+                ->with('error', 'Error al cargar el detalle: ' . $e->getMessage());
         }
     }
     
