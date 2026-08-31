@@ -762,70 +762,6 @@ class ProveedoresController extends Controller
         // }
     }
 
-    public function pagarProveedor($id)
-    {
-        try {
-            if (!$id) {
-                return redirect()->route('cpanel.proveedor.mercancia.registrar_pagos')
-                    ->with('error', 'Debe indicar un código de proveedor');
-            }
-            
-            // Buscar proveedor
-            $proveedor = DB::connection('sqlsrv')
-                ->table('Proveedores')
-                ->where('ProveedorId', $id)
-                ->first();
-            
-            if (!$proveedor) {
-                return redirect()->route('cpanel.proveedor.mercancia.registrar_pagos')
-                    ->with('error', 'No se pudo encontrar un proveedor');
-            }
-            
-            // Obtener imagen
-            $imgSrc = FileHelper::getOrDownloadFile(
-                'images/proveedores/',
-                $proveedor->UrlImagen,
-                'assets/img/adminlte/img/proveedor_default.png'
-            );
-            
-            // ============================================
-            // FACTURAS VIGENTES (En Proceso + Recibiendo + Recibida)
-            // ============================================
-            $facturasVigentes = $this->buscarFacturasActivas($id);
-
-            // BALANCE DE FACTURAS
-            $balanceFacturas = new \stdClass();
-            $balanceFacturas->totalFacturas = $facturasVigentes->sum('MontoDivisa');
-            $balanceFacturas->totalPagado = $facturasVigentes->sum('total_pagado');
-            $balanceFacturas->saldoPendiente = $balanceFacturas->totalFacturas - $balanceFacturas->totalPagado;
-            $balanceFacturas->porcentajePagado = $balanceFacturas->totalFacturas > 0 
-                ? round(($balanceFacturas->totalPagado * 100) / $balanceFacturas->totalFacturas, 2) 
-                : 0;
-
-            // Obtener tasa de cambio actual
-            $tasaBcv = DivisaValor::orderBy('ID', 'desc')->first();
-            $tasaCambioActual = $tasaBcv->Valor;
-            
-            session([
-                'menu_active' => 'Proveedor Mercancía',
-                'submenu_active' => 'Registrar Pagos'
-            ]);
-            
-            return view('cpanel.proveedores.pagar_proveedor', compact(
-                'proveedor',
-                'imgSrc',
-                'facturasVigentes',
-                'balanceFacturas',
-                'tasaCambioActual'
-            ));
-            
-        } catch (\Exception $e) {
-            \Log::error('Error en pagarProveedor: ' . $e->getMessage());
-            return redirect()->route('cpanel.proveedor.mercancia.registrar_pagos')
-                ->with('error', 'Error al cargar informacion proveedor: ' . $e->getMessage());
-        }
-    }
-
     public function facturaRegistroProveedor($id)
     {
         try {
@@ -2583,7 +2519,7 @@ class ProveedoresController extends Controller
             }
             
             // 3. Asignar Tipo y Estatus
-            $pago->Tipo = 0;     // PagoMercancia
+            $pago->Tipo = $proveedor->Tipo;     // PagoMercancia
             $pago->Estatus = 2;  // Pagada
             
             // 4. Guardar transacción (como GuardarTransaccionDeProveedor)
@@ -2659,15 +2595,128 @@ class ProveedoresController extends Controller
         return $proveedor;
     }
 
+    // private function guardarTransaccionDeProveedor($pago, $proveedorId)
+    // {
+    //     // 1. Generar número de operación (como en .NET)
+    //     $numeroOperacion = 'PAG' . date('YmdHi') . '-' . $proveedorId;
+        
+    //     // 2. Verificar si ya existe una transacción con ese número
+    //     $existe = DB::connection('sqlsrv')
+    //         ->table('Transacciones')
+    //         ->where('NumeroOperacion', $numeroOperacion)
+    //         ->exists();
+        
+    //     if ($existe) {
+    //         throw new \Exception('La transacción ya existe en sistema');
+    //     }
+        
+    //     // 3. Obtener facturas vigentes con saldo pendiente
+    //     $facturas = $this->buscarFacturasActivas($proveedorId);
+        
+    //     // 4. Distribuir pago entre facturas (como en .NET)
+    //     $montoRestante = $pago->MontoDivisaAbonado;
+    //     $montoBsRestante = $pago->MontoAbonado;
+    //     $transaccionesCreadas = [];
+        
+    //     foreach ($facturas as $index => $factura) {
+            
+    //         if ($montoRestante <= 0) {
+    //             break;
+    //         }
+            
+    //         if ($factura->saldo_pendiente <= 0) {
+    //             continue;
+    //         }
+            
+    //         $montoAPagar = 0;
+    //         $montoAPagarBs = 0;
+    //         $cerrarFactura = false;
+            
+    //         if ($montoRestante >= $factura->saldo_pendiente) {
+    //             // Paga factura completa
+    //             $montoAPagar = $factura->saldo_pendiente;
+    //             $montoAPagarBs = $factura->saldo_pendiente_bs ?? ($factura->saldo_pendiente * $pago->TasaDeCambio);
+    //             $montoRestante -= $montoAPagar;
+    //             $montoBsRestante -= $montoAPagarBs;
+    //             $cerrarFactura = true;
+    //         } else {
+    //             // Pago parcial
+    //             $montoAPagar = $montoRestante;
+    //             $montoAPagarBs = $montoBsRestante;
+    //             $montoRestante = 0;
+    //             $montoBsRestante = 0;
+    //         }
+            
+    //         // Obtener la sucursal de la factura (como en .NET)
+    //         $sucursalId = $factura->SucursalId ?? 8;
+            
+    //         // Crear descripción automática (como en .NET)
+    //         $descripcionAuto = 'Auto.' . ($pago->Descripcion ?? 'Pago registrado');
+
+    //         $proveedor = DB::connection('sqlsrv')
+    //             ->table('Proveedores')
+    //             ->where('ProveedorId', $proveedorId)
+    //             ->first();
+
+    //         $tipop = 5;
+    //         if($proveedor->Tipo == 0){
+    //             $tipop = 0;
+    //         }
+            
+    //         // Crear transacción - SOLO con las columnas que existen
+    //         $transaccionId = DB::connection('sqlsrv')->table('Transacciones')->insertGetId([
+    //             'Descripcion' => $descripcionAuto,
+    //             'MontoAbonado' => $montoAPagarBs,
+    //             'MontoDivisaAbonado' => $montoAPagar,
+    //             'NumeroOperacion' => $numeroOperacion,
+    //             'DivisaId' => null,
+    //             'TasaDeCambio' => $pago->TasaDeCambio,
+    //             'Tipo' => $tipop, // 0 = PagoMercancia 5 = Servicio
+    //             'FormaDePago' => $pago->FormaDePago,
+    //             'Estatus' => 2, // 2 = Pagada
+    //             'Fecha' => $pago->Fecha,
+    //             'UrlComprobante' => $pago->UrlComprobante,
+    //             'SucursalOrigenId' => $sucursalId,
+    //             'SucursalId' => $sucursalId,
+    //             'Observacion' => $descripcionAuto,
+    //             'Nombre' => '',
+    //             'Cedula' => '',
+    //             'CategoriaId' => 0
+    //         ]);
+            
+    //         // Guardar relación en TransaccionesProveedor
+    //         DB::connection('sqlsrv')->table('TransaccionesProveedor')->insert([
+    //             'ProveedorId' => $proveedorId,
+    //             'TransaccionId' => $transaccionId,
+    //             'FacturaId' => $factura->ID
+    //         ]);
+            
+    //         // Cerrar factura si se pagó completa (como en .NET)
+    //         if ($cerrarFactura) {
+    //             DB::connection('sqlsrv')->table('Facturas')
+    //                 ->where('ID', $factura->ID)
+    //                 ->update(['Estatus' => 5]); // 5 = Pagada/Cerrada
+    //         }
+            
+    //         $transaccionesCreadas[] = $transaccionId;
+    //     }
+        
+    //     // Actualizar el objeto pago con el primer ID generado
+    //     $pago->Id = $transaccionesCreadas[0] ?? 0;
+    //     $pago->NumeroOperacion = $numeroOperacion;
+        
+    //     return $pago;
+    // }
+
     private function guardarTransaccionDeProveedor($pago, $proveedorId)
     {
         // 1. Generar número de operación (como en .NET)
-        $numeroOperacion = 'PAG' . date('YmdHi') . '-' . $proveedorId;
+        $numeroBase = 'PAG' . date('YmdHi') . '-' . $proveedorId;
         
         // 2. Verificar si ya existe una transacción con ese número
         $existe = DB::connection('sqlsrv')
             ->table('Transacciones')
-            ->where('NumeroOperacion', $numeroOperacion)
+            ->where('NumeroOperacion', $numeroBase)
             ->exists();
         
         if ($existe) {
@@ -2677,18 +2726,36 @@ class ProveedoresController extends Controller
         // 3. Obtener facturas vigentes con saldo pendiente
         $facturas = $this->buscarFacturasActivas($proveedorId);
         
-        // 4. Distribuir pago entre facturas (como en .NET)
-        $montoRestante = $pago->MontoDivisaAbonado;
-        $montoBsRestante = $pago->MontoAbonado;
+        // 4. Distribuir pago entre facturas
+        $montoRestante = (float) $pago->MontoDivisaAbonado;
+        $montoBsRestante = (float) $pago->MontoAbonado;
         $transaccionesCreadas = [];
+        $contador = 1;
+        $cantidadFacturas = $facturas->count();
+        
+        // Obtener el tipo de proveedor
+        $proveedor = DB::connection('sqlsrv')
+            ->table('Proveedores')
+            ->where('ProveedorId', $proveedorId)
+            ->first();
+        
+        $tipop = ($proveedor->Tipo == 0) ? 0 : 5;
         
         foreach ($facturas as $index => $factura) {
             
-            if ($montoRestante <= 0) {
+            // ================================================
+            // SI EL RESIDUO ES MENOR A 0.01, CONSIDERAR COMO CERO
+            // ================================================
+            if ($montoRestante < 0.01) {
+                \Log::info('Monto restante menor a 0.01, finalizando distribución', [
+                    'monto_restante' => $montoRestante
+                ]);
                 break;
             }
             
-            if ($factura->saldo_pendiente <= 0) {
+            $saldoPendiente = (float) $factura->saldo_pendiente;
+            
+            if ($saldoPendiente <= 0) {
                 continue;
             }
             
@@ -2696,47 +2763,67 @@ class ProveedoresController extends Controller
             $montoAPagarBs = 0;
             $cerrarFactura = false;
             
-            if ($montoRestante >= $factura->saldo_pendiente) {
+            if ($montoRestante >= $saldoPendiente) {
                 // Paga factura completa
-                $montoAPagar = $factura->saldo_pendiente;
-                $montoAPagarBs = $factura->saldo_pendiente_bs ?? ($factura->saldo_pendiente * $pago->TasaDeCambio);
+                $montoAPagar = $saldoPendiente;
+                $montoAPagarBs = $saldoPendiente * $pago->TasaDeCambio;
                 $montoRestante -= $montoAPagar;
                 $montoBsRestante -= $montoAPagarBs;
                 $cerrarFactura = true;
             } else {
                 // Pago parcial
                 $montoAPagar = $montoRestante;
-                $montoAPagarBs = $montoBsRestante;
+                $montoAPagarBs = $montoRestante * $pago->TasaDeCambio;
                 $montoRestante = 0;
                 $montoBsRestante = 0;
             }
             
-            // Obtener la sucursal de la factura (como en .NET)
+            // ================================================
+            // VALIDAR QUE LOS MONTOS SEAN MAYORES A 0.01
+            // ================================================
+            if ($montoAPagar < 0.01) {
+                \Log::warning('Monto a pagar menor a 0.01, omitiendo transacción', [
+                    'factura_id' => $factura->ID,
+                    'montoAPagar' => $montoAPagar
+                ]);
+                continue;
+            }
+            
+            // Obtener la sucursal de la factura
             $sucursalId = $factura->SucursalId ?? 8;
             
-            // Crear descripción automática (como en .NET)
+            // Crear descripción automática
             $descripcionAuto = 'Auto.' . ($pago->Descripcion ?? 'Pago registrado');
             
-            // Crear transacción - SOLO con las columnas que existen
-            $transaccionId = DB::connection('sqlsrv')->table('Transacciones')->insertGetId([
+            // Generar número de operación
+            if ($cantidadFacturas == 1) {
+                $numeroOperacion = $numeroBase;
+            } else {
+                $numeroOperacion = $numeroBase . '-' . $contador;
+            }
+            
+            // Crear transacción
+            $transaccionData = [
                 'Descripcion' => $descripcionAuto,
-                'MontoAbonado' => $montoAPagarBs,
-                'MontoDivisaAbonado' => $montoAPagar,
+                'MontoAbonado' => (float) $montoAPagarBs,
+                'MontoDivisaAbonado' => (float) $montoAPagar,
                 'NumeroOperacion' => $numeroOperacion,
                 'DivisaId' => null,
-                'TasaDeCambio' => $pago->TasaDeCambio,
-                'Tipo' => 0, // 0 = PagoMercancia
-                'FormaDePago' => $pago->FormaDePago,
-                'Estatus' => 2, // 2 = Pagada
+                'TasaDeCambio' => (float) $pago->TasaDeCambio,
+                'Tipo' => (int) $tipop,
+                'FormaDePago' => (int) $pago->FormaDePago,
+                'Estatus' => 2,
                 'Fecha' => $pago->Fecha,
                 'UrlComprobante' => $pago->UrlComprobante,
-                'SucursalOrigenId' => $sucursalId,
-                'SucursalId' => $sucursalId,
+                'SucursalOrigenId' => (int) $sucursalId,
+                'SucursalId' => (int) $sucursalId,
                 'Observacion' => $descripcionAuto,
                 'Nombre' => '',
                 'Cedula' => '',
                 'CategoriaId' => 0
-            ]);
+            ];
+            
+            $transaccionId = DB::connection('sqlsrv')->table('Transacciones')->insertGetId($transaccionData);
             
             // Guardar relación en TransaccionesProveedor
             DB::connection('sqlsrv')->table('TransaccionesProveedor')->insert([
@@ -2745,19 +2832,20 @@ class ProveedoresController extends Controller
                 'FacturaId' => $factura->ID
             ]);
             
-            // Cerrar factura si se pagó completa (como en .NET)
+            // Cerrar factura si se pagó completa
             if ($cerrarFactura) {
                 DB::connection('sqlsrv')->table('Facturas')
                     ->where('ID', $factura->ID)
-                    ->update(['Estatus' => 5]); // 5 = Pagada/Cerrada
+                    ->update(['Estatus' => 5]);
             }
             
             $transaccionesCreadas[] = $transaccionId;
+            $contador++;
         }
         
-        // Actualizar el objeto pago con el primer ID generado
+        // Actualizar el objeto pago
         $pago->Id = $transaccionesCreadas[0] ?? 0;
-        $pago->NumeroOperacion = $numeroOperacion;
+        $pago->NumeroOperacion = $numeroBase;
         
         return $pago;
     }
@@ -3789,6 +3877,8 @@ class ProveedoresController extends Controller
             $fechaFin = $request->input('fecha_fin') 
                 ? Carbon::parse($request->input('fecha_fin'))->endOfDay()
                 : Carbon::now()->endOfDay();
+
+                // dd($fechaInicio);
 
             $proveedoresMercancia = GeneralHelper::BuscarListadoProveedores($tipo);
 
@@ -6198,70 +6288,6 @@ class ProveedoresController extends Controller
         }
     }
 
-    public function pagarProveedorServicios($id)
-    {
-        try {
-            if (!$id) {
-                return redirect()->route('cpanel.proveedor.servicios.registrar_pagos')
-                    ->with('error', 'Debe indicar un código de proveedor');
-            }
-            
-            // Buscar proveedor
-            $proveedor = DB::connection('sqlsrv')
-                ->table('Proveedores')
-                ->where('ProveedorId', $id)
-                ->first();
-            
-            if (!$proveedor) {
-                return redirect()->route('cpanel.proveedor.servicios.registrar_pagos')
-                    ->with('error', 'No se pudo encontrar un proveedor');
-            }
-            
-            // Obtener imagen
-            $imgSrc = FileHelper::getOrDownloadFile(
-                'images/proveedores/',
-                $proveedor->UrlImagen,
-                'assets/img/adminlte/img/proveedor_default.png'
-            );
-            
-            // ============================================
-            // FACTURAS VIGENTES (En Proceso + Recibiendo + Recibida)
-            // ============================================
-            $facturasVigentes = $this->buscarFacturasActivas($id);
-
-            // BALANCE DE FACTURAS
-            $balanceFacturas = new \stdClass();
-            $balanceFacturas->totalFacturas = $facturasVigentes->sum('MontoDivisa');
-            $balanceFacturas->totalPagado = $facturasVigentes->sum('total_pagado');
-            $balanceFacturas->saldoPendiente = $balanceFacturas->totalFacturas - $balanceFacturas->totalPagado;
-            $balanceFacturas->porcentajePagado = $balanceFacturas->totalFacturas > 0 
-                ? round(($balanceFacturas->totalPagado * 100) / $balanceFacturas->totalFacturas, 2) 
-                : 0;
-
-            // Obtener tasa de cambio actual
-            $tasaBcv = DivisaValor::orderBy('ID', 'desc')->first();
-            $tasaCambioActual = $tasaBcv->Valor;
-            
-            session([
-                'menu_active' => 'Proveedor Servicios',
-                'submenu_active' => 'Registrar Pagos'
-            ]);
-            
-            return view('cpanel.servicios.pagar_proveedor', compact(
-                'proveedor',
-                'imgSrc',
-                'facturasVigentes',
-                'balanceFacturas',
-                'tasaCambioActual'
-            ));
-            
-        } catch (\Exception $e) {
-            \Log::error('Error en pagarProveedor: ' . $e->getMessage());
-            return redirect()->route('cpanel.proveedor.mercancia.registrar_pagos')
-                ->with('error', 'Error al cargar informacion proveedor: ' . $e->getMessage());
-        }
-    }
-
     public function facturaRegistroProveedorServicios($id)
     {
         try {
@@ -7049,6 +7075,134 @@ class ProveedoresController extends Controller
         } catch (\Exception $e) {
             return redirect()->back()
                 ->with('error', 'Error al actualizar la factura: ' . $e->getMessage());
+        }
+    }
+
+    public function pagarProveedor($id)
+    {
+        try {
+            if (!$id) {
+                return redirect()->route('cpanel.proveedor.mercancia.registrar_pagos')
+                    ->with('error', 'Debe indicar un código de proveedor');
+            }
+            
+            // Buscar proveedor
+            $proveedor = DB::connection('sqlsrv')
+                ->table('Proveedores')
+                ->where('ProveedorId', $id)
+                ->first();
+            
+            if (!$proveedor) {
+                return redirect()->route('cpanel.proveedor.mercancia.registrar_pagos')
+                    ->with('error', 'No se pudo encontrar un proveedor');
+            }
+            
+            // Obtener imagen
+            $imgSrc = FileHelper::getOrDownloadFile(
+                'images/proveedores/',
+                $proveedor->UrlImagen,
+                'assets/img/adminlte/img/proveedor_default.png'
+            );
+            
+            // ============================================
+            // FACTURAS VIGENTES (En Proceso + Recibiendo + Recibida)
+            // ============================================
+            $facturasVigentes = $this->buscarFacturasActivas($id);
+
+            // BALANCE DE FACTURAS
+            $balanceFacturas = new \stdClass();
+            $balanceFacturas->totalFacturas = $facturasVigentes->sum('MontoDivisa');
+            $balanceFacturas->totalPagado = $facturasVigentes->sum('total_pagado');
+            $balanceFacturas->saldoPendiente = $balanceFacturas->totalFacturas - $balanceFacturas->totalPagado;
+            $balanceFacturas->porcentajePagado = $balanceFacturas->totalFacturas > 0 
+                ? round(($balanceFacturas->totalPagado * 100) / $balanceFacturas->totalFacturas, 2) 
+                : 0;
+
+            // Obtener tasa de cambio actual
+            $tasaBcv = DivisaValor::orderBy('ID', 'desc')->first();
+            $tasaCambioActual = $tasaBcv->Valor;
+            
+            session([
+                'menu_active' => 'Proveedor Mercancía',
+                'submenu_active' => 'Registrar Pagos'
+            ]);
+            
+            return view('cpanel.proveedores.pagar_proveedor', compact(
+                'proveedor',
+                'imgSrc',
+                'facturasVigentes',
+                'balanceFacturas',
+                'tasaCambioActual'
+            ));
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en pagarProveedor: ' . $e->getMessage());
+            return redirect()->route('cpanel.proveedor.mercancia.registrar_pagos')
+                ->with('error', 'Error al cargar informacion proveedor: ' . $e->getMessage());
+        }
+    }
+
+    public function pagarProveedorServicios($id)
+    {
+        try {
+            if (!$id) {
+                return redirect()->route('cpanel.proveedor.servicios.registrar_pagos')
+                    ->with('error', 'Debe indicar un código de proveedor');
+            }
+            
+            // Buscar proveedor
+            $proveedor = DB::connection('sqlsrv')
+                ->table('Proveedores')
+                ->where('ProveedorId', $id)
+                ->first();
+            
+            if (!$proveedor) {
+                return redirect()->route('cpanel.proveedor.servicios.registrar_pagos')
+                    ->with('error', 'No se pudo encontrar un proveedor');
+            }
+            
+            // Obtener imagen
+            $imgSrc = FileHelper::getOrDownloadFile(
+                'images/proveedores/',
+                $proveedor->UrlImagen,
+                'assets/img/adminlte/img/proveedor_default.png'
+            );
+            
+            // ============================================
+            // FACTURAS VIGENTES (En Proceso + Recibiendo + Recibida)
+            // ============================================
+            $facturasVigentes = $this->buscarFacturasActivas($id);
+
+            // BALANCE DE FACTURAS
+            $balanceFacturas = new \stdClass();
+            $balanceFacturas->totalFacturas = $facturasVigentes->sum('MontoDivisa');
+            $balanceFacturas->totalPagado = $facturasVigentes->sum('total_pagado');
+            $balanceFacturas->saldoPendiente = $balanceFacturas->totalFacturas - $balanceFacturas->totalPagado;
+            $balanceFacturas->porcentajePagado = $balanceFacturas->totalFacturas > 0 
+                ? round(($balanceFacturas->totalPagado * 100) / $balanceFacturas->totalFacturas, 2) 
+                : 0;
+
+            // Obtener tasa de cambio actual
+            $tasaBcv = DivisaValor::orderBy('ID', 'desc')->first();
+            $tasaCambioActual = $tasaBcv->Valor;
+            
+            session([
+                'menu_active' => 'Proveedor Servicios',
+                'submenu_active' => 'Registrar Pagos'
+            ]);
+            
+            return view('cpanel.servicios.pagar_proveedor', compact(
+                'proveedor',
+                'imgSrc',
+                'facturasVigentes',
+                'balanceFacturas',
+                'tasaCambioActual'
+            ));
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en pagarProveedor: ' . $e->getMessage());
+            return redirect()->route('cpanel.proveedor.mercancia.registrar_pagos')
+                ->with('error', 'Error al cargar informacion proveedor: ' . $e->getMessage());
         }
     }
 }
