@@ -829,6 +829,14 @@ Route::middleware('auth')->group(function() {
     Route::get('/cpanel/facturas/servicio/{id}/editar', [ProveedoresController::class, 'editarFacturaServicio'])->name('cpanel.facturas.editar.servicio');
 
     Route::put('/cpanel/actualizar-servicio/{id}', [ProveedoresController::class, 'actualizarFacturaServicio'])->name('cpanel.facturas.actualizar.servicio');
+
+    //  Proveedores servicios - Cuentas por pagar
+    Route::get('/cpanel/proveedor/servicios/cuentas-pagar', [ProveedoresController::class, 'cuentasPagarServiciosIndex'])
+        ->name('cpanel.proveedor.servicios.cuentas_pagar');
+
+    // Lista Historial de Facturas Servicios
+    Route::get('/proveedor/servicios/historial/facturas', [ProveedoresController::class, 'listaHistorialFacturasServicios'])
+        ->name('cpanel.proveedor.servicios.historial_facturas'); 
 });
 
 

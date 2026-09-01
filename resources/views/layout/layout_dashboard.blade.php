@@ -866,6 +866,18 @@
                       <i class="nav-icon bi bi-file-text"></i><p>Registrar Servicio</p>
                     </a>
                   </li>
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.proveedor.servicios.cuentas_pagar') }}"
+                       class="nav-link {{ session('submenu_active') == 'Cuentas por pagar' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-wallet2"></i><p>Cuentas por pagar</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.proveedor.servicios.historial_facturas') }}"
+                       class="nav-link {{ session('submenu_active') == 'Historial de facturas' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-wallet2"></i><p>Historial de facturas</p>
+                    </a>
+                  </li>
                 </ul>
               </li>
 

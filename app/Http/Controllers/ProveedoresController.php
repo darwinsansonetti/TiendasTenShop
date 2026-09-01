@@ -7205,4 +7205,223 @@ class ProveedoresController extends Controller
                 ->with('error', 'Error al cargar informacion proveedor: ' . $e->getMessage());
         }
     }
+
+    public function cuentasPagarServiciosIndex()
+    {
+        try {   
+            session([
+                'menu_active' => 'Proveedor Servicios',
+                'submenu_active' => 'Cuentas por pagar'
+            ]);
+
+            // ================================================
+            // 1. BUSCAR FACTURAS DE SERVICIO EN PROCESO
+            // Equivalente a: _facturaService.BuscarListadoFacturas(EnumTipoFactura.Servicio, EnumFactura.EnProceso)
+            // ================================================
+            $listadoFacturas = $this->buscarListadoFacturasActivasServicios();
+
+            // ================================================
+            // 2. PROCESAR CADA FACTURA Y CALCULAR ESTADÍSTICAS
+            // ================================================
+            $totalGeneral = 0;
+            $totalPendiente = 0;
+            $totalPagado = 0;
+            $totalFacturas = $listadoFacturas->count();
+            $facturasVencidas = 0;
+            $facturasPorVencer = 0;
+            $facturasPagadas = 0;
+
+            foreach ($listadoFacturas as $factura) {
+                // Formatear fecha
+                $factura->FechaCreacionFormateada = $factura->FechaCreacion 
+                    ? date('d/m/Y', strtotime($factura->FechaCreacion)) 
+                    : 'N/A';
+                
+                // Calcular totales
+                $totalGeneral += (float) ($factura->MontoDivisa ?? 0);
+                $totalPendiente += (float) ($factura->saldo_pendiente ?? 0);
+                $totalPagado += (float) ($factura->total_pagado ?? 0);
+                
+                $dias = (int) ($factura->DiasTranscurridos ?? 0);
+                $saldo = (float) ($factura->saldo_pendiente ?? 0);
+                
+                // Determinar color de días
+                if ($dias > 90) {
+                    $factura->dias_color = 'danger';
+                } elseif ($dias > 60) {
+                    $factura->dias_color = 'warning';
+                } elseif ($dias > 30) {
+                    $factura->dias_color = 'info';
+                } else {
+                    $factura->dias_color = 'secondary';
+                }
+                
+                // Determinar estado
+                if ($saldo <= 0.01) {
+                    $factura->estado = 'PAGADO';
+                    $factura->estado_badge = 'success';
+                    $facturasPagadas++;
+                } elseif ($dias > 30) {
+                    $factura->estado = 'VENCIDO';
+                    $factura->estado_badge = 'danger';
+                    $facturasVencidas++;
+                } elseif ($dias > 15) {
+                    $factura->estado = 'PRÓXIMO A VENCER';
+                    $factura->estado_badge = 'warning';
+                    $facturasPorVencer++;
+                } else {
+                    $factura->estado = 'AL DÍA';
+                    $factura->estado_badge = 'info';
+                }
+            }
+
+            // ================================================
+            // 3. PREPARAR ESTADÍSTICAS
+            // ================================================
+            $estadisticas = [
+                'total_facturas_raw' => $totalFacturas,
+                'total_general_raw' => $totalGeneral,
+                'total_pendiente_raw' => $totalPendiente,
+                'total_pagado_raw' => $totalPagado,
+                'facturas_vencidas_raw' => $facturasVencidas,
+                'facturas_por_vencer_raw' => $facturasPorVencer,
+                'facturas_pagadas_raw' => $facturasPagadas,
+                
+                'total_facturas' => number_format($totalFacturas, 0),
+                'total_general' => '$' . number_format($totalGeneral, 2),
+                'total_pendiente' => '$' . number_format($totalPendiente, 2),
+                'total_pagado' => '$' . number_format($totalPagado, 2),
+                'facturas_vencidas' => number_format($facturasVencidas, 0),
+                'facturas_por_vencer' => number_format($facturasPorVencer, 0),
+                'facturas_pagadas' => number_format($facturasPagadas, 0),
+            ];
+
+            return view('cpanel.servicios.lista_cuentas_pagar_servicios', [
+                'listadoFacturas' => $listadoFacturas,
+                'estadisticas' => $estadisticas
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error en cuentasPagarServiciosIndex: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar cuentas por pagar: ' . $e->getMessage());
+        }
+    }
+
+    private function buscarListadoFacturasActivasServicios()
+    {
+        try {
+            // ================================================
+            // 1. OBTENER FACTURAS DE SERVICIOS CON ESTATUS EN PROCESO (1)
+            // ================================================
+            $facturas = DB::connection('sqlsrv')
+                ->table('Facturas as f')
+                ->leftJoin('Proveedores as p', 'f.ProveedorId', '=', 'p.ProveedorId')
+                ->leftJoin('Sucursales as s', 'f.SucursalId', '=', 's.ID') // <-- Agregar JOIN con Sucursales
+                ->where('p.Tipo', 1)
+                ->where('f.Estatus', 1)
+                ->orderBy('f.FechaCreacion', 'asc')
+                ->select([
+                    'f.ID',
+                    'f.ProveedorId',
+                    'f.Numero',
+                    'f.FechaCreacion',
+                    'f.Estatus',
+                    'f.SucursalId',
+                    'f.MontoDivisa',
+                    'f.MontoBs',
+                    'f.Descripcion',
+                    'f.TasaDeCambio',
+                    'f.MonedaPrincipal',
+                    'p.Nombre as proveedor_nombre',
+                    'p.Rif_Cedula as proveedor_rif',
+                    's.Nombre as sucursal_nombre' // <-- Nombre de la sucursal
+                ])
+                ->get();
+
+            // ================================================
+            // 2. CALCULAR PAGOS Y SALDO PENDIENTE POR FACTURA
+            // ================================================
+            foreach ($facturas as $factura) {
+                // Sumar pagos desde TransaccionesProveedor
+                $pagos = DB::connection('sqlsrv')
+                    ->table('TransaccionesProveedor as tp')
+                    ->join('Transacciones as t', 'tp.TransaccionId', '=', 't.ID')
+                    ->where('tp.FacturaId', $factura->ID)
+                    ->where('t.Estatus', 2) // Pagada
+                    ->sum('t.MontoDivisaAbonado');
+
+                $factura->total_pagado = (float) ($pagos ?? 0);
+                $factura->saldo_pendiente = max(0, ((float) $factura->MontoDivisa - (float) $factura->total_pagado));
+                
+                // Calcular saldo pendiente en Bs
+                $factura->saldo_pendiente_bs = $factura->saldo_pendiente * $factura->TasaDeCambio;
+                
+                // Calcular días transcurridos desde la creación
+                if ($factura->FechaCreacion) {
+                    $fechaCreacion = new \DateTime($factura->FechaCreacion);
+                    $hoy = new \DateTime();
+                    $diff = $fechaCreacion->diff($hoy);
+                    $factura->DiasTranscurridos = $diff->days;
+                } else {
+                    $factura->DiasTranscurridos = 0;
+                }
+            }
+
+            return $facturas;
+
+        } catch (\Exception $e) {
+            \Log::error('Error en buscarListadoFacturasActivasServicios: ' . $e->getMessage());
+            return collect();
+        }
+    }
+
+
+    public function listaHistorialFacturasServicios(Request $request)
+    {
+        try {
+            session([
+                'menu_active' => 'Proveedor Servicios',
+                'submenu_active' => 'Historial de facturas'
+            ]);
+
+            $tipo = 1;
+
+            // Obtener filtros
+            $fechaInicio = $request->input('fecha_inicio');
+            $fechaFin = $request->input('fecha_fin');
+            $busqueda = $request->input('busqueda', '');
+
+            // Si hay fechas seleccionadas, parsearlas; si no, null para que no filtre
+            $fechaInicioParsed = !empty($fechaInicio) 
+                ? Carbon::parse($fechaInicio)->startOfDay()
+                : null;
+
+            $fechaFinParsed = !empty($fechaFin) 
+                ? Carbon::parse($fechaFin)->endOfDay()
+                : null;
+
+            // Facturas PAGADAS (Estatus = 3) con filtros
+            $facturas = $this->buscarListadoFacturasPagadasTipo(
+                $tipo, 
+                3, 
+                $fechaInicioParsed, 
+                $fechaFinParsed, 
+                $busqueda
+            );
+
+            // Ordenar de más reciente a más antigua (descendente)
+            $facturas = $facturas->sortByDesc('FechaCreacion')->values();
+
+            return view('cpanel.servicios.historial_facturas', compact(
+                'facturas',
+                'fechaInicio',
+                'fechaFin',
+                'busqueda'
+            ));
+
+        } catch (\Exception $e) {
+            \Log::error('Error en listaHistorialFacturas: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar Historial de facturas: ' . $e->getMessage());
+        }
+    }
 }
