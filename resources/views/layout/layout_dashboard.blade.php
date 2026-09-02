@@ -779,6 +779,7 @@
               {{-- ── LOGÍSTICA ────────────────────────────── --}}
               <li class="nav-header">LOGÍSTICA</li>
 
+              {{-- ── PROVEEDOR DE MERCANCIA ────────────────────────────── --}}
               <li class="nav-item {{ session('menu_active') == 'Proveedor Mercancía' ? 'menu-open' : '' }}">
                 <a href="#" class="nav-link">
                   <i class="nav-icon bi bi-truck"></i>
@@ -836,6 +837,7 @@
                 </ul>
               </li>
 
+              {{-- ── PROVEEDOR DE SERVICIOS ────────────────────────────── --}}
               <li class="nav-item {{ session('menu_active') == 'Proveedor Servicios' ? 'menu-open' : '' }}">
                 <a href="#" class="nav-link">
                   <i class="nav-icon bi bi-tools"></i>
@@ -881,6 +883,7 @@
                 </ul>
               </li>
 
+              {{-- ── INVENTARIO ────────────────────────────── --}}
               <li class="nav-item {{ session('menu_active') == 'Inventario' ? 'menu-open' : '' }}">
                 <a href="#" class="nav-link">
                   <i class="nav-icon bi bi-clipboard-data"></i>
@@ -903,6 +906,12 @@
                     <a href="{{ route('cpanel.inventario.auditoria.listado') }}"
                        class="nav-link {{ session('submenu_active') == 'Auditar Inventario' ? 'active' : '' }}">
                       <i class="nav-icon bi bi-inbox-fill"></i><p>Auditar Inventario</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.inventario.imprimir.precios') }}"
+                       class="nav-link {{ session('submenu_active') == 'Imprimir precios' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-inbox-fill"></i><p>Imprimir precios</p>
                     </a>
                   </li>
                 </ul>

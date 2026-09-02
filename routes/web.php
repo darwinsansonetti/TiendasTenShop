@@ -651,6 +651,13 @@ Route::middleware('auth')->group(function() {
     Route::post('/cpanel/inventario/descargar-plantilla', [InventarioController::class, 'descargarPlantilla'])
         ->name('cpanel.inventario.descargar-plantilla');
 
+    // Imprimir precios por sucursal
+    Route::get('/cpanel/inventario/imprimir/precios', [InventarioController::class, 'listadoInventarioImprimir'])
+    ->name('cpanel.inventario.imprimir.precios');
+
+    Route::get('/cpanel/inventario/imprimir-precios-pdf', [InventarioController::class, 'imprimirPreciosPDF'])
+    ->name('cpanel.inventario.imprimir.precios.pdf');
+
     // AI automatico para transferencias
     Route::get('/cpanel/transferencias/sugerencia/ai', [DistribucionController::class, 'ai_transferencias'])
         ->name('cpanel.distribucion.ai.transferencias');

@@ -4069,4 +4069,122 @@ class InventarioController extends Controller
             'exactitud' => $exactitud
         ]);
     }
+
+    public function listadoInventarioImprimir(Request $request)
+    {
+        try {
+            session([
+                'menu_active' => 'Inventario',
+                'submenu_active' => 'Imprimir precios'
+            ]);
+
+            $sucursalId = session('sucursal_id', 0);
+            $sucursalNombre = session('sucursal_nombre', 'Sin sucursal');
+
+            $productos = $this->buscarCambioDePrecios($sucursalId);
+
+            // ✅ Convertir a array para evitar problemas con @json
+            $productosArray = $productos->toArray();
+
+            return view('cpanel.inventario.imprimir_precios', [
+                'sucursalId' => $sucursalId,
+                'sucursalNombre' => $sucursalNombre,
+                'productos' => $productos,
+                'productosJson' => json_encode($productosArray), // ✅ Pasar JSON directamente
+                'totalProductos' => $productos->count()
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en imprimirPrecios: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar el listado de precios: ' . $e->getMessage());
+        }
+    }
+
+    private function buscarCambioDePrecios($sucursalId, $tipo = null)
+    {
+        try {
+            $query = DB::connection('sqlsrv')
+                ->table('Productos as p')
+                ->join('ProductoSucursal as ps', 'p.ID', '=', 'ps.ProductoId')
+                ->where('ps.SucursalId', $sucursalId)
+                ->where('ps.NuevoPvp', '!=', 0)
+                ->where('p.Estatus', 1);
+
+            if ($tipo !== null) {
+                $query->where('ps.Tipo', $tipo);
+            }
+
+            $productos = $query
+                ->select([
+                    'p.ID as ProductoId',
+                    'p.Codigo',
+                    'p.Descripcion',
+                    'p.UrlFoto',
+                    'ps.PvpDivisa as Pvp',
+                    'ps.NuevoPvp',
+                    'ps.Tipo',
+                    'ps.SucursalId'
+                ])
+                ->orderBy('p.Codigo', 'asc')
+                ->get();
+
+            // ✅ Formatear datos (EXACTAMENTE como en el otro método)
+            $productos->transform(function ($item) {
+                $item->diferencia = (float) $item->NuevoPvp - (float) $item->Pvp;
+                $item->es_aumento = $item->diferencia > 0;
+                
+                // ✅ Misma ruta que en el otro método: 'images/items/thumbs/'
+                $item->UrlFoto = $item->UrlFoto 
+                    ? FileHelper::getOrDownloadFile('images/items/thumbs/', $item->UrlFoto, 'assets/img/adminlte/img/produc_default.jfif')
+                    : 'assets/img/adminlte/img/produc_default.jfif';
+                
+                return $item;
+            });
+
+            Log::info('Productos con cambio de precio encontrados', [
+                'sucursal_id' => $sucursalId,
+                'cantidad' => $productos->count()
+            ]);
+
+            return $productos;
+
+        } catch (\Exception $e) {
+            Log::error('Error en buscarCambioDePrecios: ' . $e->getMessage());
+            return collect();
+        }
+    }
+
+    public function imprimirPreciosPDF(Request $request)
+    {
+        try {
+            $sucursalId = session('sucursal_id', 0);
+            
+            $productos = $this->buscarCambioDePrecios($sucursalId);
+
+            if ($productos->isEmpty()) {
+                return back()->with('error', 'No hay productos con cambio de precio para imprimir');
+            }
+
+            // Obtener datos de la sucursal
+            $sucursal = DB::connection('sqlsrv')
+                ->table('Sucursales')
+                ->where('ID', $sucursalId)
+                ->first();
+
+            // Generar PDF con DomPDF
+            $pdf = Pdf::loadView('cpanel.inventario.etiquetas_precios', [
+                'productos' => $productos,
+                'sucursal' => $sucursal
+            ]);
+
+            // Tamaño de página en mm (165mm x 92mm)
+            $pdf->setPaper([0, 0, 165, 92], 'portrait');
+
+            return $pdf->download('CambioPrecio_' . date('Ymd') . '.pdf');
+
+        } catch (\Exception $e) {
+            Log::error('Error en imprimirPreciosPDF: ' . $e->getMessage());
+            return back()->with('error', 'Error al generar el PDF: ' . $e->getMessage());
+        }
+    }
 }
