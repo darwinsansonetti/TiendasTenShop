@@ -701,16 +701,36 @@
                       <i class="nav-icon bi bi-journal-bookmark"></i><p>Balance General</p>
                     </a>
                   </li>
+                  @if(false != false)
+                    <li class="nav-item">
+                      <a href="{{ route('cpanel.contabilidad.show_cerrar_dia') }}"
+                        class="nav-link {{ session('submenu_active') == 'Cerrar Día' ? 'active' : '' }}">
+                        <i class="nav-icon bi bi-calendar-check"></i><p>Cerrar Día</p>
+                      </a>
+                    </li>
+                    <li class="nav-item">
+                      <a href="{{ route('cpanel.contabilidad.probar_cerrar_dia') }}"
+                        class="nav-link {{ session('submenu_active') == 'Probar Cerrar Dia' ? 'active' : '' }}">
+                        <i class="nav-icon bi bi-calendar-x"></i><p>Probar Cerrar Dia</p>
+                      </a>
+                    </li>
+                  @endif
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.contabilidad.show_cerrar_dia') }}"
-                       class="nav-link {{ session('submenu_active') == 'Cerrar Día' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-calendar-check"></i><p>Cerrar Día</p>
+                    <a href="{{ route('cpanel.contabilidad.registrar_gastos') }}"
+                       class="nav-link {{ session('submenu_active') == 'Registrar Gastos' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-calendar-x"></i><p>Registrar Gastos</p>
                     </a>
                   </li>
                   <li class="nav-item">
-                    <a href="{{ route('cpanel.contabilidad.probar_cerrar_dia') }}"
-                       class="nav-link {{ session('submenu_active') == 'Probar Cerrar Dia' ? 'active' : '' }}">
-                      <i class="nav-icon bi bi-calendar-x"></i><p>Probar Cerrar Dia</p>
+                    <a href="{{ route('cpanel.contabilidad.lista_gastos') }}"
+                       class="nav-link {{ session('submenu_active') == 'Listado Gastos' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-calendar-x"></i><p>Listado Gastos</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.contabilidad.gastos_categoria') }}"
+                       class="nav-link {{ session('submenu_active') == 'Gastos por Categoría' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-calendar-x"></i><p>Gastos por Categoría</p>
                     </a>
                   </li>
                 </ul>

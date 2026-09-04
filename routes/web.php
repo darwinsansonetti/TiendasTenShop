@@ -171,6 +171,26 @@ Route::middleware('auth')->group(function() {
     // Probar Cerrar Dia
     Route::get('/cpanel/contabilidad/probar/cerrar', [ContabilidadController::class, 'cerrar_dia_automaticamente'])->name('cpanel.contabilidad.probar_cerrar_dia');
 
+    // Registrar gastos
+    Route::get('/cpanel/contabilidad/registrar/gastos', [ContabilidadController::class, 'registrarGastos'])->name('cpanel.contabilidad.registrar_gastos');
+    Route::get('/cpanel/contabilidad/editar/gasto/{id}', [ContabilidadController::class, 'editarGasto'])->name('cpanel.contabilidad.editar_gasto');
+    Route::post('/cpanel/contabilidad/guardar/gasto', [ContabilidadController::class, 'storeGasto'])->name('cpanel.contabilidad.guardar_gasto');
+    Route::put('/cpanel/contabilidad/actualizar/gasto/{id}', [ContabilidadController::class, 'updateGasto'])->name('cpanel.contabilidad.actualizar_gasto');
+    
+    // Listado de gastos
+    Route::get('/cpanel/contabilidad/listado/gastos', [ContabilidadController::class, 'listadoGastosContables'])->name('cpanel.contabilidad.lista_gastos');
+    // Eliminar gastos
+    Route::delete('/cpanel/contabilidad/eliminar/gasto/{id}', [ContabilidadController::class, 'eliminarGasto'])->name('cpanel.contabilidad.eliminar_gasto');
+
+    // Detalles de gasto
+    Route::get('/cpanel/contabilidad/detalle/gasto/{id}', [ContabilidadController::class, 'detalleGasto'])->name('cpanel.contabilidad.detalle_gasto');
+
+    // Update Comprobante
+    Route::post('/cpanel/contabilidad/upload/comprobante', [ContabilidadController::class, 'uploadComprobante'])->name('cpanel.contabilidad.upload_comprobante');
+    
+    // Listado de gastos por categoria
+    Route::get('/cpanel/contabilidad/listado/gastos/categoria', [ContabilidadController::class, 'listadoGastosCategoria'])->name('cpanel.contabilidad.gastos_categoria');
+
     // Ventas Diarias - Empleados
     Route::get('/cpanel/empleados/ventas', [EmpleadosController::class, 'listado_empleados'])->name('cpanel.empleados.ventas_diarias');
 

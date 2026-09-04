@@ -12,6 +12,7 @@ use App\Helpers\ParametrosFiltroFecha;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use App\Helpers\FileHelper;
 
 use App\Services\VentasService;
 
@@ -2466,14 +2467,7 @@ class ContabilidadController extends Controller
 
         // Reconstruir la colección con los datos modificados
         $ventasAgrupadasPorFecha = collect($ventasArray);
-
-        // Para ver el resultado agrupado
-        // dd($ventasAgrupadasPorFecha);
-
-        // return view('cpanel.contabilidad.cerrar_dia', [
-        //     'ventasAgrupadasPorFecha' => $ventasAgrupadasPorFecha
-        // ]);
-
+        
         return $ventasAgrupadasPorFecha;
     }
 
@@ -2542,5 +2536,801 @@ class ContabilidadController extends Controller
         $totales['total_bs_periodo'] = $totales['total_bs_facturados'] - $totales['total_egresos_bs'];
         
         return $totales;
+    }
+
+    public function registrarGastos(Request $request = null)
+    {
+        try {
+            Log::info('INICIO - ContabilidadController::registrarGastos');
+
+            session([
+                'menu_active' => 'Contabilidad',
+                'submenu_active' => 'Registrar Gastos'
+            ]);
+
+            // ================================================
+            // 1. OBTENER TASA DE CAMBIO DIARIA
+            // ================================================
+            $tasaCambio = DB::connection('sqlsrv')
+                ->table('DivisaValor')
+                ->orderBy('ID', 'desc')
+                ->first();
+
+            $tasaCambioId = $tasaCambio->ID ?? 0;
+            $tasaCambioValor = $tasaCambio->Valor ?? 0;
+
+            // ================================================
+            // 2. OBTENER SUCURSAL ACTIVA
+            // ================================================
+            $sucursalId = session('sucursal_id', 0);
+
+            // ================================================
+            // 3. OBTENER LISTA DE SUCURSALES
+            // ================================================
+            $sucursales = DB::connection('sqlsrv')
+                ->table('Sucursales')
+                ->where('EsActiva', 1)
+                ->select('ID', 'Nombre')
+                ->orderBy('Nombre')
+                ->get();
+
+            // ================================================
+            // 4. OBTENER LISTA DE CATEGORÍAS DE GASTOS
+            // ================================================
+            $categorias = DB::connection('sqlsrv')
+                ->table('CategoriaGastos')
+                ->where('EsActivo', 1)  // ✅ Columna correcta: 'EsActivo'
+                ->select('CategoriaId', 'Nombre')  // ✅ Columna correcta: 'CategoriaId'
+                ->orderBy('Nombre')
+                ->get();
+
+            // ================================================
+            // 5. CREAR OBJETO TRANSACCIONDTO
+            // ================================================
+            $transaccion = (object) [
+                'DivisaId' => $tasaCambioId,
+                'Fecha' => Carbon::now()->format('Y-m-d'),
+                'MontoAbonado' => 0,
+                'MontoDivisaAbonado' => 0,
+                'SucursalOrigenId' => $sucursalId,
+                'TasaDeCambio' => $tasaCambioValor,
+                'Tipo' => 5,
+                'Id' => 0
+            ];
+
+            Log::info('Formulario de gastos cargado', [
+                'tasa_cambio' => $tasaCambioValor,
+                'sucursal_id' => $sucursalId
+            ]);
+
+            return view('cpanel.contabilidad.registrar_gastos', [
+                'transaccion' => $transaccion,
+                'sucursales' => $sucursales,
+                'categorias' => $categorias,
+                'modo' => 'crear'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en ContabilidadController::registrarGastos: ' . $e->getMessage());
+            return back()->with('error', 'En estos momentos no es posible crear un nuevo gasto. Intente más tarde');
+        }
+    }
+
+    public function storeGasto(Request $request)
+    {
+        try {
+            Log::info('INICIO - ContabilidadController::storeGasto', $request->all());
+
+            $request->validate([
+                'fecha' => 'required|date',
+                'sucursal_id' => 'required|exists:Sucursales,ID',
+                'categoria_id' => 'required|exists:CategoriaGastos,CategoriaId',
+                'cedula' => 'nullable|string|max:20',
+                'nombre' => 'nullable|string|max:100',
+                'tasa_cambio' => 'required|numeric|min:0.01',
+                'monto_divisa' => 'required|numeric|min:0.01',
+                'monto_bs' => 'nullable|numeric|min:0',
+                'forma_pago' => 'required|integer',
+                'observacion' => 'nullable|string|max:500',
+                'comprobante' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120'
+            ]);
+
+            DB::connection('sqlsrv')->beginTransaction();
+
+            try {
+                $numeroOperacion = Carbon::now()->format('YmdHi') . '-' . $request->sucursal_id;
+
+                $existe = DB::connection('sqlsrv')
+                    ->table('Transacciones')
+                    ->where('NumeroOperacion', $numeroOperacion)
+                    ->exists();
+
+                if ($existe) {
+                    $numeroOperacion = Carbon::now()->format('YmdHi') . '-' . $request->sucursal_id . '-' . rand(1, 99);
+                }
+
+                $montoDivisa = $request->monto_divisa;
+                $montoBs = $request->monto_bs ?? ($montoDivisa * $request->tasa_cambio);
+
+                $sucursalOrigenId = session('sucursal_id', 8);
+
+                // ================================================
+                // PROCESAR COMPROBANTE
+                // ================================================
+                $urlComprobante = null;
+                if ($request->hasFile('comprobante')) {
+                    $file = $request->file('comprobante');
+                    $extension = $file->getClientOriginalExtension();
+                    $fileName = 'COMP' . date('YmdHi') . '-' . $request->sucursal_id . '.' . $extension;
+
+                    $environment = app()->environment();
+
+                    if ($environment === 'production') {
+                        $folder = 'images/comprobantes/';
+                        $physicalPath = base_path('public/' . $folder);
+                        if (!is_dir($physicalPath)) {
+                            mkdir($physicalPath, 0777, true);
+                        }
+                        $file->move($physicalPath, $fileName);
+                    } else {
+                        $folder = 'images/comprobantes/';
+                        $storagePath = 'public/' . $folder;
+                        if (!Storage::exists($storagePath)) {
+                            Storage::makeDirectory($storagePath, 0755, true);
+                        }
+                        Storage::putFileAs($storagePath, $file, $fileName);
+                    }
+
+                    $urlComprobante = $fileName;
+                }
+
+                $transaccionId = DB::connection('sqlsrv')->table('Transacciones')->insertGetId([
+                    'Descripcion' => 'GASTO',
+                    'MontoAbonado' => $montoBs,
+                    'MontoDivisaAbonado' => $montoDivisa,
+                    'NumeroOperacion' => $numeroOperacion,
+                    'DivisaId' => 0,
+                    'TasaDeCambio' => $request->tasa_cambio,
+                    'Tipo' => 2,
+                    'FormaDePago' => $request->forma_pago,
+                    'Estatus' => 2,
+                    'Fecha' => Carbon::parse($request->fecha),
+                    'UrlComprobante' => $urlComprobante,
+                    'SucursalOrigenId' => $sucursalOrigenId,
+                    'SucursalId' => $request->sucursal_id,
+                    'Observacion' => $request->observacion ?? '',
+                    'Nombre' => $request->nombre ?? '',
+                    'Cedula' => $request->cedula ?? '',
+                    'CategoriaId' => $request->categoria_id
+                ]);
+
+                Log::info('Gasto registrado exitosamente', [
+                    'transaccion_id' => $transaccionId,
+                    'numero_operacion' => $numeroOperacion,
+                    'comprobante' => $urlComprobante ?? 'Sin comprobante'
+                ]);
+
+                DB::connection('sqlsrv')->commit();
+
+                // ================================================
+                // OBTENER TASA DE CAMBIO ACTUAL
+                // ================================================
+                $tasaActual = DB::connection('sqlsrv')
+                    ->table('DivisaValor')
+                    ->orderBy('ID', 'desc')
+                    ->first();
+
+                $tasaCambioActual = $tasaActual->Valor ?? 0;
+
+                return redirect()->route('cpanel.contabilidad.lista_gastos')
+                    ->with('success', 'El gasto se ha registrado exitosamente. Número: ' . $numeroOperacion)
+                    ->with('tasa_cambio', $tasaCambioActual);
+
+            } catch (\Exception $e) {
+                DB::connection('sqlsrv')->rollBack();
+                Log::error('Error en transacción de gasto: ' . $e->getMessage());
+                throw $e;
+            }
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Por favor complete los datos necesarios para registrar el gasto');
+        } catch (\Exception $e) {
+            Log::error('Error en ContabilidadController::storeGasto: ' . $e->getMessage());
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'En estos momentos no es posible registrar el gasto. Intente más tarde');
+        }
+    }
+
+    public function editarGasto($id)
+    {
+        try {
+            Log::info('INICIO - ContabilidadController::editarGasto', ['id' => $id]);
+
+            session([
+                'menu_active' => 'Contabilidad',
+                'submenu_active' => 'Registrar Gastos'
+            ]);
+
+            // ================================================
+            // 1. OBTENER LA TRANSACCIÓN (GASTO)
+            // ================================================
+            $transaccion = DB::connection('sqlsrv')
+                ->table('Transacciones')
+                ->where('ID', $id)
+                ->first();
+
+            if (!$transaccion) {
+                return redirect()->route('cpanel.contabilidad.registrar_gastos')
+                    ->with('error', 'Gasto no encontrado');
+            }
+
+            // Procesar imagen con FileHelper
+            $imgSrc = null;
+            if ($transaccion->UrlComprobante) {
+                $imgSrc = FileHelper::getOrDownloadFile(
+                    'images/comprobantes/',
+                    $transaccion->UrlComprobante,
+                    'images/no-image.jpg'
+                );
+            }
+
+            // ================================================
+            // 2. OBTENER TASA DE CAMBIO DIARIA
+            // ================================================
+            $tasaCambio = DB::connection('sqlsrv')
+                ->table('DivisaValor')
+                ->orderBy('ID', 'desc')
+                ->first();
+
+            // ================================================
+            // 3. OBTENER SUCURSALES
+            // ================================================
+            $sucursales = DB::connection('sqlsrv')
+                ->table('Sucursales')
+                ->where('EsActiva', 1)
+                ->select('ID', 'Nombre')
+                ->orderBy('Nombre')
+                ->get();
+
+            // ================================================
+            // 4. OBTENER CATEGORÍAS DE GASTOS
+            // ================================================
+            $categorias = DB::connection('sqlsrv')
+                ->table('CategoriaGastos')
+                ->where('EsActivo', 1)  // ✅ Columna correcta: 'EsActivo'
+                ->select('CategoriaId', 'Nombre')  // ✅ Columna correcta: 'CategoriaId'
+                ->orderBy('Nombre')
+                ->get();
+
+            // ================================================
+            // 5. PREPARAR OBJETO PARA LA VISTA
+            // ================================================
+            $transaccion->Fecha = $transaccion->Fecha ? Carbon::parse($transaccion->Fecha)->format('Y-m-d') : Carbon::now()->format('Y-m-d');
+
+            Log::info('Gasto encontrado para editar', ['id' => $id]);
+
+            return view('cpanel.contabilidad.registrar_gastos', [
+                'transaccion' => $transaccion,
+                'sucursales' => $sucursales,
+                'categorias' => $categorias,
+                'modo' => 'editar', // Indicar que es edición
+                'imgSrc' => $imgSrc
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en ContabilidadController::editarGasto: ' . $e->getMessage());
+            return redirect()->route('cpanel.contabilidad.registrar_gastos')
+                ->with('error', 'Error al cargar el gasto para editar');
+        }
+    }
+
+    public function updateGasto(Request $request, $id)
+    {
+        try {
+            Log::info('INICIO - ContabilidadController::updateGasto', ['id' => $id, 'data' => $request->all()]);
+
+            $request->validate([
+                'fecha' => 'required|date',
+                'sucursal_id' => 'required|exists:Sucursales,ID',
+                'categoria_id' => 'required|exists:CategoriaGastos,CategoriaId',
+                'cedula' => 'nullable|string|max:20',
+                'nombre' => 'nullable|string|max:100',
+                'tasa_cambio' => 'required|numeric|min:0.01',
+                'monto_divisa' => 'required|numeric|min:0.01',
+                'monto_bs' => 'nullable|numeric|min:0',
+                'forma_pago' => 'required|integer',
+                'observacion' => 'nullable|string|max:500'
+            ]);
+
+            // Verificar que el gasto existe
+            $gasto = DB::connection('sqlsrv')
+                ->table('Transacciones')
+                ->where('ID', $id)
+                ->where('Tipo', 2)
+                ->first();
+
+            if (!$gasto) {
+                return redirect()->back()->with('error', 'Gasto no encontrado');
+            }
+
+            // Calcular montos
+            $montoDivisa = $request->monto_divisa;
+            $montoBs = $request->monto_bs ?? ($montoDivisa * $request->tasa_cambio);
+
+            $sucursalOrigenId = session('sucursal_id', 8);
+
+            // Actualizar transacción
+            DB::connection('sqlsrv')->table('Transacciones')
+                ->where('ID', $id)
+                ->update([
+                    'Descripcion' => 'GASTO',
+                    'MontoAbonado' => $montoBs,
+                    'MontoDivisaAbonado' => $montoDivisa,
+                    'TasaDeCambio' => $request->tasa_cambio,
+                    'FormaDePago' => $request->forma_pago,
+                    'Fecha' => Carbon::parse($request->fecha),
+                    'SucursalOrigenId' => $sucursalOrigenId,
+                    'SucursalId' => $request->sucursal_id,
+                    'Observacion' => $request->observacion ?? '',
+                    'Nombre' => $request->nombre ?? '',
+                    'Cedula' => $request->cedula ?? '',
+                    'CategoriaId' => $request->categoria_id,
+                    'Estatus' => 2 // Pagada (cuando se edita se mantiene pagada)
+                ]);
+
+            Log::info('Gasto actualizado exitosamente', ['id' => $id]);
+
+            return redirect()->route('cpanel.contabilidad.lista_gastos')
+                ->with('success', 'El gasto se ha actualizado exitosamente');
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Por favor complete los datos necesarios para actualizar el gasto');
+        } catch (\Exception $e) {
+            Log::error('Error en ContabilidadController::updateGasto: ' . $e->getMessage());
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Error al actualizar el gasto');
+        }
+    }
+
+    public function eliminarGasto($id)
+    {
+        try {
+            Log::info('INICIO - ContabilidadController::eliminarGasto', ['id' => $id]);
+
+            $existe = DB::connection('sqlsrv')
+                ->table('Transacciones')
+                ->where('ID', $id)
+                ->exists();
+
+            if (!$existe) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Gasto no encontrado'
+                ], 404);
+            }
+
+            DB::connection('sqlsrv')->table('Transacciones')
+                ->where('ID', $id)
+                ->delete();
+
+            Log::info('Gasto eliminado exitosamente', ['id' => $id]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Gasto eliminado exitosamente'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en ContabilidadController::eliminarGasto: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar el gasto'
+            ], 500);
+        }
+    }
+
+    public function listadoGastosContables(Request $request)
+    {
+        try {
+            Log::info('INICIO - ContabilidadController::listadoGastosContables');
+
+            // ================================================
+            // 1. ASIGNAR MENU ACTIVO
+            // Equivalente a: AsignarMenuActivo(MenuActivo.CUADRECAJA)
+            // ================================================
+            session([
+                'menu_active' => 'Contabilidad',
+                'submenu_active' => 'Listado Gastos'
+            ]);
+
+            // ================================================
+            // 2. OBTENER PARÁMETROS
+            // ================================================
+            $ttmnd = $request->input('ttmnd', 1); // 1 = Divisas, 0 = Bolívares
+            $fechaInicio = $request->input('fecha_inicio', Carbon::now()->startOfMonth()->format('Y-m-d'));
+            $fechaFin = $request->input('fecha_fin', Carbon::now()->format('Y-m-d'));
+            // $agruparGastos = $request->input('agrupar', false);
+
+            // ================================================
+            // 3. OBTENER SUCURSAL ACTIVA
+            // ================================================
+            $sucursalId = session('sucursal_id', 0);
+
+            // ================================================
+            // 4. BUSCAR LISTADO DE GASTOS
+            // Equivalente a: _transaccionService.BuscarGastos(SucursalActivaId, filtroFecha)
+            // ================================================
+            $listadoGastos = $this->buscarGastos($sucursalId, $fechaInicio, $fechaFin);
+
+            // ================================================
+            // 5. AGRUPAR POR CATEGORÍA (si aplica)
+            // Equivalente a: _transaccionService.AgruparCategoriaGastos()
+            // ================================================
+            // if ($agruparGastos) {
+            //     $listadoGastos = $this->agruparCategoriaGastos($listadoGastos);
+            // }
+
+            // ================================================
+            // 6. CALCULAR TOTALES
+            // ================================================
+            $totales = $this->calcularTotales($listadoGastos);
+
+            // ================================================
+            // 7. TIPO DE MONEDA
+            // ================================================
+            $verEnDivisas = ($ttmnd == 1);
+
+            Log::info('Listado de gastos cargado', [
+                'sucursal_id' => $sucursalId,
+                'total' => $listadoGastos->count(),
+                'fecha_inicio' => $fechaInicio,
+                'fecha_fin' => $fechaFin
+            ]);
+
+            return view('cpanel.contabilidad.listado_gastos', [
+                'listadoGastos' => $listadoGastos,
+                'totales' => $totales,
+                'verEnDivisas' => $verEnDivisas,
+                'fechaInicio' => $fechaInicio,
+                'fechaFin' => $fechaFin,
+                // 'agruparGastos' => $agruparGastos
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en listadoGastosContables: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar el listado de gastos');
+        }
+    }
+
+    private function buscarGastos($sucursalId, $fechaInicio, $fechaFin)
+    {
+        try {
+            $gastos = DB::connection('sqlsrv')
+                ->table('Transacciones as t')
+                ->leftJoin('CategoriaGastos as c', 't.CategoriaId', '=', 'c.CategoriaId')
+                ->where('t.Tipo', 2) // Gasto
+                // ->where('t.SucursalId', $sucursalId)
+                ->whereDate('t.Fecha', '>=', $fechaInicio)
+                ->whereDate('t.Fecha', '<=', $fechaFin)
+                ->select([
+                    't.ID',
+                    't.Descripcion',
+                    't.MontoAbonado',
+                    't.MontoDivisaAbonado',
+                    't.NumeroOperacion',
+                    't.TasaDeCambio',
+                    't.FormaDePago',
+                    't.Fecha',
+                    't.Observacion',
+                    't.Nombre',
+                    't.Cedula',
+                    't.CategoriaId',
+                    'c.Nombre as categoria_nombre'
+                ])
+                ->orderBy('t.Fecha', 'desc')
+                ->orderBy('t.ID', 'desc')
+                ->get();
+
+            // Formatear datos
+            $gastos->transform(function ($item) {
+                $item->FechaFormateada = $item->Fecha ? Carbon::parse($item->Fecha)->format('d/m/Y') : 'N/A';
+                $item->Hora = $item->Fecha ? Carbon::parse($item->Fecha)->format('h:i A') : 'N/A';
+                $item->MontoDivisaAbonado = (float) $item->MontoDivisaAbonado;
+                $item->MontoAbonado = (float) $item->MontoAbonado;
+                return $item;
+            });
+
+            return $gastos;
+
+        } catch (\Exception $e) {
+            Log::error('Error en buscarGastos: ' . $e->getMessage());
+            return collect();
+        }
+    }
+
+    private function agruparCategoriaGastos($listadoGastos)
+    {
+        try {
+            if ($listadoGastos->isEmpty()) {
+                return $listadoGastos;
+            }
+
+            // Agrupar por categoría
+            $grupos = $listadoGastos->groupBy('CategoriaId');
+
+            $nuevaLista = collect();
+
+            foreach ($grupos as $categoriaId => $items) {
+                $primerItem = $items->first();
+
+                $gastoAgrupado = (object) [
+                    'ID' => null,
+                    'CategoriaId' => $categoriaId,
+                    'categoria_nombre' => $primerItem->categoria_nombre ?? 'Sin categoría',
+                    'MontoDivisaAbonado' => $items->sum('MontoDivisaAbonado'),
+                    'MontoAbonado' => $items->sum('MontoAbonado'),
+                    'Fecha' => Carbon::now(),
+                    'FechaFormateada' => Carbon::now()->format('d/m/Y'),
+                    'NumeroOperacion' => 'AGRUPADO',
+                    'Descripcion' => 'Total ' . ($primerItem->categoria_nombre ?? 'Sin categoría'),
+                    'agrupado' => true
+                ];
+
+                $nuevaLista->push($gastoAgrupado);
+            }
+
+            // Ordenar por monto descendente
+            return $nuevaLista->sortByDesc('MontoDivisaAbonado')->values();
+
+        } catch (\Exception $e) {
+            Log::error('Error en agruparCategoriaGastos: ' . $e->getMessage());
+            return $listadoGastos;
+        }
+    }
+
+    private function calcularTotales($listadoGastos)
+    {
+        try {
+            return (object) [
+                'total_divisa' => $listadoGastos->sum('MontoDivisaAbonado'),
+                'total_bs' => $listadoGastos->sum('MontoAbonado'),
+                'cantidad' => $listadoGastos->count()
+            ];
+        } catch (\Exception $e) {
+            Log::error('Error en calcularTotales: ' . $e->getMessage());
+            return (object) ['total_divisa' => 0, 'total_bs' => 0, 'cantidad' => 0];
+        }
+    }
+
+    public function detalleGasto($id)
+    {
+        try {
+            Log::info('INICIO - ContabilidadController::detalleGasto', ['id' => $id]);
+
+            // ================================================
+            // 1. OBTENER EL GASTO
+            // ================================================
+            $gasto = DB::connection('sqlsrv')
+                ->table('Transacciones as t')
+                ->leftJoin('CategoriaGastos as c', 't.CategoriaId', '=', 'c.CategoriaId')
+                ->where('t.ID', $id)
+                ->where('t.Tipo', 2) // Gasto
+                ->select([
+                    't.ID',
+                    't.Descripcion',
+                    't.MontoAbonado',
+                    't.MontoDivisaAbonado',
+                    't.NumeroOperacion',
+                    't.TasaDeCambio',
+                    't.FormaDePago',
+                    't.Fecha',
+                    't.Observacion',
+                    't.Nombre',
+                    't.Cedula',
+                    't.CategoriaId',
+                    't.UrlComprobante',
+                    'c.Nombre as categoria_nombre'
+                ])
+                ->first();
+
+            if (!$gasto) {
+                return redirect()->route('cpanel.contabilidad.lista_gastos')
+                    ->with('error', 'Gasto no encontrado');
+            }
+
+            // ================================================
+            // 2. FORMATEAR DATOS
+            // ================================================
+            $gasto->FechaFormateada = $gasto->Fecha ? Carbon::parse($gasto->Fecha)->format('d/m/Y') : 'N/A';
+            $gasto->Hora = $gasto->Fecha ? Carbon::parse($gasto->Fecha)->format('h:i A') : 'N/A';
+
+            // Procesar imagen con FileHelper
+            $imgSrc = null;
+            if ($gasto->UrlComprobante) {
+                $imgSrc = FileHelper::getOrDownloadFile(
+                    'images/comprobantes/',
+                    $gasto->UrlComprobante,
+                    'images/no-image.jpg'
+                );
+            }
+
+            $formasPago = [
+                0 => 'Efectivo',
+                1 => 'Cheque',
+                2 => 'Depósito',
+                3 => 'Transferencia',
+                4 => 'Zelle',
+                5 => 'Paypal',
+                6 => 'Otro'
+            ];
+
+            $gasto->FormaDePagoTexto = $formasPago[$gasto->FormaDePago ?? 0] ?? 'N/A';
+
+            session([
+                'menu_active' => 'Contabilidad',
+                'submenu_active' => 'Listado Gastos'
+            ]);
+
+            return view('cpanel.contabilidad.detalle_gasto', [
+                'gasto' => $gasto,
+                'imgSrc' => $imgSrc
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en detalleGasto: ' . $e->getMessage());
+            return redirect()->route('cpanel.contabilidad.lista_gastos')
+                ->with('error', 'Error al cargar el detalle del gasto');
+        }
+    }
+
+    public function uploadComprobante(Request $request)
+    {
+        try {
+            $request->validate([
+                'id' => 'required|exists:Transacciones,ID',
+                'file' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120'
+            ]);
+
+            $id = $request->id;
+            $file = $request->file('file');
+
+            // Generar nombre del archivo
+            $extension = $file->getClientOriginalExtension();
+            $fileName = 'COMP' . date('YmdHi') . '-' . $id . '.' . $extension;
+
+            // Guardar archivo
+            $environment = app()->environment();
+
+            if ($environment === 'production') {
+                $folder = 'images/comprobantes/';
+                $physicalPath = base_path('public/' . $folder);
+                if (!is_dir($physicalPath)) {
+                    mkdir($physicalPath, 0777, true);
+                }
+                $file->move($physicalPath, $fileName);
+            } else {
+                $folder = 'images/comprobantes/';
+                $storagePath = 'public/' . $folder;
+                if (!Storage::exists($storagePath)) {
+                    Storage::makeDirectory($storagePath, 0755, true);
+                }
+                Storage::putFileAs($storagePath, $file, $fileName);
+            }
+
+            // Actualizar la transacción con la URL del comprobante
+            DB::connection('sqlsrv')->table('Transacciones')
+                ->where('ID', $id)
+                ->update([
+                    'UrlComprobante' => $fileName
+                ]);
+
+            Log::info('Comprobante subido exitosamente', ['id' => $id, 'archivo' => $fileName]);
+
+            return redirect()->back()->with('success', 'Comprobante subido exitosamente');
+
+        } catch (\Exception $e) {
+            Log::error('Error en uploadComprobante: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Error al subir el comprobante');
+        }
+    }
+
+    public function listadoGastosCategoria(Request $request)
+    {
+        try {
+            Log::info('INICIO - ContabilidadController::listadoGastosCategoria');
+
+            session([
+                'menu_active' => 'Contabilidad',
+                'submenu_active' => 'Gastos por Categoría'
+            ]);
+
+            // ================================================
+            // OBTENER PARÁMETROS DE FILTRO
+            // ================================================
+            $ttmnd = $request->input('ttmnd', 1);
+            $fechaInicio = $request->input('fecha_inicio', Carbon::now()->startOfMonth()->format('Y-m-d'));
+            $fechaFin = $request->input('fecha_fin', Carbon::now()->format('Y-m-d'));
+            $sucursalId = session('sucursal_id', 0);
+
+            // ================================================
+            // BUSCAR GASTOS PARA CATEGORÍAS (usa método separado)
+            // ================================================
+            $listadoGastos = $this->buscarGastosPorCategoria($sucursalId, $fechaInicio, $fechaFin);
+
+            // ================================================
+            // AGRUPAR POR CATEGORÍA
+            // ================================================
+            $gastosAgrupados = $this->agruparCategoriaGastos($listadoGastos);
+
+            // ================================================
+            // CALCULAR TOTALES
+            // ================================================
+            $totales = $this->calcularTotales($gastosAgrupados);
+            $verEnDivisas = ($ttmnd == 1);
+
+            return view('cpanel.contabilidad.listado_gastos_categoria', [
+                'listadoGastos' => $gastosAgrupados,
+                'totales' => $totales,
+                'verEnDivisas' => $verEnDivisas,
+                'fechaInicio' => $fechaInicio,
+                'fechaFin' => $fechaFin
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en listadoGastosCategoria: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar el listado de gastos por categoría');
+        }
+    }
+
+    private function buscarGastosPorCategoria($sucursalId, $fechaInicio, $fechaFin)
+    {
+        try {
+            $gastos = DB::connection('sqlsrv')
+                ->table('Transacciones as t')
+                ->leftJoin('CategoriaGastos as c', 't.CategoriaId', '=', 'c.CategoriaId')
+                ->whereIn('t.Tipo', [2, 3]) // Gasto y GastoCaja
+                // ->where('t.SucursalId', $sucursalId)
+                ->whereDate('t.Fecha', '>=', $fechaInicio)
+                ->whereDate('t.Fecha', '<=', $fechaFin)
+                ->select([
+                    't.ID',
+                    't.Descripcion',
+                    't.MontoAbonado',
+                    't.MontoDivisaAbonado',
+                    't.NumeroOperacion',
+                    't.TasaDeCambio',
+                    't.FormaDePago',
+                    't.Fecha',
+                    't.Observacion',
+                    't.Nombre',
+                    't.Cedula',
+                    't.CategoriaId',
+                    'c.Nombre as categoria_nombre'
+                ])
+                ->orderBy('t.Fecha', 'desc')
+                ->orderBy('t.ID', 'desc')
+                ->get();
+
+            // Formatear datos
+            $gastos->transform(function ($item) {
+                $item->FechaFormateada = $item->Fecha ? Carbon::parse($item->Fecha)->format('d/m/Y') : 'N/A';
+                $item->MontoDivisaAbonado = (float) $item->MontoDivisaAbonado;
+                $item->MontoAbonado = (float) $item->MontoAbonado;
+                $item->Observacion = $item->Observacion ?? '';
+                return $item;
+            });
+
+            return $gastos;
+
+        } catch (\Exception $e) {
+            Log::error('Error en buscarGastosPorCategoria: ' . $e->getMessage());
+            return collect();
+        }
     }
 }
