@@ -18,6 +18,7 @@ use App\Http\Controllers\ProveedoresController;
 use App\Http\Controllers\RecepcionesController;
 use App\Http\Controllers\DistribucionController;
 use App\Http\Controllers\InventarioController;
+use App\Http\Controllers\BancosController;
 
 /*
 |--------------------------------------------------------------------------
@@ -864,6 +865,26 @@ Route::middleware('auth')->group(function() {
     // Lista Historial de Facturas Servicios
     Route::get('/proveedor/servicios/historial/facturas', [ProveedoresController::class, 'listaHistorialFacturasServicios'])
         ->name('cpanel.proveedor.servicios.historial_facturas'); 
+
+    // Llamado a la vista para cargar Bancos
+    Route::get('/cpanel/bancos', [BancosController::class, 'mostrarBancos'])
+        ->name('cpanel.bancos.index');
+
+    Route::get('/cpanel/bancos/crear', [BancosController::class, 'crearBanco'])->name('cpanel.bancos.crear');
+    Route::post('/cpanel/bancos/guardar', [BancosController::class, 'guardarBanco'])->name('cpanel.bancos.guardar');
+    Route::get('/cpanel/bancos/detalle/{id}', [BancosController::class, 'detalleBanco'])->name('cpanel.bancos.detalle');
+    Route::get('/cpanel/bancos/editar/{id}', [BancosController::class, 'editarBanco'])->name('cpanel.bancos.editar');
+    Route::put('/cpanel/bancos/actualizar/{id}', [BancosController::class, 'actualizarBanco'])->name('cpanel.bancos.actualizar');
+
+    // Llamado a la vista para cargar Puntos de Ventas
+    Route::get('/cpanel/puntos', [BancosController::class, 'mostrarPuntos'])
+        ->name('cpanel.puntos.index');
+
+    Route::get('/cpanel/puntos/crear', [BancosController::class, 'crearPunto'])->name('cpanel.puntos.crear');
+    Route::post('/cpanel/puntos/guardar', [BancosController::class, 'guardarPunto'])->name('cpanel.puntos.guardar');
+    Route::get('/cpanel/puntos/detalle/{id}', [BancosController::class, 'detallePunto'])->name('cpanel.puntos.detalle');
+    Route::get('/cpanel/puntos/editar/{id}', [BancosController::class, 'editarPunto'])->name('cpanel.puntos.editar');
+    Route::put('/cpanel/puntos/actualizar/{id}', [BancosController::class, 'actualizarPunto'])->name('cpanel.puntos.actualizar');
 });
 
 

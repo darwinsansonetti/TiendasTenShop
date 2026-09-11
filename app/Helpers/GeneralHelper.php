@@ -1688,20 +1688,76 @@ class GeneralHelper
         // $fechaFin = now()->endOfDay();
 
         $fechaInicio = (clone $fechaFin)->subMonths(2)->startOfDay();
+        $fechaLimiteIngreso = (clone $fechaFin)->subMonths(2)->startOfDay();
 
         /*
         |--------------------------------------------------------------------------
         | 1️⃣ PRODUCTOS CON BAJA DEMANDA (TIENEN VENTAS)
         |--------------------------------------------------------------------------
         */
+        // $ventas = DB::table('VentaProductosView as v')
+        //     ->join('Productos as p', 'p.ID', '=', 'v.ProductoId')
+        //     ->join('Sucursales as s', 's.Id', '=', 'v.SucursalId')
+        //     ->where('v.Estatus', 1)
+        //     ->where('v.Existencia', '>', 0)
+        //     ->where('p.Codigo', '<>', 'SALDO')
+        //     ->whereBetween('v.Fecha', [$fechaInicio, $fechaFin])
+        //     ->whereNotIn('v.SucursalId', [6])
+        //     ->when($sucursalId != 0, fn ($q) =>
+        //         $q->where('v.SucursalId', $sucursalId)
+        //     )
+        //     ->groupBy(
+        //         'v.ProductoId',
+        //         'v.SucursalId',
+        //         'v.Existencia',
+        //         's.Nombre',
+        //         'p.Codigo',
+        //         'p.Descripcion',
+        //         'p.CostoDivisa',
+        //         'p.FechaCreacion',
+        //         'p.FechaActualizacion',
+        //         'v.PvpDivisa',
+        //         'v.PvpAnterior',
+        //         'v.NuevoPvp',
+        //         'v.FechaNuevoPrecio',
+        //         'v.FechaUltimaVenta',
+        //         'p.UrlFoto'
+        //     )
+        //     ->havingRaw('SUM(v.Cantidad) > 0')
+        //     ->havingRaw('SUM(v.Cantidad) <= (v.Existencia * 0.2)')
+        //     ->select(
+        //         'v.ProductoId',
+        //         'v.SucursalId',
+        //         's.Nombre as SucursalNombre',
+        //         DB::raw('SUM(v.Cantidad) as TotalUnidades'),
+        //         'v.Existencia',
+        //         'p.Codigo',
+        //         'p.Descripcion',
+        //         'p.CostoDivisa',
+        //         'p.FechaCreacion',
+        //         'p.FechaActualizacion',
+        //         'v.PvpDivisa',
+        //         'v.PvpAnterior',
+        //         'v.NuevoPvp',
+        //         'v.FechaNuevoPrecio',
+        //         'v.FechaUltimaVenta',
+        //         'p.UrlFoto'
+        //     )
+        //     ->get();
+
         $ventas = DB::table('VentaProductosView as v')
             ->join('Productos as p', 'p.ID', '=', 'v.ProductoId')
             ->join('Sucursales as s', 's.Id', '=', 'v.SucursalId')
+            ->join('ProductoSucursal as ps', function($join) {
+                $join->on('ps.ProductoId', '=', 'v.ProductoId')
+                    ->on('ps.SucursalId', '=', 'v.SucursalId');
+            })
             ->where('v.Estatus', 1)
             ->where('v.Existencia', '>', 0)
             ->where('p.Codigo', '<>', 'SALDO')
             ->where('p.Descripcion', '<>', 'SALDO')
             ->whereBetween('v.Fecha', [$fechaInicio, $fechaFin])
+            ->where('ps.FechaIngreso', '<=', $fechaLimiteIngreso) // ✅ NUEVO FILTRO
             ->whereNotIn('v.SucursalId', [6])
             ->when($sucursalId != 0, fn ($q) =>
                 $q->where('v.SucursalId', $sucursalId)
@@ -1721,6 +1777,7 @@ class GeneralHelper
                 'v.NuevoPvp',
                 'v.FechaNuevoPrecio',
                 'v.FechaUltimaVenta',
+                'ps.FechaIngreso', // ✅ Agregar al GROUP BY
                 'p.UrlFoto'
             )
             ->havingRaw('SUM(v.Cantidad) > 0')
@@ -1741,9 +1798,12 @@ class GeneralHelper
                 'v.NuevoPvp',
                 'v.FechaNuevoPrecio',
                 'v.FechaUltimaVenta',
+                'ps.FechaIngreso', // ✅ Agregar al SELECT
                 'p.UrlFoto'
             )
             ->get();
+
+            // dd($ventas);
 
         // ✅ FILTRAR PRIMERO por antigüedad (fecha más reciente >= 2 meses)
         $ventasFiltradas = $ventas->filter(function ($item) {

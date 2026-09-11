@@ -1044,6 +1044,34 @@
               </li>
 
               <!-- ========================================== -->
+              <!-- SECCIÓN: ENTIDADES BANCARIAS -->
+              <!-- ========================================== -->
+              <li class="nav-header">ENTIDADES BANCARIAS</li>
+
+              <li class="nav-item {{ session('menu_active') == 'Entidades Bancarias' ? 'menu-open' : '' }}">
+                  <a href="#" class="nav-link">
+                      <i class="nav-icon bi bi-building"></i>
+                      <p>Entidades Bancarias<i class="nav-arrow bi bi-chevron-right"></i></p>
+                  </a>
+                  <ul class="nav nav-treeview">
+                      <li class="nav-item">
+                          <a href="{{ route('cpanel.bancos.index') }}"
+                            class="nav-link {{ session('submenu_active') == 'Bancos' ? 'active' : '' }}">
+                              <i class="nav-icon bi bi-bank"></i>
+                              <p>Bancos</p>
+                          </a>
+                      </li>
+                      <li class="nav-item">
+                          <a href="{{ route('cpanel.puntos.index') }}"
+                            class="nav-link {{ session('submenu_active') == 'Puntos de Ventas' ? 'active' : '' }}">
+                              <i class="nav-icon bi bi-credit-card"></i>
+                              <p>Puntos de Ventas</p>
+                          </a>
+                      </li>
+                  </ul>
+              </li>
+
+              <!-- ========================================== -->
               <!-- SECCIÓN: PROCESOS AUTOMATIZADOS -->
               <!-- ========================================== -->
               <li class="nav-header">AUTOMATIZACIONES</li>
