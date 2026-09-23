@@ -76,9 +76,12 @@ class BancosController extends Controller
                 $item->EstatusBadge = $item->EsActivo == 1 ? 'success' : 'danger';
                 
                 // ✅ Ruta correcta: assets/img/bancos/
-                $item->LogoUrl = $item->Logo 
-                    ? asset('assets/img/bancos/' . $item->Logo) 
-                    : asset('assets/img/bancos/sinbanca.png');
+                // ✅ Procesar logo con FileHelper
+                $item->LogoUrl = FileHelper::getOrDownloadFile(
+                    'assets/img/bancos/',                           // Carpeta
+                    $item->Logo ?? '',                              // Archivo
+                    'assets/img/bancos/banco_default.png'           // Default
+                );
                 
                 return $item;
             });
@@ -125,21 +128,49 @@ class BancosController extends Controller
             ]);
 
             // ================================================
-            // 2. PROCESAR LOGO
+            // 2. PROCESAR LOGO CON DETECCIÓN DE ENTORNO
             // ================================================
             $logoName = null;
             if ($request->hasFile('logo')) {
                 $file = $request->file('logo');
                 $extension = $file->getClientOriginalExtension();
                 $logoName = 'banco_' . time() . '.' . $extension;
-                
-                $destinationPath = public_path('assets/img/bancos/');
-                
-                if (!is_dir($destinationPath)) {
-                    mkdir($destinationPath, 0777, true);
+
+                // DETECTAR ENTORNO
+                $environment = app()->environment();
+
+                if ($environment === 'production') {
+                    // ✅ PRODUCCIÓN - SmarterASP (usa public/)
+                    $folder = 'assets/img/bancos/';
+                    $physicalPath = base_path('public/' . $folder);
+
+                    if (!is_dir($physicalPath)) {
+                        mkdir($physicalPath, 0777, true);
+                    }
+
+                    $file->move($physicalPath, $logoName);
+
+                    Log::info('Logo guardado en producción', [
+                        'path' => $physicalPath,
+                        'filename' => $logoName
+                    ]);
+
+                } else {
+                    // ✅ LOCAL - storage/app/public/
+                    $folder = 'assets/img/bancos/';
+                    $storagePath = 'public/' . $folder;
+
+                    if (!Storage::exists($storagePath)) {
+                        Storage::makeDirectory($storagePath, 0755, true);
+                    }
+
+                    Storage::putFileAs($storagePath, $file, $logoName);
+
+                    Log::info('Logo guardado en local (storage)', [
+                        'path' => $storagePath,
+                        'filename' => $logoName
+                    ]);
                 }
-                
-                $file->move($destinationPath, $logoName);
             }
 
             // ================================================
@@ -195,9 +226,11 @@ class BancosController extends Controller
             // Formatear datos
             $banco->EstatusTexto = $banco->EsActivo == 1 ? 'Activo' : 'Inactivo';
             $banco->EstatusBadge = $banco->EsActivo == 1 ? 'success' : 'danger';
-            $banco->LogoUrl = $banco->Logo 
-                ? asset('assets/img/bancos/' . $banco->Logo) 
-                : asset('assets/img/bancos/sinbanca.png');
+            $banco->LogoUrl = FileHelper::getOrDownloadFile(
+                    'assets/img/bancos/',                           // Carpeta
+                    $banco->Logo ?? '',                              // Archivo
+                    'assets/img/bancos/banco_default.png'           // Default
+                );
 
             return view('cpanel.entidades_bancarias.detalle_banco', [
                 'banco' => $banco
@@ -233,9 +266,11 @@ class BancosController extends Controller
                     ->with('error', 'Banco no encontrado');
             }
 
-            $banco->LogoUrl = $banco->Logo 
-                ? asset('assets/img/bancos/' . $banco->Logo) 
-                : asset('assets/img/bancos/sinbanca.png');
+            $banco->LogoUrl = FileHelper::getOrDownloadFile(
+                    'assets/img/bancos/',                           // Carpeta
+                    $banco->Logo ?? '',                              // Archivo
+                    'assets/img/bancos/banco_default.png'           // Default
+                );
 
             return view('cpanel.entidades_bancarias.editar_banco', [
                 'banco' => $banco
@@ -282,27 +317,65 @@ class BancosController extends Controller
             }
 
             // ================================================
-            // 3. PROCESAR LOGO
+            // 3. PROCESAR LOGO CON DETECCIÓN DE ENTORNO
             // ================================================
             $logoName = $banco->Logo;
-            
+
             if ($request->hasFile('logo')) {
-                // Eliminar logo anterior si existe
-                if ($banco->Logo && file_exists(public_path('assets/img/bancos/' . $banco->Logo))) {
-                    unlink(public_path('assets/img/bancos/' . $banco->Logo));
-                }
-                
                 $file = $request->file('logo');
                 $extension = $file->getClientOriginalExtension();
                 $logoName = 'banco_' . time() . '.' . $extension;
-                
-                $destinationPath = public_path('assets/img/bancos/');
-                
-                if (!is_dir($destinationPath)) {
-                    mkdir($destinationPath, 0777, true);
+
+                $environment = app()->environment();
+
+                if ($environment === 'production') {
+                    // ✅ PRODUCCIÓN
+                    $folder = 'assets/img/bancos/';
+                    $physicalPath = base_path('public/' . $folder);
+
+                    if (!is_dir($physicalPath)) {
+                        mkdir($physicalPath, 0777, true);
+                    }
+
+                    // Eliminar logo anterior
+                    if ($banco->Logo) {
+                        $oldFilePath = $physicalPath . $banco->Logo;
+                        if (file_exists($oldFilePath)) {
+                            unlink($oldFilePath);
+                        }
+                    }
+
+                    $file->move($physicalPath, $logoName);
+
+                    Log::info('Logo actualizado en producción', [
+                        'path' => $physicalPath,
+                        'filename' => $logoName
+                    ]);
+
+                } else {
+                    // ✅ LOCAL - storage/app/public/
+                    $folder = 'assets/img/bancos/';
+                    $storagePath = 'public/' . $folder;
+
+                    if (!Storage::exists($storagePath)) {
+                        Storage::makeDirectory($storagePath, 0755, true);
+                    }
+
+                    // Eliminar logo anterior
+                    if ($banco->Logo) {
+                        $oldFile = $storagePath . $banco->Logo;
+                        if (Storage::exists($oldFile)) {
+                            Storage::delete($oldFile);
+                        }
+                    }
+
+                    Storage::putFileAs($storagePath, $file, $logoName);
+
+                    Log::info('Logo actualizado en local (storage)', [
+                        'path' => $storagePath,
+                        'filename' => $logoName
+                    ]);
                 }
-                
-                $file->move($destinationPath, $logoName);
             }
 
             // ================================================
@@ -318,7 +391,8 @@ class BancosController extends Controller
 
             Log::info('Banco actualizado exitosamente', [
                 'id' => $id,
-                'nombre' => $request->nombre
+                'nombre' => $request->nombre,
+                'logo' => $logoName
             ]);
 
             return redirect()->route('cpanel.bancos.index')

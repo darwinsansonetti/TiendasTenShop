@@ -181,9 +181,11 @@
                                                             <!-- Fila superior: Logo y nombre -->
                                                             <div class="d-flex align-items-center mb-2">
                                                                 <div class="flex-shrink-0">
-                                                                    <img src="{{ asset('assets/img/bancos/' . $pago->puntoDeVenta->banco->Logo) }}" 
-                                                                        alt="Logo" class="banco-logo-small me-2" 
-                                                                        style="width: 35px; height: 35px; object-fit: contain;">
+                                                                    <img src="{{ $pago->puntoDeVenta->banco->LogoUrl ?? asset('assets/img/bancos/banco_default.png') }}" 
+                                                                        alt="{{ $pago->puntoDeVenta->banco->Nombre ?? 'Banco' }}" 
+                                                                        class="banco-logo-small me-2" 
+                                                                        style="width: 35px; height: 35px; object-fit: contain;"
+                                                                        onerror="this.src='{{ asset('assets/img/bancos/banco_default.png') }}'">
                                                                 </div>
                                                                 <div class="flex-grow-1">
                                                                     <h6 class="mb-0 fw-bold text-truncate" style="font-size: 0.9rem;">

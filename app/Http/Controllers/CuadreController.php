@@ -35,6 +35,8 @@ use Illuminate\Support\Facades\Storage;
 use App\Enums\EnumTipoFiltroFecha; 
 use Illuminate\Support\Facades\Validator;
 
+use App\Helpers\FileHelper;
+
 class CuadreController extends Controller
 {   
 
@@ -132,6 +134,19 @@ class CuadreController extends Controller
             'pagosPuntoDeVenta.puntoDeVenta',
             'pagosPuntoDeVenta.puntoDeVenta.banco',
         ]);
+
+        // ✅ Procesar logos de bancos con FileHelper
+        if ($cierreDiario->pagosPuntoDeVenta) {
+            $cierreDiario->pagosPuntoDeVenta->each(function ($pagoPunto) {
+                if ($pagoPunto->puntoDeVenta && $pagoPunto->puntoDeVenta->banco) {
+                    $pagoPunto->puntoDeVenta->banco->LogoUrl = FileHelper::getOrDownloadFile(
+                        'assets/img/bancos/',
+                        $pagoPunto->puntoDeVenta->banco->Logo ?? '',
+                        'assets/img/bancos/banco_default.png'
+                    );
+                }
+            });
+        }
 
         // Realizar cálculos
         $totalPDV = $cierreDiario->pagosPuntoDeVenta->sum('Monto');
@@ -420,6 +435,19 @@ class CuadreController extends Controller
             // Obtener el modelo completo con relaciones (siempre por ID)
             $cierreCompleto = CierreDiario::with(['divisaValor', 'pagosPuntoDeVenta', 'pagosPuntoDeVenta.puntoDeVenta', 'pagosPuntoDeVenta.puntoDeVenta.banco'])
                 ->find($cierreId);
+
+            // ✅ Procesar logos de bancos con FileHelper
+            if ($cierreCompleto && $cierreCompleto->pagosPuntoDeVenta) {
+                $cierreCompleto->pagosPuntoDeVenta->each(function ($pagoPunto) {
+                    if ($pagoPunto->puntoDeVenta && $pagoPunto->puntoDeVenta->banco) {
+                        $pagoPunto->puntoDeVenta->banco->LogoUrl = FileHelper::getOrDownloadFile(
+                            'assets/img/bancos/',
+                            $pagoPunto->puntoDeVenta->banco->Logo ?? '',
+                            'assets/img/bancos/banco_default.png'
+                        );
+                    }
+                });
+            }
                 
             if (!$cierreCompleto) {
                 throw new \Exception('No se encontró el cierre diario con ID: ' . $cierreId);
@@ -617,7 +645,20 @@ class CuadreController extends Controller
             
             // Obtener el modelo completo con relaciones (siempre por ID)
             $cierreCompleto = CierreDiario::with(['divisaValor', 'pagosPuntoDeVenta', 'pagosPuntoDeVenta.puntoDeVenta', 'pagosPuntoDeVenta.puntoDeVenta.banco'])
-                ->find($cierreId);
+                ->find($cierreId);            
+
+            // ✅ Procesar logos de bancos con FileHelper
+            if ($cierreCompleto && $cierreCompleto->pagosPuntoDeVenta) {
+                $cierreCompleto->pagosPuntoDeVenta->each(function ($pagoPunto) {
+                    if ($pagoPunto->puntoDeVenta && $pagoPunto->puntoDeVenta->banco) {
+                        $pagoPunto->puntoDeVenta->banco->LogoUrl = FileHelper::getOrDownloadFile(
+                            'assets/img/bancos/',
+                            $pagoPunto->puntoDeVenta->banco->Logo ?? '',
+                            'assets/img/bancos/banco_default.png'
+                        );
+                    }
+                });
+            }
                 
             if (!$cierreCompleto) {
                 throw new \Exception('No se encontró el cierre diario con ID: ' . $cierreId);
@@ -902,6 +943,19 @@ class CuadreController extends Controller
 
             if (!$cierreCompleto) {
                 throw new \Exception('No se encontró el cierre diario con ID: ' . $cierreId);
+            }
+
+            // ✅ Procesar logos de bancos con FileHelper
+            if ($cierreCompleto && $cierreCompleto->pagosPuntoDeVenta) {
+                $cierreCompleto->pagosPuntoDeVenta->each(function ($pagoPunto) {
+                    if ($pagoPunto->puntoDeVenta && $pagoPunto->puntoDeVenta->banco) {
+                        $pagoPunto->puntoDeVenta->banco->LogoUrl = FileHelper::getOrDownloadFile(
+                            'assets/img/bancos/',
+                            $pagoPunto->puntoDeVenta->banco->Logo ?? '',
+                            'assets/img/bancos/banco_default.png'
+                        );
+                    }
+                });
             }
 
             // Obtenemos los gastos para mostrarlos

@@ -19,6 +19,7 @@ use App\Http\Controllers\RecepcionesController;
 use App\Http\Controllers\DistribucionController;
 use App\Http\Controllers\InventarioController;
 use App\Http\Controllers\BancosController;
+use App\Http\Controllers\BovedaController;
 
 /*
 |--------------------------------------------------------------------------
@@ -885,6 +886,27 @@ Route::middleware('auth')->group(function() {
     Route::get('/cpanel/puntos/detalle/{id}', [BancosController::class, 'detallePunto'])->name('cpanel.puntos.detalle');
     Route::get('/cpanel/puntos/editar/{id}', [BancosController::class, 'editarPunto'])->name('cpanel.puntos.editar');
     Route::put('/cpanel/puntos/actualizar/{id}', [BancosController::class, 'actualizarPunto'])->name('cpanel.puntos.actualizar');
+
+    //Boveda
+    Route::get('/cpanel/boveda', [BovedaController::class, 'index'])->name('cpanel.boveda.index');
+    Route::get('/cpanel/boveda/crear', [BovedaController::class, 'crear'])->name('cpanel.boveda.crear');
+    Route::post('/cpanel/boveda/guardar', [BovedaController::class, 'guardar'])->name('cpanel.boveda.guardar');
+    Route::get('/cpanel/boveda/detalle/{id}', [BovedaController::class, 'detalle'])->name('cpanel.boveda.detalle');
+    Route::post('/cpanel/boveda/cerrar/{id}', [BovedaController::class, 'cerrar'])->name('cpanel.boveda.cerrar');
+    Route::post('/cpanel/boveda/prestamo/guardar', [BovedaController::class, 'guardarPrestamo'])->name('cpanel.boveda.guardar_prestamo');
+    Route::post('/cpanel/boveda/prestamo/devolver/{id}', [BovedaController::class, 'devolverPrestamo'])->name('cpanel.boveda.devolver_prestamo');
+    Route::get('/cpanel/boveda/editar/{id}', [BovedaController::class, 'editar'])->name('cpanel.boveda.editar');
+    Route::put('/cpanel/boveda/actualizar/{id}', [BovedaController::class, 'actualizar'])->name('cpanel.boveda.actualizar');
+    Route::get('/cpanel/boveda/diferencias', [BovedaController::class, 'diferencias'])->name('cpanel.boveda.diferencias');
+
+    // Préstamos a Sucursal
+    Route::get('/cpanel/boveda/prestamos', [BovedaController::class, 'prestamos'])->name('cpanel.boveda.prestamos');
+    Route::get('/cpanel/boveda/prestamos/crear', [BovedaController::class, 'crearPrestamo'])->name('cpanel.boveda.crear_prestamo');
+    Route::post('/cpanel/boveda/prestamos/guardar', [BovedaController::class, 'guardarPrestamo'])->name('cpanel.boveda.guardar_prestamo');
+    Route::get('/cpanel/boveda/prestamos/detalle/{id}', [BovedaController::class, 'detallePrestamo'])->name('cpanel.boveda.detalle_prestamo');
+    Route::post('/cpanel/boveda/prestamos/devolver/{id}', [BovedaController::class, 'devolverPrestamo'])->name('cpanel.boveda.devolver_prestamo');
+
+    Route::get('/cpanel/boveda/consolidado', [BovedaController::class, 'consolidado'])->name('cpanel.boveda.consolidado');
 });
 
 

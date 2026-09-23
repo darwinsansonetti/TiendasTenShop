@@ -384,9 +384,10 @@
 
                                             <!-- LOGO DEL BANCO -->
                                             <img
-                                                src="{{ asset('assets/img/bancos/' . $PagoPunto->puntoDeVenta->banco->Logo) }}"
-                                                alt="{{ $PagoPunto->puntoDeVenta->banco->Nombre }}"
+                                                src="{{ $PagoPunto->puntoDeVenta->banco->LogoUrl ?? asset('assets/img/bancos/banco_default.png') }}"
+                                                alt="{{ $PagoPunto->puntoDeVenta->banco->Nombre ?? 'Banco' }}"
                                                 class="bank-logo-md"
+                                                onerror="this.src='{{ asset('assets/img/bancos/banco_default.png') }}'"
                                             >
 
                                             <span>

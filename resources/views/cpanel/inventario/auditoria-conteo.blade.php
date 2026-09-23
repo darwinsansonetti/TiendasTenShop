@@ -132,6 +132,23 @@
                 </div>
 
                 {{-- Tabla de productos con inputs --}}
+                {{-- Buscador --}}
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <div class="input-group">
+                            <span class="input-group-text" style="background:#f8fafc;border:1px solid #d1d5db;">
+                                <i class="bi bi-search"></i>
+                            </span>
+                            <input type="text" class="form-control" id="buscadorAuditoria"
+                                placeholder="Buscar por código..."
+                                style="font-size:0.85rem;padding:0.45rem 0.75rem;border:1px solid #d1d5db;">
+                        </div>
+                    </div>
+                    <div class="col-md-8 text-end">
+                        <span class="badge bg-secondary" id="totalProductosAuditoria">{{ count($detalles) }}</span>
+                        <span class="text-muted" style="font-size:0.85rem;">productos</span>
+                    </div>
+                </div>
                 <div class="table-responsive">
                     <table class="table table-bordered table-striped table-hover" id="tablaAuditoria">
                         <thead style="background:#f8fafc;">
@@ -171,7 +188,7 @@
                                 $productoId = $detalle->ProductoId;
                                 $detalleId = $detalle->InventarioDetalleId;
                             @endphp
-                            <tr id="fila-{{ $detalleId }}">
+                            <tr id="fila-{{ $detalleId }}" data-codigo="{{ strtoupper($detalle->Codigo ?? '') }}">
                                 <td class="text-center">
                                     <img src="{{ $imgSrc }}" 
                                          loading="lazy" 
@@ -279,6 +296,30 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
+// ============================================
+// ZOOM DE IMAGEN DE PRODUCTO
+// ============================================
+function zoomImagen(elemento) {
+    const imgFull = elemento.getAttribute('data-full-image');
+    const descripcion = elemento.getAttribute('data-description') || '';
+
+    Swal.fire({
+        title: descripcion,
+        imageUrl: imgFull,
+        imageAlt: descripcion,
+        imageWidth: 400,
+        imageHeight: 400,
+        showCloseButton: true,
+        showConfirmButton: false,
+        width: 'auto',
+        padding: '1rem',
+        background: '#fff',
+        customClass: {
+            image: 'img-fluid rounded shadow-sm'
+        }
+    });
+}
+
 // ============================================
 // CONFIRMAR FINALIZAR CONTEO
 // ============================================
@@ -556,6 +597,41 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+
+    // ============================================
+    // BUSCADOR EN TABLA DE AUDITORÍA
+    // ============================================
+    var buscadorAuditoria = document.getElementById('buscadorAuditoria');
+    var tablaAuditoria = document.getElementById('tablaAuditoria');
+
+    if (buscadorAuditoria && tablaAuditoria) {
+        buscadorAuditoria.addEventListener('keyup', function() {
+            var filter = this.value.toUpperCase().trim();
+            var rows = tablaAuditoria.querySelectorAll('tbody tr');
+            var visibles = 0;
+
+            rows.forEach(function(row) {
+                var codigo = (row.getAttribute('data-codigo') || '').toUpperCase();
+
+                // Si la fila no tiene data-codigo (ej: "No hay productos"), la ignoramos
+                if (!row.hasAttribute('data-codigo')) {
+                    return;
+                }
+
+                if (filter === '' || codigo.includes(filter)) {
+                    row.style.display = '';
+                    visibles++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            var totalBadge = document.getElementById('totalProductosAuditoria');
+            if (totalBadge) {
+                totalBadge.textContent = visibles;
+            }
+        });
+    }
 });
 </script>
 @endsection

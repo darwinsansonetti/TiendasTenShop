@@ -1072,6 +1072,40 @@
               </li>
 
               <!-- ========================================== -->
+              <!-- SECCIÓN: BÓVEDA -->
+              <!-- ========================================== -->
+              <li class="nav-header">BÓVEDA</li>
+              <li class="nav-item {{ session('menu_active') == 'Bóveda' ? 'menu-open' : '' }}">
+                  <a href="#" class="nav-link">
+                      <i class="nav-icon bi bi-safe"></i>
+                      <p>Bóveda<i class="nav-arrow bi bi-chevron-right"></i></p>
+                  </a>
+                  <ul class="nav nav-treeview">
+                      <li class="nav-item">
+                          <a href="{{ route('cpanel.boveda.consolidado') }}"
+                            class="nav-link {{ session('submenu_active') == 'Consolidado Bóveda' ? 'active' : '' }}">
+                              <i class="nav-icon bi bi-pie-chart"></i>
+                              <p>Bóveda</p>
+                          </a>
+                      </li>
+                      <li class="nav-item">
+                          <a href="{{ route('cpanel.boveda.index') }}"
+                            class="nav-link {{ session('submenu_active') == 'Cierre Diario Bóveda' ? 'active' : '' }}">
+                              <i class="nav-icon bi bi-clipboard-check"></i>
+                              <p>Cierre Diario Bóveda</p>
+                          </a>
+                      </li>
+                      <li class="nav-item">
+                          <a href="{{ route('cpanel.boveda.prestamos') }}"
+                            class="nav-link {{ session('submenu_active') == 'Préstamo a Sucursal' ? 'active' : '' }}">
+                              <i class="nav-icon bi bi-arrow-left-right"></i>
+                              <p>Préstamo a Sucursal</p>
+                          </a>
+                      </li>
+                  </ul>
+              </li>
+
+              <!-- ========================================== -->
               <!-- SECCIÓN: PROCESOS AUTOMATIZADOS -->
               <!-- ========================================== -->
               <li class="nav-header">AUTOMATIZACIONES</li>

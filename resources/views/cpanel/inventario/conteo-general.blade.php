@@ -657,10 +657,22 @@
                                     {{-- TAB 3: CON DIFERENCIAS --}}
                                     {{-- ========================================== --}}
                                     <div class="tab-pane fade" id="tabDiferencias" role="tabpanel">
-                                        <div class="d-flex justify-content-end mb-3">
-                                            <button class="btn btn-sm btn-orange" onclick="cargarDiferencias()">
-                                                <i class="bi bi-arrow-repeat me-1"></i> Ver productos
-                                            </button>
+                                        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                                            <div class="input-group" style="max-width:320px;">
+                                                <span class="input-group-text" style="background:#f8fafc;border:1px solid #d1d5db;">
+                                                    <i class="bi bi-search"></i>
+                                                </span>
+                                                <input type="text" class="form-control buscador-tabla" data-tabla="tablaDiferencias"
+                                                    placeholder="Buscar por código..."
+                                                    style="font-size:0.85rem;padding:0.45rem 0.75rem;border:1px solid #d1d5db;">
+                                            </div>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <span class="badge bg-secondary" id="totalDiferencias">0</span>
+                                                <span class="text-muted" style="font-size:0.85rem;">productos</span>
+                                                <button class="btn btn-sm btn-orange" onclick="cargarDiferencias()">
+                                                    <i class="bi bi-arrow-repeat me-1"></i> Ver productos
+                                                </button>
+                                            </div>
                                         </div>
                                         <div class="table-responsive">
                                             <table class="table table-bordered table-striped" id="tablaDiferencias">
@@ -694,10 +706,22 @@
                                     {{-- TAB 4: EXACTOS --}}
                                     {{-- ========================================== --}}
                                     <div class="tab-pane fade" id="tabExactos" role="tabpanel">
-                                        <div class="d-flex justify-content-end mb-3">
-                                            <button class="btn btn-sm btn-indigo" onclick="cargarExactos()">
-                                                <i class="bi bi-arrow-repeat me-1"></i> Ver productos
-                                            </button>
+                                        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                                            <div class="input-group" style="max-width:320px;">
+                                                <span class="input-group-text" style="background:#f8fafc;border:1px solid #d1d5db;">
+                                                    <i class="bi bi-search"></i>
+                                                </span>
+                                                <input type="text" class="form-control buscador-tabla" data-tabla="tablaExactos"
+                                                    placeholder="Buscar por código..."
+                                                    style="font-size:0.85rem;padding:0.45rem 0.75rem;border:1px solid #d1d5db;">
+                                            </div>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <span class="badge bg-secondary" id="totalExactos">0</span>
+                                                <span class="text-muted" style="font-size:0.85rem;">productos</span>
+                                                <button class="btn btn-sm btn-indigo" onclick="cargarExactos()">
+                                                    <i class="bi bi-arrow-repeat me-1"></i> Ver productos
+                                                </button>
+                                            </div>
                                         </div>
                                         <div class="table-responsive">
                                             <table class="table table-bordered table-striped" id="tablaExactos">
@@ -731,10 +755,22 @@
                                     {{-- TAB 5: NO VENDIBLES --}}
                                     {{-- ========================================== --}}
                                     <div class="tab-pane fade" id="tabNoVendibles" role="tabpanel">
-                                        <div class="d-flex justify-content-end mb-3">
-                                            <button class="btn btn-sm btn-danger" onclick="cargarNoVendibles()">
-                                                <i class="bi bi-arrow-repeat me-1"></i> Ver productos
-                                            </button>
+                                        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                                            <div class="input-group" style="max-width:320px;">
+                                                <span class="input-group-text" style="background:#f8fafc;border:1px solid #d1d5db;">
+                                                    <i class="bi bi-search"></i>
+                                                </span>
+                                                <input type="text" class="form-control buscador-tabla" data-tabla="tablaNoVendibles"
+                                                    placeholder="Buscar por código..."
+                                                    style="font-size:0.85rem;padding:0.45rem 0.75rem;border:1px solid #d1d5db;">
+                                            </div>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <span class="badge bg-secondary" id="totalNoVendibles">0</span>
+                                                <span class="text-muted" style="font-size:0.85rem;">productos</span>
+                                                <button class="btn btn-sm btn-danger" onclick="cargarNoVendibles()">
+                                                    <i class="bi bi-arrow-repeat me-1"></i> Ver productos
+                                                </button>
+                                            </div>
                                         </div>
                                         <div class="table-responsive">
                                             <table class="table table-bordered table-striped" id="tablaNoVendibles">
@@ -1044,6 +1080,8 @@ function cargarTablaConteo(tipo, nombreTabla) {
         resultado.forEach(obj => {
             var row = document.createElement('tr');
             var producto = obj.producto || {};
+            // ✅ Atributo para el buscador
+            row.setAttribute('data-codigo', (producto.codigo || '').toString().toUpperCase());
             var imgDefault = "{{ asset('assets/img/adminlte/img/produc_default.jfif') }}";
             
             var imgSrc = producto.thumbUrl || imgDefault;
@@ -1119,6 +1157,25 @@ function cargarTablaConteo(tipo, nombreTabla) {
             
             tbody.appendChild(row);
         });
+
+        // ✅ Actualizar badge contador
+        var badgeMap = {
+            'tablaDiferencias': 'totalDiferencias',
+            'tablaExactos': 'totalExactos',
+            'tablaNoVendibles': 'totalNoVendibles',
+            'tablaComparacion': null
+        };
+        var badgeId = badgeMap[nombreTabla];
+        if (badgeId) {
+            var badge = document.getElementById(badgeId);
+            if (badge) badge.textContent = resultado.length;
+        }
+
+        // ✅ Aplicar filtro actual si hay texto en el buscador
+        var inputBuscador = document.querySelector('.buscador-tabla[data-tabla="' + nombreTabla + '"]');
+        if (inputBuscador && inputBuscador.value.trim() !== '') {
+            inputBuscador.dispatchEvent(new Event('input'));
+        }
     })
     .catch(error => {
         Swal.close();
@@ -1743,6 +1800,50 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // ============================================
+    // BUSCADOR GENÉRICO PARA TABLAS DE TABS AJAX
+    // ============================================
+    document.querySelectorAll('.buscador-tabla').forEach(function(input) {
+        input.addEventListener('input', function() {
+            var tablaId = this.getAttribute('data-tabla');
+            var tabla = document.getElementById(tablaId);
+            if (!tabla) return;
+
+            var filter = this.value.toUpperCase().trim();
+            var rows = tabla.querySelectorAll('tbody tr');
+            var visibles = 0;
+
+            rows.forEach(function(row) {
+                // Saltar la fila de "No hay productos" (sin data-codigo)
+                var codigoAttr = row.getAttribute('data-codigo');
+                if (codigoAttr === null) {
+                    return;
+                }
+
+                var codigo = codigoAttr.toUpperCase();
+
+                if (filter === '' || codigo.includes(filter)) {
+                    row.style.display = '';
+                    visibles++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            // Actualizar badge contador
+            var badgeMap = {
+                'tablaDiferencias': 'totalDiferencias',
+                'tablaExactos': 'totalExactos',
+                'tablaNoVendibles': 'totalNoVendibles'
+            };
+            var badgeId = badgeMap[tablaId];
+            if (badgeId) {
+                var badge = document.getElementById(badgeId);
+                if (badge) badge.textContent = visibles;
+            }
+        });
+    });
 });
 </script>
 @endsection
