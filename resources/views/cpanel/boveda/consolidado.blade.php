@@ -108,6 +108,18 @@
                                     onclick="setRango('anio')">Este año</button>
                         </div>
                     </div>
+
+                    {{-- ✅ BOTONES DE EXPORTACIÓN --}}
+                    <div class="row mt-3">
+                        <div class="col-12 d-flex justify-content-end gap-2">
+                            <button type="button" class="btn btn-success btn-sm fw-semibold" onclick="exportarConsolidadoExcel()">
+                                <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
+                            </button>
+                            <button type="button" class="btn btn-danger btn-sm fw-semibold" onclick="exportarConsolidadoPDF()">
+                                <i class="bi bi-file-earmark-pdf me-1"></i>Exportar PDF
+                            </button>
+                        </div>
+                    </div>
                 </form>
             </div>
         </div>
@@ -796,9 +808,102 @@
     </div>
 </div>
 
+{{-- ================================================ --}}
+{{-- DATOS PARA EXPORTACIÓN (no afecta la vista) --}}
+{{-- ================================================ --}}
+@php
+    $exportData = [
+        'meta' => [
+            'titulo'      => 'Consolidado Bóveda',
+            'fechaInicio' => \Carbon\Carbon::parse($fechaInicio)->format('d/m/Y'),
+            'fechaFin'    => \Carbon\Carbon::parse($fechaFin)->format('d/m/Y'),
+            'sucursal'    => $sucursalId != ''
+                            ? ($sucursales->where('ID', $sucursalId)->first()->Nombre ?? 'Todas')
+                            : 'Todas las sucursales',
+            'generado'    => now()->format('d/m/Y H:i'),
+            'tasa'        => $tasaValor,
+        ],
+        'totales' => [
+            ['Concepto' => 'Total Divisas en Bóveda',     'Monto USD' => round($totalDivisas, 2),                  'Monto Bs' => null],
+            ['Concepto' => 'Total Bs. en Bóveda',          'Monto USD' => round($totalBsUSD, 2),                    'Monto Bs' => round($totalBs, 2)],
+            ['Concepto' => 'Préstamos Pendientes USD',     'Monto USD' => round($totalPrestamosPendientesUSD, 2),   'Monto Bs' => null],
+            ['Concepto' => 'Préstamos Pendientes Bs.',     'Monto USD' => null,                                     'Monto Bs' => round($totalPrestamosPendientesBs, 2)],
+            ['Concepto' => 'Disponible en Divisas',        'Monto USD' => round($disponibleDivisas, 2),             'Monto Bs' => null],
+            ['Concepto' => 'Disponible en Bolívares',      'Monto USD' => round($disponibleBsUSD, 2),               'Monto Bs' => round($disponibleBs, 2)],
+            ['Concepto' => 'Total Consolidado en Bs.',     'Monto USD' => round($totalConsolidadoBsUSDFinal, 2),    'Monto Bs' => round($totalConsolidadoBsFinal, 2)],
+        ],
+        'divisas' => $divisasPorDenominacion->map(fn($d) => [
+            'Denominación' => (float) $d->Denominacion,
+            'Contados'     => (int) $d->CantidadContada,
+            'Prestados'    => (int) $d->CantidadPrestada,
+            'Contado USD'  => round($d->MontoContado, 2),
+            'Neto USD'     => round($d->MontoNeto, 2),
+        ])->values(),
+        'bs' => $bsPorDenominacion->map(fn($d) => [
+            'Denominación' => (float) $d->Denominacion,
+            'Contados'     => (int) $d->CantidadContada,
+            'Prestados'    => (int) $d->CantidadPrestada,
+            'Contado Bs'   => round($d->MontoContado, 2),
+            'Contado USD'  => round($d->MontoContadoUSD, 2),
+            'Neto Bs'      => round($d->MontoNeto, 2),
+            'Neto USD'     => round($d->MontoNetoUSD, 2),
+        ])->values(),
+        'gastos' => $gastosPorCategoria->map(fn($g) => [
+            'Categoría' => $g->Categoria,
+            'Cantidad'  => (int) $g->Cantidad,
+            'Total USD' => round($g->TotalUSD, 2),
+            'Total Bs'  => round($g->TotalBs, 2),
+        ])->values(),
+        'pdv' => $puntosVentaTotales->map(fn($p) => [
+            'Sucursal'        => $p->sucursal_nombre ?? 'N/A',
+            'Punto de Venta'  => $p->pdv_descripcion,
+            'Código'          => $p->pdv_codigo ?? '',
+            'Banco'           => $p->banco_nombre ?? 'N/A',
+            'Sistema Bs'      => round($p->TotalSistema, 2),
+            'Sistema USD'     => round($p->TotalSistemaUSD, 2),
+            'Depositado Bs'   => round($p->TotalDepositado, 2),
+            'Depositado USD'  => round($p->TotalDepositadoUSD, 2),
+            'Diferencia Bs'   => round($p->TotalDiferencia, 2),
+            'Diferencia USD'  => round($p->TotalDiferenciaUSD, 2),
+        ])->values(),
+        'otros' => $otrosTotales->map(fn($o) => [
+            'Concepto'        => $o->TipoNombre,
+            'Moneda'          => $o->Moneda,
+            'Sistema'         => round($o->TotalSistema, 2),
+            'Sistema USD'     => round($o->TotalSistemaUSD, 2),
+            'Depositado'      => round($o->TotalDepositado, 2),
+            'Depositado USD'  => round($o->TotalDepositadoUSD, 2),
+            'Diferencia'      => round($o->TotalDiferencia, 2),
+            'Diferencia USD'  => round($o->TotalDiferenciaUSD, 2),
+        ])->values(),
+        'prestamos' => $prestamosPendientes->map(fn($p) => [
+            'Sucursal'       => $p->sucursal_nombre,
+            'Préstamos'      => (int) $p->CantidadPrestamos,
+            'Pendiente USD'  => round($p->TotalPendienteUSD, 2),
+            'Pendiente Bs'   => round($p->TotalPendienteBs, 2),
+        ])->values(),
+        'historial' => $historialBovedas->map(fn($b) => [
+            'ID'           => $b->BovedaId,
+            'Fecha'        => $b->FechaFormateada,
+            'Sucursal'     => $b->sucursal_nombre ?? 'N/A',
+            'Estatus'      => $b->EstatusTexto,
+            'Conciliación' => $b->ConciliacionTexto,
+        ])->values(),
+    ];
+@endphp
+
+<script>
+    window.CONSOLIDADO_DATA = @json($exportData);
+</script>
+
 @endsection
 
 @section('js')
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
 <script>
     function setRango(tipo) {
         const hoy = new Date();
@@ -849,6 +954,197 @@
             }
         });
     });
+
+    // ============================================
+    // EXPORTAR CONSOLIDADO A EXCEL (múltiples hojas)
+    // ============================================
+    function exportarConsolidadoExcel() {
+        try {
+            const D = window.CONSOLIDADO_DATA;
+            if (!D) {
+                Swal.fire({ icon: 'warning', title: 'Sin datos', text: 'No hay información para exportar' });
+                return;
+            }
+
+            const wb = XLSX.utils.book_new();
+            const meta = D.meta;
+
+            // ---------- Hoja RESUMEN ----------
+            const resumen = [
+                ['CONSOLIDADO BÓVEDA'],
+                ['Fecha Inicio', meta.fechaInicio, '', 'Fecha Fin', meta.fechaFin],
+                ['Sucursal', meta.sucursal],
+                ['Tasa de Cambio', meta.tasa],
+                ['Generado', meta.generado],
+                [],
+                ['TOTALES GENERALES'],
+                ['Concepto', 'Monto USD', 'Monto Bs'],
+                ...D.totales.map(t => [t.Concepto, t['Monto USD'], t['Monto Bs']]),
+            ];
+            const wsResumen = XLSX.utils.aoa_to_sheet(resumen);
+            wsResumen['!cols'] = [{ wch: 32 }, { wch: 18 }, { wch: 18 }];
+            XLSX.utils.book_append_sheet(wb, wsResumen, 'RESUMEN');
+
+            // Helper para agregar hoja desde array de objetos
+            const addSheet = (name, rows, colsWidths) => {
+                if (!rows || !rows.length) return;
+                const ws = XLSX.utils.json_to_sheet(rows);
+                if (colsWidths) ws['!cols'] = colsWidths.map(w => ({ wch: w }));
+                XLSX.utils.book_append_sheet(wb, ws, name);
+            };
+
+            addSheet('DIVISAS',   D.divisas,   [14, 12, 12, 16, 16]);
+            addSheet('BOLIVARES', D.bs,        [14, 12, 12, 16, 16, 16, 16]);
+            if (D.gastos.length)    addSheet('GASTOS',    D.gastos,    [30, 12, 16, 18]);
+            if (D.pdv.length)       addSheet('PDV',       D.pdv,       [20, 28, 14, 20, 14, 14, 14, 14, 14, 14]);
+            if (D.otros.length)     addSheet('OTROS',     D.otros,     [20, 10, 14, 14, 14, 14, 14, 14]);
+            if (D.prestamos.length) addSheet('PRESTAMOS', D.prestamos, [24, 12, 16, 18]);
+            addSheet('HISTORIAL', D.historial, [8, 12, 24, 12, 16]);
+
+            const fecha = new Date().toISOString().slice(0, 10);
+            XLSX.writeFile(wb, `consolidado_boveda_${fecha}.xlsx`);
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Excel generado',
+                text: 'Se exportaron todas las secciones',
+                timer: 2000,
+                showConfirmButton: false
+            });
+        } catch (e) {
+            console.error(e);
+            Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo generar el Excel: ' + e.message });
+        }
+    }
+
+    // ============================================
+    // EXPORTAR CONSOLIDADO A PDF
+    // ============================================
+    function exportarConsolidadoPDF() {
+        try {
+            const D = window.CONSOLIDADO_DATA;
+            if (!D) {
+                Swal.fire({ icon: 'warning', title: 'Sin datos', text: 'No hay información para exportar' });
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('landscape', 'mm', 'a4');
+            const meta = D.meta;
+            let y = 15;
+
+            // Encabezado
+            doc.setFontSize(16);
+            doc.setTextColor(124, 58, 237);
+            doc.text('CONSOLIDADO BÓVEDA', 14, y);
+            y += 8;
+            doc.setFontSize(9);
+            doc.setTextColor(80, 80, 80);
+            doc.text(`Período: ${meta.fechaInicio} al ${meta.fechaFin}`, 14, y); y += 5;
+            doc.text(`Sucursal: ${meta.sucursal}`, 14, y); y += 5;
+            doc.text(`Tasa de cambio: ${meta.tasa}`, 14, y); y += 5;
+            doc.text(`Generado: ${meta.generado}`, 14, y); y += 7;
+
+            // Helper de tabla
+            const addTable = (titulo, head, body, startY) => {
+                if (!body || !body.length) return startY;
+                doc.setFontSize(11);
+                doc.setTextColor(40, 40, 40);
+                doc.text(titulo, 14, startY);
+                doc.autoTable({
+                    head: [head],
+                    body: body,
+                    startY: startY + 3,
+                    theme: 'grid',
+                    headStyles: { fillColor: [124, 58, 237], textColor: 255, fontSize: 8, fontStyle: 'bold' },
+                    bodyStyles: { fontSize: 7.5, cellPadding: 1.5 },
+                    alternateRowStyles: { fillColor: [245, 245, 250] },
+                    margin: { left: 14, right: 14 },
+                });
+                return doc.lastAutoTable.finalY + 8;
+            };
+
+            // 1. Totales
+            y = addTable('TOTALES GENERALES',
+                ['Concepto', 'Monto USD', 'Monto Bs'],
+                D.totales.map(t => [t.Concepto, t['Monto USD'] ?? '-', t['Monto Bs'] ?? '-']),
+                y);
+
+            // 2. Divisas
+            y = addTable('DIVISAS POR DENOMINACIÓN',
+                ['Denominación', 'Contados', 'Prestados', 'Contado USD', 'Neto USD'],
+                D.divisas.map(d => [d['Denominación'], d['Contados'], d['Prestados'], d['Contado USD'], d['Neto USD']]),
+                y);
+
+            // 3. Bolívares
+            y = addTable('BOLÍVARES POR DENOMINACIÓN',
+                ['Denominación', 'Contados', 'Prestados', 'Contado Bs', 'Contado USD', 'Neto Bs', 'Neto USD'],
+                D.bs.map(d => [d['Denominación'], d['Contados'], d['Prestados'], d['Contado Bs'], d['Contado USD'], d['Neto Bs'], d['Neto USD']]),
+                y);
+
+            // 4. Gastos
+            if (D.gastos.length) {
+                y = addTable('GASTOS DEL PERÍODO',
+                    ['Categoría', 'Cantidad', 'Total USD', 'Total Bs'],
+                    D.gastos.map(g => [g['Categoría'], g['Cantidad'], g['Total USD'], g['Total Bs']]),
+                    y);
+            }
+
+            // 5. PDV
+            if (D.pdv.length) {
+                y = addTable('PUNTOS DE VENTA',
+                    ['Sucursal', 'PDV', 'Banco', 'Sistema Bs', 'Sistema USD', 'Depositado Bs', 'Diferencia Bs'],
+                    D.pdv.map(p => [p['Sucursal'], p['Punto de Venta'], p['Banco'], p['Sistema Bs'], p['Sistema USD'], p['Depositado Bs'], p['Diferencia Bs']]),
+                    y);
+            }
+
+            // 6. Otros
+            if (D.otros.length) {
+                y = addTable('OTROS CONCEPTOS',
+                    ['Concepto', 'Moneda', 'Sistema', 'Depositado', 'Diferencia'],
+                    D.otros.map(o => [o['Concepto'], o['Moneda'], o['Sistema'], o['Depositado'], o['Diferencia']]),
+                    y);
+            }
+
+            // 7. Préstamos
+            if (D.prestamos.length) {
+                y = addTable('PRÉSTAMOS PENDIENTES',
+                    ['Sucursal', 'Préstamos', 'Pendiente USD', 'Pendiente Bs'],
+                    D.prestamos.map(p => [p['Sucursal'], p['Préstamos'], p['Pendiente USD'], p['Pendiente Bs']]),
+                    y);
+            }
+
+            // 8. Historial
+            y = addTable('ÚLTIMOS CIERRES DE BÓVEDA',
+                ['ID', 'Fecha', 'Sucursal', 'Estatus', 'Conciliación'],
+                D.historial.map(h => [h['ID'], h['Fecha'], h['Sucursal'], h['Estatus'], h['Conciliación']]),
+                y);
+
+            // Footer de páginas
+            const totalPag = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= totalPag; i++) {
+                doc.setPage(i);
+                doc.setFontSize(7);
+                doc.setTextColor(120, 120, 120);
+                doc.text(`Página ${i} de ${totalPag}`, doc.internal.pageSize.width - 25, doc.internal.pageSize.height - 8);
+                doc.text('Consolidado Bóveda', 14, doc.internal.pageSize.height - 8);
+            }
+
+            const fecha = new Date().toISOString().slice(0, 10);
+            doc.save(`consolidado_boveda_${fecha}.pdf`);
+
+            Swal.fire({
+                icon: 'success',
+                title: 'PDF generado',
+                text: 'Se exportaron todas las secciones',
+                timer: 2000,
+                showConfirmButton: false
+            });
+        } catch (e) {
+            console.error(e);
+            Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo generar el PDF: ' + e.message });
+        }
+    }
 </script>
 @endsection
 

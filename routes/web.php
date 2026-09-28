@@ -907,6 +907,10 @@ Route::middleware('auth')->group(function() {
     Route::post('/cpanel/boveda/prestamos/devolver/{id}', [BovedaController::class, 'devolverPrestamo'])->name('cpanel.boveda.devolver_prestamo');
 
     Route::get('/cpanel/boveda/consolidado', [BovedaController::class, 'consolidado'])->name('cpanel.boveda.consolidado');
+
+    // Envio de Boveda por correo
+    Route::post('/cpanel/boveda/enviar-correo/{id}', [BovedaController::class, 'enviarPorCorreo'])
+    ->name('cpanel.boveda.enviar_correo');
 });
 
 
@@ -986,6 +990,18 @@ Route::get('/db-structure', function () {
     }
 
     return response()->json($output);
+});
+
+Route::get('/test-mail', function () {
+    try {
+        \Mail::raw('Test de correo desde Laravel Local con Gmail', function ($message) {
+            $message->to('sansonettidiazdarwinjose@gmail.com')
+                    ->subject('Test Laravel Local + Gmail');
+        });
+        return '✅ Correo enviado correctamente a sansonettidiazdarwinjose@gmail.com';
+    } catch (\Exception $e) {
+        return '❌ Error: ' . $e->getMessage();
+    }
 });
 
 // Obtener Views en BD Sql Server

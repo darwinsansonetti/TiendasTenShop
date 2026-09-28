@@ -3541,9 +3541,6 @@ class InventarioController extends Controller
         }
     }
 
-    /**
-     * Crear hoja AJUSTES
-     */
     private function crearHojaAjustes($spreadsheet, $inventario, $sucursal, $detalles)
     {
         $sheet = new Worksheet($spreadsheet, 'AJUSTES');
@@ -3554,30 +3551,59 @@ class InventarioController extends Controller
         $headers = ['CODIGO', 'CONTADO', 'INVERTIDO', 'SOLO', 'DAÑADO', 'VACIO', 'AJUSTE', 'CANTIDAD'];
         $this->agregarHeaders($sheet, $headers, 7);
 
-        $row = 8;
+        // 1. Calcular ajustes y quedarnos solo con los que aplican
+        $ajustes = [];
         foreach ($detalles as $detalle) {
             $contado = $detalle->CantidadContada ?? 0;
             $existencia = $detalle->Existencia ?? 0;
+            $pieSolo = $detalle->CantidadPieSolo ?? 0;
+            $pieInvertido = $detalle->CantidadPieInvertido ?? 0;
+            $danado = $detalle->CantidadPiezaDanada ?? 0;
+            $cajaVacia = $detalle->CantidadCajaVacia ?? 0;
+
             $diferencia = $contado - $existencia;
+            $piezasNoVendibles = $pieSolo + $pieInvertido + $danado + $cajaVacia;
 
-            // Solo mostrar productos que tienen diferencia
-            if ($diferencia != 0) {
-                $sheet->setCellValue('A' . $row, $detalle->Codigo ?? '');
-                $sheet->setCellValue('B' . $row, $contado);
-                $sheet->setCellValue('C' . $row, $detalle->CantidadPieInvertido ?? 0);
-                $sheet->setCellValue('D' . $row, $detalle->CantidadPieSolo ?? 0);
-                $sheet->setCellValue('E' . $row, $detalle->CantidadPiezaDanada ?? 0);
-                $sheet->setCellValue('F' . $row, $detalle->CantidadCajaVacia ?? 0);
-                $sheet->setCellValue('G' . $row, $diferencia < 0 ? 'Restar' : 'Sumar');
-                
-                // 🔥 Si es Restar, la cantidad es negativa; si es Sumar, positiva
-                $sheet->setCellValue('H' . $row, $diferencia < 0 ? $diferencia : abs($diferencia));
+            $ajuste = ($diferencia != 0) ? $diferencia : -$piezasNoVendibles;
 
-                $sheet->getStyle('A' . $row . ':H' . $row)->getBorders()->getAllBorders()
-                    ->setBorderStyle(Border::BORDER_THIN);
-
-                $row++;
+            if ($ajuste != 0) {
+                $ajustes[] = [
+                    'detalle' => $detalle,
+                    'contado' => $contado,
+                    'pieSolo' => $pieSolo,
+                    'pieInvertido' => $pieInvertido,
+                    'danado' => $danado,
+                    'cajaVacia' => $cajaVacia,
+                    'ajuste' => $ajuste,
+                ];
             }
+        }
+
+        // 2. Ordenar: primero Restar (negativos), luego Sumar (positivos)
+        usort($ajustes, function ($a, $b) {
+            // Los negativos van primero: -1 < 0 < 1
+            if ($a['ajuste'] == $b['ajuste']) {
+                return strcmp($a['detalle']->Codigo, $b['detalle']->Codigo); // desempate por código
+            }
+            return $a['ajuste'] <=> $b['ajuste'];
+        });
+
+        // 3. Pintar
+        $row = 8;
+        foreach ($ajustes as $item) {
+            $sheet->setCellValue('A' . $row, $item['detalle']->Codigo ?? '');
+            $sheet->setCellValue('B' . $row, $item['contado']);
+            $sheet->setCellValue('C' . $row, $item['pieInvertido']);
+            $sheet->setCellValue('D' . $row, $item['pieSolo']);
+            $sheet->setCellValue('E' . $row, $item['danado']);
+            $sheet->setCellValue('F' . $row, $item['cajaVacia']);
+            $sheet->setCellValue('G' . $row, $item['ajuste'] < 0 ? 'Restar' : 'Sumar');
+            $sheet->setCellValue('H' . $row, $item['ajuste']);
+
+            $sheet->getStyle('A' . $row . ':H' . $row)->getBorders()->getAllBorders()
+                ->setBorderStyle(Border::BORDER_THIN);
+
+            $row++;
         }
     }
 
@@ -3970,7 +3996,58 @@ class InventarioController extends Controller
         $sheet->getStyle('A' . $row . ':' . $lastColumn . $row)->getFill()
             ->setFillType(Fill::FILL_SOLID)
             ->getStartColor()->setARGB('FFE0E0E0');
-    }    
+    }   
+
+    /**
+     * Crear hoja AJUSTES
+     */
+    // private function crearHojaAjustes($spreadsheet, $inventario, $sucursal, $detalles)
+    // {
+    //     $sheet = new Worksheet($spreadsheet, 'AJUSTES');
+    //     $spreadsheet->addSheet($sheet);
+
+    //     $this->agregarEncabezadoInventario($sheet, $inventario, $sucursal);
+
+    //     $headers = ['CODIGO', 'CONTADO', 'INVERTIDO', 'SOLO', 'DAÑADO', 'VACIO', 'AJUSTE', 'CANTIDAD'];
+    //     $this->agregarHeaders($sheet, $headers, 7);
+
+    //     $row = 8;
+    //     foreach ($detalles as $detalle) {
+    //         $contado = $detalle->CantidadContada ?? 0;
+    //         $existencia = $detalle->Existencia ?? 0;
+    //         $pieSolo = $detalle->CantidadPieSolo ?? 0;
+    //         $pieInvertido = $detalle->CantidadPieInvertido ?? 0;
+    //         $danado = $detalle->CantidadPiezaDanada ?? 0;
+    //         $cajaVacia = $detalle->CantidadCajaVacia ?? 0;
+
+    //         $diferencia = $contado - $existencia;
+
+    //         // 🔥 FIX: incluir también productos con piezas no vendibles
+    //         $tieneAjuste = ($diferencia != 0) 
+    //                     || ($pieSolo != 0) 
+    //                     || ($pieInvertido != 0) 
+    //                     || ($danado != 0) 
+    //                     || ($cajaVacia != 0);
+
+    //         if ($tieneAjuste) {
+    //             $sheet->setCellValue('A' . $row, $detalle->Codigo ?? '');
+    //             $sheet->setCellValue('B' . $row, $contado);
+    //             $sheet->setCellValue('C' . $row, $detalle->CantidadPieInvertido ?? 0);
+    //             $sheet->setCellValue('D' . $row, $detalle->CantidadPieSolo ?? 0);
+    //             $sheet->setCellValue('E' . $row, $detalle->CantidadPiezaDanada ?? 0);
+    //             $sheet->setCellValue('F' . $row, $detalle->CantidadCajaVacia ?? 0);
+    //             $sheet->setCellValue('G' . $row, $diferencia < 0 ? 'Restar' : 'Sumar');
+                
+    //             // 🔥 Si es Restar, la cantidad es negativa; si es Sumar, positiva
+    //             $sheet->setCellValue('H' . $row, $diferencia < 0 ? $diferencia : abs($diferencia));
+
+    //             $sheet->getStyle('A' . $row . ':H' . $row)->getBorders()->getAllBorders()
+    //                 ->setBorderStyle(Border::BORDER_THIN);
+
+    //             $row++;
+    //         }
+    //     }
+    // } 
 
     // En el controlador, modifica el método monitorearConteo
     public function monitorearConteo($id)

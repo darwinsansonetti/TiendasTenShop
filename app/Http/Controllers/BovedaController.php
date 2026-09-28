@@ -8,6 +8,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
+use App\Mail\CierreBovedaMail;
+use Illuminate\Support\Facades\Mail;
+
 class BovedaController extends Controller
 {
     private $denominacionesDivisa = [1, 2, 5, 10, 20, 50, 100];
@@ -873,15 +876,32 @@ class BovedaController extends Controller
 
             $usuarioId = auth()->user()->id ?? null;
 
+            // 1. Actualizar estatus de la bóveda
             DB::connection('sqlsrv')->table('Boveda')->where('BovedaId', $id)->update([
                 'Estatus' => 1,
                 'FechaCierre' => Carbon::now(),
                 'UsuarioCierre' => $usuarioId
             ]);
 
-            return response()->json(['success' => true, 'message' => 'Bóveda cerrada exitosamente']);
+            Log::info('Bóveda cerrada', ['boveda_id' => $id]);
+
+            // 2. 🔥 Enviar correo automáticamente
+            $correoEnviado = $this->enviarCorreoCierreBoveda($id);
+
+            // 3. Responder (independientemente de si el correo se envió)
+            $mensaje = 'Bóveda cerrada exitosamente';
+            if (!$correoEnviado) {
+                $mensaje .= ' (el correo no pudo enviarse, revise el log)';
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => $mensaje,
+                'correo_enviado' => $correoEnviado
+            ]);
 
         } catch (\Exception $e) {
+            Log::error('Error en cerrar: ' . $e->getMessage());
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
@@ -2265,6 +2285,132 @@ class BovedaController extends Controller
         } catch (\Exception $e) {
             Log::error('Error en BovedaController::consolidado: ' . $e->getMessage());
             return back()->with('error', 'Error al cargar el consolidado: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Envía el cierre de bóveda por correo (uso interno).
+     * No devuelve JSON, solo envía o loguea el error.
+     */
+    private function enviarCorreoCierreBoveda($id)
+    {
+        try {
+            Log::info('INICIO - enviarCorreoCierreBoveda', ['boveda_id' => $id]);
+
+            // Buscar la bóveda
+            $boveda = DB::connection('sqlsrv')
+                ->table('Boveda as b')
+                ->leftJoin('Sucursales as s', 'b.SucursalId', '=', 's.ID')
+                ->leftJoin('DivisaValor as dv', 'b.DivisaValorId', '=', 'dv.ID')
+                ->where('b.BovedaId', $id)
+                ->select(['b.*', 's.Nombre as sucursal_nombre', 'dv.Valor as tasa_cambio'])
+                ->first();
+
+            if (!$boveda) {
+                Log::warning('enviarCorreoCierreBoveda: bóveda no encontrada', ['id' => $id]);
+                return false;
+            }
+
+            // Denominaciones
+            $denominacionesDivisa = DB::connection('sqlsrv')
+                ->table('BovedaDenominacionDivisa as bdd')
+                ->leftJoin('Sucursales as s', 'bdd.SucursalId', '=', 's.ID')
+                ->where('bdd.BovedaId', $id)
+                ->select(['bdd.*', 's.Nombre as sucursal_nombre'])
+                ->get();
+
+            $denominacionesBs = DB::connection('sqlsrv')
+                ->table('BovedaDenominacionBs as bdb')
+                ->leftJoin('Sucursales as s', 'bdb.SucursalId', '=', 's.ID')
+                ->where('bdb.BovedaId', $id)
+                ->select(['bdb.*', 's.Nombre as sucursal_nombre'])
+                ->get();
+
+            // Conciliación PDV
+            $conciliacionPDV = DB::connection('sqlsrv')
+                ->table('BovedaConciliacionPDV as bcp')
+                ->leftJoin('Sucursales as s', 'bcp.SucursalId', '=', 's.ID')
+                ->leftJoin('PuntosDeVenta as pdv', 'bcp.PuntoDeVentaId', '=', 'pdv.PuntoDeVentaId')
+                ->leftJoin('Bancos as b', 'pdv.BancoId', '=', 'b.ID')
+                ->where('bcp.BovedaId', $id)
+                ->select([
+                    'bcp.*',
+                    's.Nombre as sucursal_nombre',
+                    'pdv.Descripcion as pdv_descripcion',
+                    'pdv.Codigo as pdv_codigo',
+                    'b.Nombre as banco_nombre'
+                ])
+                ->get();
+
+            // Conciliación Otros
+            $conciliacionOtros = DB::connection('sqlsrv')
+                ->table('BovedaConciliacionOtros as bco')
+                ->leftJoin('Sucursales as s', 'bco.SucursalId', '=', 's.ID')
+                ->where('bco.BovedaId', $id)
+                ->select(['bco.*', 's.Nombre as sucursal_nombre'])
+                ->get()
+                ->map(function ($item) {
+                    $tipos = [
+                        1 => 'Biopago',
+                        2 => 'Transferencia',
+                        3 => 'Cashea',
+                        4 => 'Zelle'
+                    ];
+                    $item->TipoNombre = $tipos[$item->Tipo] ?? 'Otro';
+                    return $item;
+                });
+
+            // Conciliación Efectivo
+            $conciliacionEfectivo = DB::connection('sqlsrv')
+                ->table('BovedaConciliacionEfectivo as bce')
+                ->leftJoin('Sucursales as s', 'bce.SucursalId', '=', 's.ID')
+                ->where('bce.BovedaId', $id)
+                ->select(['bce.*', 's.Nombre as sucursal_nombre'])
+                ->get();
+
+            // Totales
+            $totales = [
+                'divisas'        => $denominacionesDivisa->sum('MontoTotal'),
+                'bs'             => $denominacionesBs->sum('MontoTotal'),
+                'pdv_sistema'    => $conciliacionPDV->sum('MontoSistema'),
+                'pdv_depositado' => $conciliacionPDV->sum('MontoDepositado'),
+                'pdv_diferencia' => $conciliacionPDV->sum('MontoSistema') - $conciliacionPDV->sum('MontoDepositado'),
+            ];
+
+            // 🔹 Destinatarios: desde .env o fallback
+            $destinatariosStr = env('BOVEDA_DESTINATARIOS', '');
+            $destinatarios = array_filter(array_map('trim', explode(',', $destinatariosStr)));
+
+            if (empty($destinatarios)) {
+                Log::warning('enviarCorreoCierreBoveda: no hay destinatarios configurados');
+                return false;
+            }
+
+            // Enviar correo
+            Mail::to($destinatarios)
+                ->send(new CierreBovedaMail(
+                    $boveda,
+                    $denominacionesDivisa,
+                    $denominacionesBs,
+                    $conciliacionPDV,
+                    $conciliacionOtros,
+                    $conciliacionEfectivo,
+                    $totales
+                ));
+
+            Log::info('Correo enviado correctamente', [
+                'boveda_id' => $id,
+                'destinatarios' => $destinatarios
+            ]);
+
+            return true;
+
+        } catch (\Exception $e) {
+            Log::error('Error al enviar correo de cierre de bóveda: ' . $e->getMessage(), [
+                'boveda_id' => $id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return false;
         }
     }
 }
