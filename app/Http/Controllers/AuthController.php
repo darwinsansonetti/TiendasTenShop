@@ -7,42 +7,124 @@ use App\Models\AspNetUser;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class AuthController extends Controller
 {
+    // public function login(Request $request)
+    // {
+    //     $request->validate([
+    //         'email' => 'required|string|email',
+    //         'password' => 'required|string'
+    //     ]);
+
+    //     // Buscar usuario por email
+    //     $user = AspNetUser::where('Email', $request->email)->first();
+
+    //     if (!$user) {
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'El email no está registrado'
+    //         ]);
+    //     }
+
+    //     // Verificar la contraseña usando Hash::check con PasswordV2
+    //     if (!$user->Password || !Hash::check($request->password, $user->Password)) {
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Contraseña incorrecta'
+    //         ]);
+    //     }
+
+    //     // Iniciar sesión
+    //     Auth::login($user);
+
+    //     // Retornar mensaje sin redirigir
+    //     return response()->json([
+    //         'success' => true,
+    //         'message' => 'Bienvenido ' . $user->NombreCompleto
+    //     ]);
+    // }
+
     public function login(Request $request)
     {
         $request->validate([
-            'email' => 'required|string|email',
+            'email'    => 'required|string|email',
             'password' => 'required|string'
         ]);
 
-        // Buscar usuario por email
-        $user = AspNetUser::where('Email', $request->email)->first();
+        try {
+            // 1. Buscar usuario por email
+            $user = AspNetUser::where('Email', $request->email)->first();
 
-        if (!$user) {
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El email no está registrado'
+                ]);
+            }
+
+            // 2. Verificar si el usuario está activo
+            if (isset($user->EsActivo) && $user->EsActivo == 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El usuario está inactivo. Contacte al administrador.'
+                ]);
+            }
+
+            // 3. Verificar el campo Password
+            if (empty($user->Password)) {
+                // Primera vez: no tiene password en Laravel
+                // Se guarda el hash del password que ingresó
+                $user->Password = Hash::make($request->password);
+                $user->save();
+
+            } else {
+                // Ya tiene password: validar
+                if (!Hash::check($request->password, $user->Password)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Contraseña incorrecta'
+                    ]);
+                }
+            }
+
+            // 4. Obtener los roles del usuario
+            $roles = DB::connection('sqlsrv')
+                ->table('AspNetUserRoles as ur')
+                ->join('AspNetRoles as r', 'ur.RoleId', '=', 'r.Id')
+                ->where('ur.UserId', $user->Id)
+                ->pluck('r.Name')
+                ->map(fn($r) => trim($r))
+                ->toArray();
+
+            // 5. Determinar si es MASTER
+            $esMaster = in_array('MASTER', $roles);
+
+            // 6. Iniciar sesión
+            Auth::login($user);
+
+            // 7. Determinar redirect
+            $redirectUrl = $esMaster
+                ? route('cpanel.dashboard')      // MASTER → dashboard
+                : route('pago.movil.publico');   // Otros → formulario de verificación
+
+            return response()->json([
+                'success'   => true,
+                'message'   => 'Bienvenido ' . $user->NombreCompleto,
+                'es_master' => $esMaster,
+                'roles'     => $roles,
+                'redirect'  => $redirectUrl,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error login: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'El email no está registrado'
+                'message' => 'Error al iniciar sesión. Intente nuevamente.'
             ]);
         }
-
-        // Verificar la contraseña usando Hash::check con PasswordV2
-        if (!$user->Password || !Hash::check($request->password, $user->Password)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Contraseña incorrecta'
-            ]);
-        }
-
-        // Iniciar sesión
-        Auth::login($user);
-
-        // Retornar mensaje sin redirigir
-        return response()->json([
-            'success' => true,
-            'message' => 'Bienvenido ' . $user->NombreCompleto
-        ]);
     }
 
     // Recuperar password
