@@ -1068,6 +1068,20 @@
                               <p>Puntos de Ventas</p>
                           </a>
                       </li>
+                      <li class="nav-item">
+                          <a href="{{ route('cpanel.configuracion.pago.movil') }}"
+                            class="nav-link {{ session('submenu_active') == 'Configuracion - Pago Movil' ? 'active' : '' }}">
+                              <i class="nav-icon bi bi-credit-card"></i>
+                              <p>Configuracion - Pago Movil</p>
+                          </a>
+                      </li>
+                      <li class="nav-item">
+                          <a href="{{ route('cpanel.pago.movil.index') }}"
+                            class="nav-link {{ session('submenu_active') == 'Pago Movil' ? 'active' : '' }}">
+                              <i class="nav-icon bi bi-credit-card"></i>
+                              <p>Pago Movil</p>
+                          </a>
+                      </li>
                   </ul>
               </li>
 

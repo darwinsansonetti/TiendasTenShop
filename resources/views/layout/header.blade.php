@@ -358,8 +358,10 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
         showToastWithIcon(data.message, 'success');
 
         // Redirigir después de 2 segundos
+        const redirectUrl = data.redirect || "{{ route('cpanel.dashboard') }}";
+
         setTimeout(() => { 
-            window.location.href = "{{ route('cpanel.dashboard') }}";
+            window.location.href = redirectUrl;
         }, 500);
 
     } catch (err) {

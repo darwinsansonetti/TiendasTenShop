@@ -911,8 +911,52 @@ Route::middleware('auth')->group(function() {
     // Envio de Boveda por correo
     Route::post('/cpanel/boveda/enviar-correo/{id}', [BovedaController::class, 'enviarPorCorreo'])
     ->name('cpanel.boveda.enviar_correo');
-});
 
+    // Verificacion de Pago Movil
+    Route::get('/cpanel/pago/movil/verify', [BancosController::class, 'verifyPagoMovil'])
+    ->name('cpanel.pago.movil.index');
+
+    Route::get('/cpanel/pago/movil/verificar', [BancosController::class, 'formVerificarPagoMovil'])
+        ->name('cpanel.pago.movil.form');
+
+    Route::get('/cpanel/pago/movil/detalle/{id}', [BancosController::class, 'detallePagoMovil'])
+        ->name('cpanel.pago.movil.detalle');
+
+    Route::post('/cpanel/pago/movil/consultar', [BancosController::class, 'consultarPagoMovil'])
+    ->name('cpanel.pago.movil.consultar');
+
+    // Configuración Pago Móvil (CRUD)
+    Route::get('/cpanel/pago/movil/config', [BancosController::class, 'configuracionPagoMovil'])
+        ->name('cpanel.configuracion.pago.movil');
+
+    Route::get('/cpanel/pago/movil/config/create', [BancosController::class, 'crearConfiguracionPagoMovil'])
+        ->name('cpanel.configuracion.pago.movil.create');
+
+    Route::post('/cpanel/pago/movil/config', [BancosController::class, 'guardarConfiguracionPagoMovil'])
+        ->name('cpanel.configuracion.pago.movil.store');
+
+    Route::get('/cpanel/pago/movil/config/{id}/edit', [BancosController::class, 'editarConfiguracionPagoMovil'])
+        ->name('cpanel.configuracion.pago.movil.edit');
+
+    Route::put('/cpanel/pago/movil/config/{id}', [BancosController::class, 'actualizarConfiguracionPagoMovil'])
+        ->name('cpanel.configuracion.pago.movil.update');
+
+    Route::post('/cpanel/pago/movil/config/{id}/toggle', [BancosController::class, 'toggleConfiguracionPagoMovil'])
+        ->name('cpanel.configuracion.pago.movil.toggle');
+
+    Route::delete('/cpanel/pago/movil/config/{id}', [BancosController::class, 'eliminarConfiguracionPagoMovil'])
+        ->name('cpanel.configuracion.pago.movil.destroy');
+
+    // ============================================
+    // RUTAS TEMPORALES - PAGO MÓVIL
+    // (Eliminar cuando se termine de probar)
+    // ============================================
+    Route::get('/pago-movil-publico', [BancosController::class, 'formPublicoPagoMovil'])
+        ->name('pago.movil.publico');
+
+    Route::post('/pago-movil-publico/consultar', [BancosController::class, 'consultarPagoMovilPublico'])
+        ->name('pago.movil.publico.consultar');
+});
 
 
 // Prueba de conexion con la BD
