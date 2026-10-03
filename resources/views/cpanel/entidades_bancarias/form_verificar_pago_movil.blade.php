@@ -134,8 +134,8 @@
                                     <label class="form-label fw-semibold" style="font-size:0.85rem;">
                                         Monto (Bs.) <span class="text-danger">*</span>
                                     </label>
-                                    <input type="number" step="0.01" min="0.01" name="importe" class="form-control"
-                                           placeholder="Ej: 120.00" required>
+                                    <input type="text" inputmode="numeric" name="importe" id="importe" class="form-control"
+                                        placeholder="0.00" value="0.00" required>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label fw-semibold" style="font-size:0.85rem;">
@@ -213,6 +213,40 @@
 @section('js')
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
+// ============================================
+// FORMATEO TIPO CAJA REGISTRADORA
+// ============================================
+const inputImporte = document.getElementById('importe');
+let centavos = 0;
+
+inputImporte.addEventListener('input', function(e) {
+    const soloDigitos = this.value.replace(/\D/g, '');
+    centavos = soloDigitos ? parseInt(soloDigitos, 10) : 0;
+
+    if (centavos > 99999999999) {
+        centavos = 99999999999;
+    }
+
+    this.value = formatearMonto(centavos);
+});
+
+inputImporte.addEventListener('focus', function() {
+    this.select();
+});
+
+inputImporte.addEventListener('blur', function() {
+    if (!this.value || this.value === '0.00' || this.value === '0,00') {
+        centavos = 0;
+        this.value = '0.00';
+    }
+});
+
+function formatearMonto(centavos) {
+    const entero  = Math.floor(centavos / 100);
+    const decimal = (centavos % 100).toString().padStart(2, '0');
+    return entero + '.' + decimal;
+}
+
 document.getElementById('SucursalPagoMovilId').addEventListener('change', function() {
     const opt = this.options[this.selectedIndex];
     document.getElementById('rifDestino').value = opt.dataset.rif || '';
@@ -237,6 +271,16 @@ document.getElementById('formPagoMovil').addEventListener('submit', async functi
         return;
     }
 
+    // Validar monto antes de continuar
+    if (centavos < 1) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Monto inválido',
+            text: 'El monto debe ser mayor a 0.',
+        });
+        return;
+    }
+
     const btn = document.getElementById('btnConsultar');
     const originalHTML = btn.innerHTML;
     btn.disabled = true;
@@ -249,6 +293,9 @@ document.getElementById('formPagoMovil').addEventListener('submit', async functi
 
     // Agregar la cédula ya compuesta
     formData.cedulaPagador = cedula;
+
+    // ✅ Convertir el importe formateado a número limpio (ej. "25450.40")
+    formData.importe = (centavos / 100).toFixed(2);
 
     try {
         const res = await fetch('{{ route('cpanel.pago.movil.consultar') }}', {

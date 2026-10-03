@@ -31,4 +31,8 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'puente_pago_movil' => [
+        'url'   => env('PUENTE_PAGO_MOVIL_URL'),
+        'token' => env('PUENTE_PAGO_MOVIL_TOKEN'),
+    ],
 ];

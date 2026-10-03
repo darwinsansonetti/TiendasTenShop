@@ -18,6 +18,7 @@ use App\Helpers\FileHelper;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Auth;
 
 
 class BancosController extends Controller
@@ -881,7 +882,7 @@ class BancosController extends Controller
         ]);
 
         try {
-            // 1. Obtener la configuración (API Key, RIF, Teléfono, Endpoint)
+            // 1. Obtener la configuración
             $config = DB::connection('sqlsrv')
                 ->table('SucursalPagoMovil')
                 ->where('SucursalPagoMovilId', $request->SucursalPagoMovilId)
@@ -895,7 +896,7 @@ class BancosController extends Controller
                 ], 422);
             }
 
-            // 2. Validar duplicado (misma ref + fecha + banco + sucursal)
+            // 2. Validar duplicado
             $existe = DB::connection('sqlsrv')
                 ->table('PagoMovil')
                 ->where('SucursalId', $config->SucursalId)
@@ -911,30 +912,30 @@ class BancosController extends Controller
                 ], 409);
             }
 
-            // 3. Consultar API BDV
+            // 3. Consultar a través del PUENTE (Venezuela)
             $endpoint = $config->Endpoint
                 ?: 'https://bdvconciliacion.banvenez.com:443/getMovement';
 
-            $payload = [
-                'cedulaPagador'   => strtoupper(trim($request->cedulaPagador)),
-                'telefonoPagador' => trim($request->telefonoPagador),
-                'telefonoDestino' => trim($config->Telefono),
-                'referencia'      => trim($request->referencia),
-                'fechaPago'       => $request->fechaPago,
-                'importe'         => number_format((float) $request->importe, 2, '.', ''),
-                'bancoOrigen'     => trim($request->bancoOrigen),
-            ];
-
-            $response = Http::timeout(20)
+            $response = Http::timeout(30)
                 ->withHeaders([
-                    'X-API-Key'    => trim($config->ApiKey),
+                    'X-Token'      => config('services.puente_pago_movil.token'),
                     'Content-Type' => 'application/json',
                     'Accept'       => 'application/json',
                 ])
-                ->post($endpoint, $payload);
+                ->post(config('services.puente_pago_movil.url'), [
+                    'apiKey'          => trim($config->ApiKey),
+                    'endpoint'        => $endpoint,
+                    'telefonoDestino' => trim($config->Telefono),
+                    'cedulaPagador'   => strtoupper(trim($request->cedulaPagador)),
+                    'telefonoPagador' => trim($request->telefonoPagador),
+                    'referencia'      => trim($request->referencia),
+                    'fechaPago'       => $request->fechaPago,
+                    'importe'         => number_format((float) $request->importe, 2, '.', ''),
+                    'bancoOrigen'     => trim($request->bancoOrigen),
+                ]);
 
             if ($response->failed()) {
-                Log::error('BDV Conciliación: Error HTTP', [
+                Log::error('Puente Pago Móvil [cPanel]: Error HTTP', [
                     'status' => $response->status(),
                     'body'   => $response->body(),
                     'config' => $config->SucursalPagoMovilId,
@@ -942,19 +943,17 @@ class BancosController extends Controller
                 return response()->json([
                     'success' => false,
                     'code'    => $response->status(),
-                    'message' => 'Error de comunicación con el banco (HTTP ' . $response->status() . ').',
+                    'message' => 'Error de comunicación con el servicio de verificación (HTTP ' . $response->status() . ').',
                     'data'    => null,
                 ], 200);
             }
 
-            // 4. Evaluar respuesta del banco
+            // 4. Evaluar respuesta
             $resultado = $response->json();
             $code = $resultado['code'] ?? 0;
-
             $exitoso = ($code === 1000);
             $resultado['success'] = $exitoso;
 
-            // Mensaje amigable según el código del banco
             if ($exitoso) {
                 $resultado['mensaje_amigable'] = 'Pago verificado correctamente.';
             } else {
@@ -967,7 +966,7 @@ class BancosController extends Controller
                 };
             }
 
-            // 5. Si fue exitoso, guardar en la tabla
+            // 5. Guardar si fue exitoso
             if ($exitoso) {
                 DB::connection('sqlsrv')->table('PagoMovil')->insert([
                     'SucursalPagoMovilId' => $config->SucursalPagoMovilId,
@@ -1395,15 +1394,25 @@ class BancosController extends Controller
      * Formulario público para verificar un pago móvil (sin layout, sin login).
      * TEMPORAL - Solo para pruebas.
      */
-    public function formPublicoPagoMovil()
+    public function formPublicoPagoMovil(Request $request)
     {
+        // 1. Obtener el usuario logueado
+        $user = Auth::user();
+
+        if (!$user) {
+            return redirect()->route('landingpage.index');
+        }
+
+        $sucursalId = $user->SucursalId;
+
+        // 2. Obtener las configuraciones SOLO de la sucursal del usuario
         $configuraciones = DB::connection('sqlsrv')
             ->table('SucursalPagoMovil as spm')
             ->join('Sucursales as s', 'spm.SucursalId', '=', 's.ID')
             ->where('spm.Activo', 1)
+            ->where('spm.SucursalId', $sucursalId)
             ->where('s.Tipo', 1)
             ->where('s.EsActiva', 1)
-            ->orderBy('s.Nombre')
             ->orderBy('spm.Alias')
             ->select(
                 'spm.SucursalPagoMovilId',
@@ -1415,8 +1424,48 @@ class BancosController extends Controller
             )
             ->get();
 
+        // 3. Obtener los pagos verificados HOY de esa sucursal
+        $hoy = \Carbon\Carbon::now()->format('Y-m-d');
+
+        $pagosHoy = DB::connection('sqlsrv')
+            ->table('PagoMovil as pm')
+            ->leftJoin('SucursalPagoMovil as spm', 'pm.SucursalPagoMovilId', '=', 'spm.SucursalPagoMovilId')
+            ->where('pm.SucursalId', $sucursalId)
+            ->whereDate('pm.FechaVerificacion', $hoy)
+            ->orderByDesc('pm.FechaVerificacion')
+            ->select(
+                'pm.PagoMovilId',
+                'pm.Referencia',
+                'pm.CedulaPagador',
+                'pm.TelefonoPagador',
+                'pm.FechaPago',
+                'pm.Importe',
+                'pm.BancoOrigen',
+                'pm.BancoOrigenNombre',
+                'pm.FechaVerificacion',
+                'spm.Alias as alias_pago_movil'
+            )
+            ->get()
+            ->map(function ($p) {
+                $p->FechaPagoFormateada = $p->FechaPago
+                    ? \Carbon\Carbon::parse($p->FechaPago)->format('d/m/Y')
+                    : '—';
+                $p->FechaVerificacionFormateada = $p->FechaVerificacion
+                    ? \Carbon\Carbon::parse($p->FechaVerificacion)->format('d/m/Y H:i')
+                    : '—';
+                return $p;
+            });
+
+        // 4. Totales
+        $totalPagosHoy = $pagosHoy->count();
+        $totalMontoHoy = $pagosHoy->sum('Importe');
+
         return view('publico.pago_movil_form', [
             'configuraciones' => $configuraciones,
+            'pagosHoy'        => $pagosHoy,
+            'totalPagosHoy'   => $totalPagosHoy,
+            'totalMontoHoy'   => $totalMontoHoy,
+            'sucursalId'      => $sucursalId,
         ]);
     }
 
@@ -1436,9 +1485,6 @@ class BancosController extends Controller
             'bancoOrigen'         => 'required|string|max:4',
         ]);
 
-        $payload  = null;
-        $endpoint = null;
-
         try {
             // 1. Obtener la configuración
             $config = DB::connection('sqlsrv')
@@ -1448,7 +1494,7 @@ class BancosController extends Controller
                 ->first();
 
             if (!$config) {
-                Log::warning('BDV [público]: Config no encontrada o inactiva', [
+                Log::warning('Puente Pago Móvil [público]: Config no encontrada o inactiva', [
                     'SucursalPagoMovilId' => $request->SucursalPagoMovilId,
                 ]);
                 return response()->json([
@@ -1457,41 +1503,40 @@ class BancosController extends Controller
                 ], 422);
             }
 
-            // 2. Consultar API BDV
+            // 2. Consultar a través del PUENTE (Venezuela)
             $endpoint = $config->Endpoint
                 ?: 'https://bdvconciliacion.banvenez.com:443/getMovement';
 
-            $payload = [
-                'cedulaPagador'   => strtoupper(trim($request->cedulaPagador)),
-                'telefonoPagador' => trim($request->telefonoPagador),
-                'telefonoDestino' => trim($config->Telefono),
-                'referencia'      => trim($request->referencia),
-                'fechaPago'       => $request->fechaPago,
-                'importe'         => number_format((float) $request->importe, 2, '.', ''),
-                'bancoOrigen'     => trim($request->bancoOrigen),
-            ];
-
-            Log::info('BDV [público]: Iniciando consulta', [
-                'endpoint'  => $endpoint,
-                'payload'   => $payload,
+            Log::info('Puente Pago Móvil [público]: Iniciando consulta', [
                 'config_id' => $config->SucursalPagoMovilId,
+                'referencia' => $request->referencia,
             ]);
 
-            $response = Http::timeout(20)
+            $response = Http::timeout(30)
                 ->withHeaders([
-                    'X-API-Key'    => trim($config->ApiKey),
+                    'X-Token'      => config('services.puente_pago_movil.token'),
                     'Content-Type' => 'application/json',
                     'Accept'       => 'application/json',
                 ])
-                ->post($endpoint, $payload);
+                ->post(config('services.puente_pago_movil.url'), [
+                    'apiKey'          => trim($config->ApiKey),
+                    'endpoint'        => $endpoint,
+                    'telefonoDestino' => trim($config->Telefono),
+                    'cedulaPagador'   => strtoupper(trim($request->cedulaPagador)),
+                    'telefonoPagador' => trim($request->telefonoPagador),
+                    'referencia'      => trim($request->referencia),
+                    'fechaPago'       => $request->fechaPago,
+                    'importe'         => number_format((float) $request->importe, 2, '.', ''),
+                    'bancoOrigen'     => trim($request->bancoOrigen),
+                ]);
 
-            Log::info('BDV [público]: Respuesta recibida', [
+            Log::info('Puente Pago Móvil [público]: Respuesta recibida', [
                 'http_status' => $response->status(),
                 'body'        => $response->body(),
             ]);
 
             if ($response->failed()) {
-                Log::error('BDV [público]: Error HTTP', [
+                Log::error('Puente Pago Móvil [público]: Error HTTP', [
                     'status' => $response->status(),
                     'body'   => $response->body(),
                     'config' => $config->SucursalPagoMovilId,
@@ -1499,7 +1544,7 @@ class BancosController extends Controller
                 return response()->json([
                     'success' => false,
                     'code'    => $response->status(),
-                    'message' => 'Error de comunicación con el banco (HTTP ' . $response->status() . ').',
+                    'message' => 'Error de comunicación con el servicio de verificación (HTTP ' . $response->status() . ').',
                     'data'    => null,
                 ], 200);
             }
@@ -1541,7 +1586,7 @@ class BancosController extends Controller
                     'UsuarioVerifico'     => session('usuario_id') ?? null,
                 ]);
 
-                Log::info('BDV [público]: Pago guardado', [
+                Log::info('Puente Pago Móvil [público]: Pago guardado', [
                     'referencia' => $request->referencia,
                     'importe'    => $request->importe,
                 ]);
@@ -1550,13 +1595,11 @@ class BancosController extends Controller
             return response()->json($resultado);
 
         } catch (\Exception $e) {
-            Log::error('BDV [público]: Excepción', [
-                'message'  => $e->getMessage(),
-                'code'     => $e->getCode(),
-                'file'     => $e->getFile(),
-                'line'     => $e->getLine(),
-                'endpoint' => $endpoint,
-                'payload'  => $payload,
+            Log::error('Puente Pago Móvil [público]: Excepción', [
+                'message' => $e->getMessage(),
+                'code'    => $e->getCode(),
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
             ]);
             return response()->json([
                 'success' => false,
