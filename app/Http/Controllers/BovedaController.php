@@ -1705,6 +1705,544 @@ class BovedaController extends Controller
     /**
      * Vista consolidada de la Bóveda (todos los totales) con filtros de fecha
      */
+    // public function consolidado(Request $request)
+    // {
+    //     try {
+
+    //         session([
+    //             'menu_active' => 'Bóveda',
+    //             'submenu_active' => 'Consolidado Bóveda'
+    //         ]);
+
+    //         // ================================================
+    //         // FILTROS DE FECHA
+    //         // ================================================
+    //         $fechaMinima = '2026-09-01';
+
+    //         $defaultInicio = Carbon::now()->startOfMonth()->format('Y-m-d');
+    //         if ($defaultInicio < $fechaMinima) {
+    //             $defaultInicio = $fechaMinima;
+    //         }
+
+    //         $fechaInicio = $request->input('fecha_inicio', $defaultInicio);
+    //         $fechaFin = $request->input('fecha_fin', Carbon::now()->format('Y-m-d'));
+
+    //         if ($fechaInicio < $fechaMinima) {
+    //             $fechaInicio = $fechaMinima;
+    //         }
+
+    //         $sucursalId = $request->input('sucursal_id', '');
+
+    //         // ================================================
+    //         // FILTRAR BÓVEDAS POR FECHA Y SUCURSAL
+    //         // ================================================
+    //         $bovedasFiltradas = DB::connection('sqlsrv')
+    //             ->table('Boveda')
+    //             ->whereDate('Fecha', '>=', $fechaInicio)
+    //             ->whereDate('Fecha', '<=', $fechaFin)
+    //             ->when($sucursalId != '', fn($q) => $q->where('SucursalId', $sucursalId))
+    //             ->pluck('BovedaId')
+    //             ->toArray();
+
+    //         // Sucursales para filtro
+    //         $sucursales = DB::connection('sqlsrv')
+    //             ->table('Sucursales')
+    //             ->where('EsActiva', 1)
+    //             ->select('ID', 'Nombre')
+    //             ->orderBy('Nombre')
+    //             ->get();
+
+    //         // ================================================
+    //         // 1. DIVISAS POR DENOMINACIÓN (CONTADO - PRESTADO)
+    //         // ================================================
+    //         $divisasContadas = DB::connection('sqlsrv')
+    //             ->table('BovedaDenominacionDivisa')
+    //             ->whereIn('BovedaId', $bovedasFiltradas)
+    //             ->select(
+    //                 'Denominacion',
+    //                 DB::raw('SUM(Cantidad) as CantidadContada'),
+    //                 DB::raw('SUM(MontoTotal) as MontoContado')
+    //             )
+    //             ->groupBy('Denominacion')
+    //             ->get()
+    //             ->keyBy('Denominacion');
+
+    //         $divisasPrestadas = DB::connection('sqlsrv')
+    //             ->table('BovedaPrestamoDenominacion as bpd')
+    //             ->join('BovedaPrestamo as bp', 'bpd.BovedaPrestamoId', '=', 'bp.BovedaPrestamoId')
+    //             ->where('bp.Estatus', 0)
+    //             ->where('bp.TipoMoneda', 0)
+    //             ->whereDate('bp.FechaPrestamo', '>=', $fechaInicio)
+    //             ->whereDate('bp.FechaPrestamo', '<=', $fechaFin)
+    //             ->when($sucursalId != '', fn($q) => $q->where('bp.SucursalId', $sucursalId))
+    //             ->select(
+    //                 'bpd.Denominacion',
+    //                 DB::raw('SUM(bpd.Cantidad) as CantidadPrestada'),
+    //                 DB::raw('SUM(bpd.MontoTotal) as MontoPrestado')
+    //             )
+    //             ->groupBy('bpd.Denominacion')
+    //             ->get()
+    //             ->keyBy('Denominacion');
+
+    //         $divisasPorDenominacion = $divisasContadas->map(function ($item, $denominacion) use ($divisasPrestadas) {
+    //             $prestado = $divisasPrestadas->get($denominacion);
+    //             $cantPrestada  = $prestado->CantidadPrestada ?? 0;
+    //             $montoPrestado = $prestado->MontoPrestado ?? 0;
+
+    //             $item->CantidadPrestada = $cantPrestada;
+    //             $item->MontoPrestado    = $montoPrestado;
+    //             $item->CantidadNeta     = $item->CantidadContada - $cantPrestada;
+    //             $item->MontoNeto        = $item->MontoContado - $montoPrestado;
+
+    //             // Divisas ya están en USD → USD = mismo monto
+    //             $item->MontoContadoUSD = $item->MontoContado;
+    //             $item->MontoNetoUSD    = $item->MontoNeto;
+
+    //             // Retrocompatibilidad con la vista actual
+    //             $item->TotalCantidad = $item->CantidadContada;
+    //             $item->TotalMonto    = $item->MontoContado;
+
+    //             return $item;
+    //         })->values();
+
+    //         // Denominaciones que solo tienen préstamo (no conteo)
+    //         $denominacionesExtra = $divisasPrestadas->keys()->diff($divisasContadas->keys());
+    //         foreach ($denominacionesExtra as $den) {
+    //             $prestado = $divisasPrestadas->get($den);
+    //             $divisasPorDenominacion->push((object)[
+    //                 'Denominacion'      => $den,
+    //                 'CantidadContada'   => 0,
+    //                 'MontoContado'      => 0,
+    //                 'MontoContadoUSD'   => 0,
+    //                 'CantidadPrestada'  => $prestado->CantidadPrestada,
+    //                 'MontoPrestado'     => $prestado->MontoPrestado,
+    //                 'CantidadNeta'      => -$prestado->CantidadPrestada,
+    //                 'MontoNeto'         => -$prestado->MontoPrestado,
+    //                 'MontoNetoUSD'      => -$prestado->MontoPrestado,
+    //                 'TotalCantidad'     => 0,
+    //                 'TotalMonto'        => 0,
+    //             ]);
+    //         }
+
+    //         $divisasPorDenominacion = $divisasPorDenominacion->sortByDesc('Denominacion')->values();
+
+    //         // ================================================
+    //         // 2. BOLÍVARES POR DENOMINACIÓN (CONTADO - PRESTADO + CONVERSIÓN USD)
+    //         // ================================================
+    //         $bsContados = DB::connection('sqlsrv')
+    //             ->table('BovedaDenominacionBs as bdb')
+    //             ->join('Boveda as bo', 'bdb.BovedaId', '=', 'bo.BovedaId')
+    //             ->leftJoin('DivisaValor as dv', 'bo.DivisaValorId', '=', 'dv.ID')
+    //             ->whereIn('bdb.BovedaId', $bovedasFiltradas)
+    //             ->select(
+    //                 'bdb.Denominacion',
+    //                 DB::raw('SUM(bdb.Cantidad) as CantidadContada'),
+    //                 DB::raw('SUM(bdb.MontoTotal) as MontoContado'),
+    //                 DB::raw('SUM(CASE WHEN ISNULL(dv.Valor, 0) > 0 THEN bdb.MontoTotal / dv.Valor ELSE 0 END) as MontoContadoUSD')
+    //             )
+    //             ->groupBy('bdb.Denominacion')
+    //             ->get()
+    //             ->keyBy('Denominacion');
+
+    //         $bsPrestados = DB::connection('sqlsrv')
+    //             ->table('BovedaPrestamoDenominacion as bpd')
+    //             ->join('BovedaPrestamo as bp', 'bpd.BovedaPrestamoId', '=', 'bp.BovedaPrestamoId')
+    //             ->where('bp.Estatus', 0)
+    //             ->where('bp.TipoMoneda', 1)
+    //             ->whereDate('bp.FechaPrestamo', '>=', $fechaInicio)
+    //             ->whereDate('bp.FechaPrestamo', '<=', $fechaFin)
+    //             ->when($sucursalId != '', fn($q) => $q->where('bp.SucursalId', $sucursalId))
+    //             ->select(
+    //                 'bpd.Denominacion',
+    //                 DB::raw('SUM(bpd.Cantidad) as CantidadPrestada'),
+    //                 DB::raw('SUM(bpd.MontoTotal) as MontoPrestado')
+    //             )
+    //             ->groupBy('bpd.Denominacion')
+    //             ->get()
+    //             ->keyBy('Denominacion');
+
+    //         $bsPrestadosUSD = DB::connection('sqlsrv')
+    //             ->table('BovedaPrestamoDenominacion as bpd')
+    //             ->join('BovedaPrestamo as bp', 'bpd.BovedaPrestamoId', '=', 'bp.BovedaPrestamoId')
+    //             ->where('bp.Estatus', 0)
+    //             ->where('bp.TipoMoneda', 1)
+    //             ->whereDate('bp.FechaPrestamo', '>=', $fechaInicio)
+    //             ->whereDate('bp.FechaPrestamo', '<=', $fechaFin)
+    //             ->when($sucursalId != '', fn($q) => $q->where('bp.SucursalId', $sucursalId))
+    //             ->select(
+    //                 'bpd.Denominacion',
+    //                 DB::raw('SUM(bp.MontoDivisa) as MontoPrestadoUSD')
+    //             )
+    //             ->groupBy('bpd.Denominacion')
+    //             ->get()
+    //             ->keyBy('Denominacion');
+
+    //         $bsPorDenominacion = $bsContados->map(function ($item, $denominacion) use ($bsPrestados, $bsPrestadosUSD) {
+    //             $prestado    = $bsPrestados->get($denominacion);
+    //             $prestadoUSD = $bsPrestadosUSD->get($denominacion);
+
+    //             $cantPrestada     = $prestado->CantidadPrestada ?? 0;
+    //             $montoPrestado    = $prestado->MontoPrestado ?? 0;
+    //             $montoPrestadoUSD = $prestadoUSD->MontoPrestadoUSD ?? 0;
+
+    //             $item->CantidadPrestada = $cantPrestada;
+    //             $item->MontoPrestado    = $montoPrestado;
+    //             $item->MontoPrestadoUSD = $montoPrestadoUSD;
+    //             $item->CantidadNeta     = $item->CantidadContada - $cantPrestada;
+    //             $item->MontoNeto        = $item->MontoContado - $montoPrestado;
+    //             $item->MontoNetoUSD     = $item->MontoContadoUSD - $montoPrestadoUSD;
+
+    //             $item->TotalCantidad = $item->CantidadContada;
+    //             $item->TotalMonto    = $item->MontoContado;
+
+    //             return $item;
+    //         })->values();
+
+    //         $denominacionesExtraBs = $bsPrestados->keys()->diff($bsContados->keys());
+    //         foreach ($denominacionesExtraBs as $den) {
+    //             $prestado    = $bsPrestados->get($den);
+    //             $prestadoUSD = $bsPrestadosUSD->get($den);
+
+    //             $montoPrestadoUSD = $prestadoUSD->MontoPrestadoUSD ?? 0;
+
+    //             $bsPorDenominacion->push((object)[
+    //                 'Denominacion'      => $den,
+    //                 'CantidadContada'   => 0,
+    //                 'MontoContado'      => 0,
+    //                 'MontoContadoUSD'   => 0,
+    //                 'CantidadPrestada'  => $prestado->CantidadPrestada,
+    //                 'MontoPrestado'     => $prestado->MontoPrestado,
+    //                 'MontoPrestadoUSD'  => $montoPrestadoUSD,
+    //                 'CantidadNeta'      => -$prestado->CantidadPrestada,
+    //                 'MontoNeto'         => -$prestado->MontoPrestado,
+    //                 'MontoNetoUSD'      => -$montoPrestadoUSD,
+    //                 'TotalCantidad'     => 0,
+    //                 'TotalMonto'        => 0,
+    //             ]);
+    //         }
+
+    //         $bsPorDenominacion = $bsPorDenominacion->sortByDesc('Denominacion')->values();
+
+    //         // ================================================
+    //         // 3. TOTALES POR PUNTO DE VENTA (Bs + estimado USD)
+    //         // ================================================
+    //         $puntosVentaTotales = DB::connection('sqlsrv')
+    //             ->table('BovedaConciliacionPDV as bcp')
+    //             ->join('PuntosDeVenta as pdv', 'bcp.PuntoDeVentaId', '=', 'pdv.PuntoDeVentaId')
+    //             ->leftJoin('Bancos as b', 'pdv.BancoId', '=', 'b.ID')
+    //             ->leftJoin('Sucursales as s', 'pdv.SucursalId', '=', 's.ID')
+    //             ->join('Boveda as bo', 'bcp.BovedaId', '=', 'bo.BovedaId')
+    //             ->leftJoin('DivisaValor as dv', 'bo.DivisaValorId', '=', 'dv.ID')
+    //             ->whereIn('bcp.BovedaId', $bovedasFiltradas)
+    //             ->select(
+    //                 'pdv.PuntoDeVentaId',
+    //                 'pdv.Descripcion as pdv_descripcion',
+    //                 'pdv.Codigo as pdv_codigo',
+    //                 'b.Nombre as banco_nombre',
+    //                 's.Nombre as sucursal_nombre',
+    //                 DB::raw('SUM(bcp.MontoSistema) as TotalSistema'),
+    //                 DB::raw('SUM(bcp.MontoDepositado) as TotalDepositado'),
+    //                 DB::raw('SUM(bcp.Diferencia) as TotalDiferencia'),
+    //                 DB::raw('SUM(CASE WHEN ISNULL(dv.Valor, 0) > 0 THEN bcp.MontoSistema / dv.Valor ELSE 0 END) as TotalSistemaUSD'),
+    //                 DB::raw('SUM(CASE WHEN ISNULL(dv.Valor, 0) > 0 THEN bcp.MontoDepositado / dv.Valor ELSE 0 END) as TotalDepositadoUSD'),
+    //                 DB::raw('SUM(CASE WHEN ISNULL(dv.Valor, 0) > 0 THEN bcp.Diferencia / dv.Valor ELSE 0 END) as TotalDiferenciaUSD')
+    //             )
+    //             ->groupBy(
+    //                 'pdv.PuntoDeVentaId',
+    //                 'pdv.Descripcion',
+    //                 'pdv.Codigo',
+    //                 'b.Nombre',
+    //                 's.Nombre'
+    //             )
+    //             ->orderBy('s.Nombre')
+    //             ->orderBy('pdv.Descripcion')
+    //             ->get();
+
+    //         // ================================================
+    //         // 4. TOTALES POR OTROS CONCEPTOS (Bs + estimado USD)
+    //         // ================================================
+    //         $tiposOtros = [
+    //             1 => 'Biopago',
+    //             2 => 'Transferencia',
+    //             3 => 'Cashea',
+    //             4 => 'Zelle'
+    //         ];
+
+    //         $otrosTotales = DB::connection('sqlsrv')
+    //             ->table('BovedaConciliacionOtros as bco')
+    //             ->join('Boveda as bo', 'bco.BovedaId', '=', 'bo.BovedaId')
+    //             ->leftJoin('DivisaValor as dv', 'bo.DivisaValorId', '=', 'dv.ID')
+    //             ->whereIn('bco.BovedaId', $bovedasFiltradas)
+    //             ->select(
+    //                 'bco.Tipo',
+    //                 DB::raw('SUM(bco.MontoSistema) as TotalSistema'),
+    //                 DB::raw('SUM(bco.MontoDepositado) as TotalDepositado'),
+    //                 DB::raw('SUM(bco.Diferencia) as TotalDiferencia'),
+    //                 DB::raw('SUM(CASE WHEN ISNULL(dv.Valor, 0) > 0 THEN bco.MontoSistema / dv.Valor ELSE 0 END) as TotalSistemaUSD'),
+    //                 DB::raw('SUM(CASE WHEN ISNULL(dv.Valor, 0) > 0 THEN bco.MontoDepositado / dv.Valor ELSE 0 END) as TotalDepositadoUSD'),
+    //                 DB::raw('SUM(CASE WHEN ISNULL(dv.Valor, 0) > 0 THEN bco.Diferencia / dv.Valor ELSE 0 END) as TotalDiferenciaUSD')
+    //             )
+    //             ->groupBy('bco.Tipo')
+    //             ->get()
+    //             ->map(function ($item) use ($tiposOtros) {
+    //                 $item->TipoNombre = $tiposOtros[$item->Tipo] ?? 'Otro';
+    //                 $item->Moneda     = $item->Tipo == 4 ? 'USD' : 'Bs';
+    //                 $item->Simbolo    = $item->Tipo == 4 ? '$' : 'Bs.';
+
+    //                 // Zelle ya está en USD → USD = mismo monto
+    //                 if ($item->Tipo == 4) {
+    //                     $item->TotalSistemaUSD    = $item->TotalSistema;
+    //                     $item->TotalDepositadoUSD = $item->TotalDepositado;
+    //                     $item->TotalDiferenciaUSD = $item->TotalDiferencia;
+    //                 }
+    //                 return $item;
+    //             });
+
+    //         // ================================================
+    //         // 5. TOTALES DE EFECTIVO (Bs + estimado USD)
+    //         // ================================================
+    //         $efectivoTotales = DB::connection('sqlsrv')
+    //             ->table('BovedaConciliacionEfectivo as bce')
+    //             ->join('Boveda as bo', 'bce.BovedaId', '=', 'bo.BovedaId')
+    //             ->leftJoin('DivisaValor as dv', 'bo.DivisaValorId', '=', 'dv.ID')
+    //             ->whereIn('bce.BovedaId', $bovedasFiltradas)
+    //             ->select(
+    //                 'bce.Tipo',
+    //                 DB::raw('SUM(bce.MontoSistema) as TotalSistema'),
+    //                 DB::raw('SUM(bce.MontoDepositado) as TotalDepositado'),
+    //                 DB::raw('SUM(bce.Diferencia) as TotalDiferencia'),
+    //                 DB::raw('SUM(CASE WHEN ISNULL(dv.Valor, 0) > 0 THEN bce.MontoSistema / dv.Valor ELSE 0 END) as TotalSistemaUSD'),
+    //                 DB::raw('SUM(CASE WHEN ISNULL(dv.Valor, 0) > 0 THEN bce.MontoDepositado / dv.Valor ELSE 0 END) as TotalDepositadoUSD'),
+    //                 DB::raw('SUM(CASE WHEN ISNULL(dv.Valor, 0) > 0 THEN bce.Diferencia / dv.Valor ELSE 0 END) as TotalDiferenciaUSD')
+    //             )
+    //             ->groupBy('bce.Tipo')
+    //             ->get()
+    //             ->map(function ($item) {
+    //                 $item->TipoNombre = $item->Tipo == 1 ? 'Divisas' : 'Bolívares';
+    //                 $item->Moneda     = $item->Tipo == 1 ? 'USD' : 'Bs';
+    //                 $item->Simbolo    = $item->Tipo == 1 ? '$' : 'Bs.';
+
+    //                 // Divisas ya están en USD → USD = mismo monto
+    //                 if ($item->Tipo == 1) {
+    //                     $item->TotalSistemaUSD    = $item->TotalSistema;
+    //                     $item->TotalDepositadoUSD = $item->TotalDepositado;
+    //                     $item->TotalDiferenciaUSD = $item->TotalDiferencia;
+    //                 }
+    //                 return $item;
+    //             });
+
+    //         // ================================================
+    //         // 6. PRÉSTAMOS PENDIENTES POR SUCURSAL (SIN CONVERSIÓN)
+    //         // ================================================
+    //         $prestamosPendientes = DB::connection('sqlsrv')
+    //             ->table('BovedaPrestamo as bp')
+    //             ->join('Sucursales as s', 'bp.SucursalId', '=', 's.ID')
+    //             ->where('bp.Estatus', 0)
+    //             ->whereDate('bp.FechaPrestamo', '>=', $fechaInicio)
+    //             ->whereDate('bp.FechaPrestamo', '<=', $fechaFin)
+    //             ->when($sucursalId != '', fn($q) => $q->where('bp.SucursalId', $sucursalId))
+    //             ->select(
+    //                 's.ID as SucursalId',
+    //                 's.Nombre as sucursal_nombre',
+    //                 DB::raw('COUNT(bp.BovedaPrestamoId) as CantidadPrestamos'),
+    //                 DB::raw('SUM(CASE WHEN bp.TipoMoneda = 0 THEN bp.SaldoPendiente ELSE 0 END) as TotalPendienteUSD'),
+    //                 DB::raw('SUM(CASE WHEN bp.TipoMoneda = 1 THEN bp.SaldoPendiente ELSE 0 END) as TotalPendienteBs')
+    //             )
+    //             ->groupBy('s.ID', 's.Nombre')
+    //             ->orderBy('s.Nombre')
+    //             ->get();
+
+    //         // ================================================
+    //         // 7. TOTALES GENERALES
+    //         // ================================================
+    //         // Divisas (ya en USD)
+    //         $totalDivisasContadas = $divisasPorDenominacion->sum('MontoContado');
+    //         $totalDivisas         = $divisasPorDenominacion->sum('MontoNeto');
+
+    //         // Bolívares (Bs + USD)
+    //         $totalBsContados    = $bsPorDenominacion->sum('MontoContado');
+    //         $totalBsContadosUSD = $bsPorDenominacion->sum('MontoContadoUSD');
+    //         $totalBs            = $bsPorDenominacion->sum('MontoNeto');
+    //         $totalBsUSD         = $bsPorDenominacion->sum('MontoNetoUSD');
+
+    //         // Puntos de venta
+    //         $totalPdvSistema       = $puntosVentaTotales->sum('TotalSistema');
+    //         $totalPdvSistemaUSD    = $puntosVentaTotales->sum('TotalSistemaUSD');
+    //         $totalPdvDepositado    = $puntosVentaTotales->sum('TotalDepositado');
+    //         $totalPdvDepositadoUSD = $puntosVentaTotales->sum('TotalDepositadoUSD');
+
+    //         // Préstamos
+    //         $totalPrestamosPendientesUSD = $prestamosPendientes->sum('TotalPendienteUSD');
+    //         $totalPrestamosPendientesBs  = $prestamosPendientes->sum('TotalPendienteBs');
+
+    //         // Disponible
+    //         $disponibleDivisas = $totalDivisas;
+    //         $disponibleBs      = $totalBs;
+    //         $disponibleBsUSD   = $totalBsUSD;
+
+    //         // ================================================
+    //         // 7.1 TOTALES ESPECÍFICOS PARA "CONSOLIDADO EN BS"
+    //         // ================================================
+    //         // Otros: solo los que están en Bs (Biopago, Transferencia, Cashea)
+    //         $totalOtrosBs    = $otrosTotales->where('Moneda', 'Bs')->sum('TotalSistema');
+    //         $totalOtrosBsUSD = $otrosTotales->where('Moneda', 'Bs')->sum('TotalSistemaUSD');
+
+    //         // Efectivo: solo el tipo 2 (Bolívares)
+    //         $efectivoBsRow      = $efectivoTotales->where('Tipo', 2)->first();
+    //         $totalEfectivoBs    = $efectivoBsRow->TotalSistema ?? 0;
+    //         $totalEfectivoBsUSD = $efectivoBsRow->TotalSistemaUSD ?? 0;
+
+    //         // Total consolidado en Bs = físico neto + PDV + Otros Bs + Efectivo Bs
+    //         $totalConsolidadoBs    = $disponibleBs + $totalPdvSistema + $totalOtrosBs + $totalEfectivoBs;
+    //         $totalConsolidadoBsUSD = $disponibleBsUSD + $totalPdvSistemaUSD + $totalOtrosBsUSD + $totalEfectivoBsUSD;
+
+    //         $tasa = $this->obtenerTasaCambioActual();
+    //         $tasaValor = $tasa ? $tasa->Valor : 0;
+
+    //         // ================================================
+    //         // 7.2 GASTOS Y PAGOS A PROVEEDORES DEL PERÍODO
+    //         //     Tipo 0 = Pago Proveedor Mercancía
+    //         //     Tipo 2 = Gasto
+    //         //     Tipo 3 = Gasto de Caja
+    //         //     Tipo 5 = Pago Proveedor Servicio
+    //         // ================================================
+    //         $tiposSalidas = [0, 2, 3, 5];
+
+    //         $gastosPeriodo = DB::connection('sqlsrv')
+    //             ->table('Transacciones as t')
+    //             ->leftJoin('Sucursales as s', 't.SucursalId', '=', 's.ID')
+    //             ->whereIn('t.Tipo', $tiposSalidas)
+    //             ->whereDate('t.Fecha', '>=', $fechaInicio)
+    //             ->whereDate('t.Fecha', '<=', $fechaFin)
+    //             ->select(
+    //                 't.ID',
+    //                 't.Fecha',
+    //                 't.Descripcion',
+    //                 't.Nombre as CategoriaNombre',
+    //                 't.CategoriaId',
+    //                 't.Tipo',
+    //                 't.MontoDivisaAbonado',
+    //                 't.MontoAbonado',
+    //                 't.TasaDeCambio',
+    //                 't.NumeroOperacion',
+    //                 't.SucursalId',
+    //                 's.Nombre as SucursalNombre'
+    //             )
+    //             ->orderBy('t.Fecha', 'desc')
+    //             ->get();
+
+    //         // Mapeo de tipos a etiquetas legibles
+    //         $tiposDescripcion = [
+    //             0 => 'Pago Proveedor Mercancía',
+    //             2 => 'Gastos',
+    //             3 => 'Gastos de Caja',
+    //             5 => 'Pago Proveedor Servicio',
+    //         ];
+
+    //         // Totales
+    //         $totalGastosUSD = $gastosPeriodo->sum(fn($g) => (float) ($g->MontoDivisaAbonado ?? 0));
+    //         $totalGastosBs  = $gastosPeriodo->sum(fn($g) => (float) ($g->MontoAbonado ?? 0));
+
+    //         // Agrupados por categoría (usa Nombre si existe, sino el tipo)
+    //         $gastosPorCategoria = $gastosPeriodo
+    //             ->groupBy(function ($g) use ($tiposDescripcion) {
+    //                 // Si tiene Nombre (categoría de gasto), usarlo
+    //                 if (!empty($g->CategoriaNombre)) {
+    //                     return $g->CategoriaNombre;
+    //                 }
+    //                 // Si no, usar el nombre del tipo
+    //                 return $tiposDescripcion[$g->Tipo] ?? 'Otro';
+    //             })
+    //             ->map(function ($items, $categoria) {
+    //                 return (object) [
+    //                     'Categoria' => $categoria,
+    //                     'Cantidad'  => $items->count(),
+    //                     'TotalUSD'  => $items->sum(fn($g) => (float) ($g->MontoDivisaAbonado ?? 0)),
+    //                     'TotalBs'   => $items->sum(fn($g) => (float) ($g->MontoAbonado ?? 0)),
+    //                 ];
+    //             })
+    //             ->sortByDesc('TotalUSD')
+    //             ->values();
+
+    //         // ================================================
+    //         // 7.3 AJUSTAR EL TOTAL CONSOLIDADO RESTANDO SALIDAS
+    //         // ================================================
+    //         $totalConsolidadoBsFinal    = $totalConsolidadoBs - $totalGastosBs;
+    //         $totalConsolidadoBsUSDFinal = $totalConsolidadoBsUSD - $totalGastosUSD;
+
+    //         // ================================================
+    //         // 8. HISTORIAL DE BÓVEDAS (FILTRADO)
+    //         // ================================================
+    //         $historialBovedas = DB::connection('sqlsrv')
+    //             ->table('Boveda as b')
+    //             ->leftJoin('Sucursales as s', 'b.SucursalId', '=', 's.ID')
+    //             ->whereDate('b.Fecha', '>=', $fechaInicio)
+    //             ->whereDate('b.Fecha', '<=', $fechaFin)
+    //             ->when($sucursalId != '', fn($q) => $q->where('b.SucursalId', $sucursalId))
+    //             ->orderBy('b.Fecha', 'desc')
+    //             ->orderBy('b.BovedaId', 'desc')
+    //             ->limit(10)
+    //             ->select(['b.*', 's.Nombre as sucursal_nombre'])
+    //             ->get()
+    //             ->map(function ($item) {
+    //                 $item->EstatusTexto = $item->Estatus == 0 ? 'Abierto' : 'Cerrado';
+    //                 $item->EstatusBadge = $item->Estatus == 0 ? 'success' : 'secondary';
+    //                 $item->ConciliacionTexto = $item->EstatusConciliacion == 1 ? 'Conciliado' :
+    //                                         ($item->EstatusConciliacion == 2 ? 'Con Diferencia' : 'Pendiente');
+    //                 $item->ConciliacionBadge = $item->EstatusConciliacion == 1 ? 'success' :
+    //                                         ($item->EstatusConciliacion == 2 ? 'danger' : 'warning');
+    //                 $item->FechaFormateada = $item->Fecha ? \Carbon\Carbon::parse($item->Fecha)->format('d/m/Y') : 'N/A';
+    //                 return $item;
+    //             });
+
+    //         return view('cpanel.boveda.consolidado', [
+    //             'divisasPorDenominacion' => $divisasPorDenominacion,
+    //             'bsPorDenominacion' => $bsPorDenominacion,
+    //             'puntosVentaTotales' => $puntosVentaTotales,
+    //             'otrosTotales' => $otrosTotales,
+    //             'efectivoTotales' => $efectivoTotales,
+    //             'prestamosPendientes' => $prestamosPendientes,
+    //             'totalDivisas' => $totalDivisas,
+    //             'totalBs' => $totalBs,
+    //             'totalBsUSD' => $totalBsUSD,
+    //             'totalDivisasContadas' => $totalDivisasContadas,
+    //             'totalBsContados' => $totalBsContados,
+    //             'totalBsContadosUSD' => $totalBsContadosUSD,
+    //             'totalPdvSistema' => $totalPdvSistema,
+    //             'totalPdvSistemaUSD' => $totalPdvSistemaUSD,
+    //             'totalPdvDepositado' => $totalPdvDepositado,
+    //             'totalPdvDepositadoUSD' => $totalPdvDepositadoUSD,
+    //             'totalPrestamosPendientesUSD' => $totalPrestamosPendientesUSD,
+    //             'totalPrestamosPendientesBs' => $totalPrestamosPendientesBs,
+    //             'disponibleDivisas' => $disponibleDivisas,
+    //             'disponibleBs' => $disponibleBs,
+    //             'disponibleBsUSD' => $disponibleBsUSD,
+    //             'totalConsolidadoBs' => $totalConsolidadoBs,
+    //             'totalConsolidadoBsUSD' => $totalConsolidadoBsUSD,
+    //             'totalOtrosBs' => $totalOtrosBs,
+    //             'totalOtrosBsUSD' => $totalOtrosBsUSD,
+    //             'totalEfectivoBs' => $totalEfectivoBs,
+    //             'totalEfectivoBsUSD' => $totalEfectivoBsUSD,
+    //             'tasaValor' => $tasaValor,
+    //             'historialBovedas' => $historialBovedas,
+    //             'fechaInicio' => $fechaInicio,
+    //             'fechaFin' => $fechaFin,
+    //             'sucursalId' => $sucursalId,
+    //             'sucursales' => $sucursales,
+    //             'gastosPeriodo' => $gastosPeriodo,
+    //             'gastosPorCategoria' => $gastosPorCategoria,
+    //             'totalGastosUSD' => $totalGastosUSD,
+    //             'totalGastosBs' => $totalGastosBs,
+    //             'totalConsolidadoBsFinal' => $totalConsolidadoBsFinal,
+    //             'totalConsolidadoBsUSDFinal' => $totalConsolidadoBsUSDFinal,
+    //         ]);
+
+    //     } catch (\Exception $e) {
+    //         Log::error('Error en BovedaController::consolidado: ' . $e->getMessage());
+    //         return back()->with('error', 'Error al cargar el consolidado: ' . $e->getMessage());
+    //     }
+    // }
+
     public function consolidado(Request $request)
     {
         try {
@@ -1752,51 +2290,6 @@ class BovedaController extends Controller
                 ->orderBy('Nombre')
                 ->get();
 
-            // Si no hay bóvedas en el rango, devolver vacío
-            if (empty($bovedasFiltradas)) {
-                return view('cpanel.boveda.consolidado', [
-                    'divisasPorDenominacion' => collect(),
-                    'bsPorDenominacion' => collect(),
-                    'puntosVentaTotales' => collect(),
-                    'otrosTotales' => collect(),
-                    'efectivoTotales' => collect(),
-                    'prestamosPendientes' => collect(),
-                    'totalDivisas' => 0,
-                    'totalBs' => 0,
-                    'totalBsUSD' => 0,
-                    'totalDivisasContadas' => 0,
-                    'totalBsContados' => 0,
-                    'totalBsContadosUSD' => 0,
-                    'totalPdvSistema' => 0,
-                    'totalPdvSistemaUSD' => 0,
-                    'totalPdvDepositado' => 0,
-                    'totalPdvDepositadoUSD' => 0,
-                    'totalPrestamosPendientesUSD' => 0,
-                    'totalPrestamosPendientesBs' => 0,
-                    'disponibleDivisas' => 0,
-                    'disponibleBs' => 0,
-                    'disponibleBsUSD' => 0,
-                    'totalConsolidadoBs' => 0,
-                    'totalConsolidadoBsUSD' => 0,
-                    'totalOtrosBs' => 0,
-                    'totalOtrosBsUSD' => 0,
-                    'totalEfectivoBs' => 0,
-                    'totalEfectivoBsUSD' => 0,
-                    'tasaValor' => 0,
-                    'historialBovedas' => collect(),
-                    'fechaInicio' => $fechaInicio,
-                    'fechaFin' => $fechaFin,
-                    'sucursalId' => $sucursalId,
-                    'sucursales' => $sucursales,
-                    'gastosPeriodo' => collect(),
-                    'gastosPorCategoria' => collect(),
-                    'totalGastosUSD' => 0,
-                    'totalGastosBs' => 0,
-                    'totalConsolidadoBsFinal' => 0,
-                    'totalConsolidadoBsUSDFinal' => 0,
-                ]);
-            }
-
             // ================================================
             // 1. DIVISAS POR DENOMINACIÓN (CONTADO - PRESTADO)
             // ================================================
@@ -1811,6 +2304,32 @@ class BovedaController extends Controller
                 ->groupBy('Denominacion')
                 ->get()
                 ->keyBy('Denominacion');
+
+            // 🔥 Cambios ENTREGADOS en el rango (salen de la bóveda)
+            $cambiosEntregadosDivisa = DB::connection('sqlsrv')
+                ->table('BovedaCambioDivisaDetalle as d')
+                ->join('BovedaCambioDivisa as c', 'd.CambioId', '=', 'c.CambioId')
+                ->whereDate('c.FechaCambio', '>=', $fechaInicio)
+                ->whereDate('c.FechaCambio', '<=', $fechaFin)
+                ->where('d.Tipo', 'ENTREGADO')
+                ->select('d.Denominacion', DB::raw('SUM(d.Cantidad) as Total'))
+                ->groupBy('d.Denominacion')
+                ->get()
+                ->mapWithKeys(fn($i) => [number_format((float) $i->Denominacion, 2, '.', '') => $i->Total])
+                ->toArray();
+
+            // 🔥 Cambios CAMBIADOS en el rango (entran a la bóveda)
+            $cambiosCambiadosDivisa = DB::connection('sqlsrv')
+                ->table('BovedaCambioDivisaDetalle as d')
+                ->join('BovedaCambioDivisa as c', 'd.CambioId', '=', 'c.CambioId')
+                ->whereDate('c.FechaCambio', '>=', $fechaInicio)
+                ->whereDate('c.FechaCambio', '<=', $fechaFin)
+                ->where('d.Tipo', 'CAMBIADO')
+                ->select('d.Denominacion', DB::raw('SUM(d.Cantidad) as Total'))
+                ->groupBy('d.Denominacion')
+                ->get()
+                ->mapWithKeys(fn($i) => [number_format((float) $i->Denominacion, 2, '.', '') => $i->Total])
+                ->toArray();
 
             $divisasPrestadas = DB::connection('sqlsrv')
                 ->table('BovedaPrestamoDenominacion as bpd')
@@ -1829,50 +2348,60 @@ class BovedaController extends Controller
                 ->get()
                 ->keyBy('Denominacion');
 
-            $divisasPorDenominacion = $divisasContadas->map(function ($item, $denominacion) use ($divisasPrestadas) {
+            // ================================================
+            // 1.1 UNIR TODAS LAS DENOMINACIONES RELEVANTES
+            // ================================================
+            $todasLasDenominaciones = collect()
+                ->merge($divisasContadas->keys())
+                ->merge(array_keys($cambiosEntregadosDivisa))
+                ->merge(array_keys($cambiosCambiadosDivisa))
+                ->merge($divisasPrestadas->keys())
+                ->unique()
+                ->values();
+
+            $divisasPorDenominacion = $todasLasDenominaciones->map(function ($denominacion) use (
+                $divisasContadas,
+                $divisasPrestadas,
+                $cambiosEntregadosDivisa,
+                $cambiosCambiadosDivisa
+            ) {
+                $contada  = $divisasContadas->get($denominacion);
                 $prestado = $divisasPrestadas->get($denominacion);
-                $cantPrestada  = $prestado->CantidadPrestada ?? 0;
-                $montoPrestado = $prestado->MontoPrestado ?? 0;
 
-                $item->CantidadPrestada = $cantPrestada;
-                $item->MontoPrestado    = $montoPrestado;
-                $item->CantidadNeta     = $item->CantidadContada - $cantPrestada;
-                $item->MontoNeto        = $item->MontoContado - $montoPrestado;
+                $cantidadBase     = $contada->CantidadContada ?? 0;
+                $cantidadPrestada = $prestado->CantidadPrestada ?? 0;
 
-                // Divisas ya están en USD → USD = mismo monto
-                $item->MontoContadoUSD = $item->MontoContado;
-                $item->MontoNetoUSD    = $item->MontoNeto;
+                // Ajustar por cambios
+                $key = number_format((float) $denominacion, 2, '.', '');
+                $entregado = $cambiosEntregadosDivisa[$key] ?? 0;
+                $cambiado  = $cambiosCambiadosDivisa[$key]  ?? 0;
 
-                // Retrocompatibilidad con la vista actual
-                $item->TotalCantidad = $item->CantidadContada;
-                $item->TotalMonto    = $item->MontoContado;
+                $cantidadAjustada = $cantidadBase - $entregado + $cambiado;
+                $montoAjustado    = $cantidadAjustada * (float) $denominacion;
+                $montoPrestado    = $cantidadPrestada * (float) $denominacion;
 
-                return $item;
+                return (object) [
+                    'Denominacion'      => (float) $denominacion,
+                    'CantidadContada'   => $cantidadAjustada,
+                    'MontoContado'      => $montoAjustado,
+                    'MontoContadoUSD'   => $montoAjustado,
+                    'CantidadPrestada'  => $cantidadPrestada,
+                    'MontoPrestado'     => $montoPrestado,
+                    'MontoPrestadoUSD'  => $montoPrestado,
+                    'CantidadNeta'      => $cantidadAjustada - $cantidadPrestada,
+                    'MontoNeto'         => $montoAjustado - $montoPrestado,
+                    'MontoNetoUSD'      => $montoAjustado - $montoPrestado,
+                    'TotalCantidad'     => $cantidadAjustada,
+                    'TotalMonto'        => $montoAjustado,
+                ];
+            })->filter(function ($item) {
+                return $item->CantidadContada != 0 || $item->CantidadPrestada != 0;
             })->values();
-
-            // Denominaciones que solo tienen préstamo (no conteo)
-            $denominacionesExtra = $divisasPrestadas->keys()->diff($divisasContadas->keys());
-            foreach ($denominacionesExtra as $den) {
-                $prestado = $divisasPrestadas->get($den);
-                $divisasPorDenominacion->push((object)[
-                    'Denominacion'      => $den,
-                    'CantidadContada'   => 0,
-                    'MontoContado'      => 0,
-                    'MontoContadoUSD'   => 0,
-                    'CantidadPrestada'  => $prestado->CantidadPrestada,
-                    'MontoPrestado'     => $prestado->MontoPrestado,
-                    'CantidadNeta'      => -$prestado->CantidadPrestada,
-                    'MontoNeto'         => -$prestado->MontoPrestado,
-                    'MontoNetoUSD'      => -$prestado->MontoPrestado,
-                    'TotalCantidad'     => 0,
-                    'TotalMonto'        => 0,
-                ]);
-            }
 
             $divisasPorDenominacion = $divisasPorDenominacion->sortByDesc('Denominacion')->values();
 
             // ================================================
-            // 2. BOLÍVARES POR DENOMINACIÓN (CONTADO - PRESTADO + CONVERSIÓN USD)
+            // 2. BOLÍVARES POR DENOMINACIÓN
             // ================================================
             $bsContados = DB::connection('sqlsrv')
                 ->table('BovedaDenominacionBs as bdb')
@@ -1888,6 +2417,32 @@ class BovedaController extends Controller
                 ->groupBy('bdb.Denominacion')
                 ->get()
                 ->keyBy('Denominacion');
+
+            // 🔥 Cambios ENTREGADOS en el rango (salen de la bóveda)
+            $cambiosEntregadosBs = DB::connection('sqlsrv')
+                ->table('BovedaCambioBsDetalle as d')
+                ->join('BovedaCambioBs as c', 'd.CambioId', '=', 'c.CambioId')
+                ->whereDate('c.FechaCambio', '>=', $fechaInicio)
+                ->whereDate('c.FechaCambio', '<=', $fechaFin)
+                ->where('d.Tipo', 'ENTREGADO')
+                ->select('d.Denominacion', DB::raw('SUM(d.Cantidad) as Total'))
+                ->groupBy('d.Denominacion')
+                ->get()
+                ->mapWithKeys(fn($i) => [(string) (int) ((float) $i->Denominacion) => $i->Total])
+                ->toArray();
+
+            // 🔥 Cambios CAMBIADOS en el rango (entran a la bóveda)
+            $cambiosCambiadosBs = DB::connection('sqlsrv')
+                ->table('BovedaCambioBsDetalle as d')
+                ->join('BovedaCambioBs as c', 'd.CambioId', '=', 'c.CambioId')
+                ->whereDate('c.FechaCambio', '>=', $fechaInicio)
+                ->whereDate('c.FechaCambio', '<=', $fechaFin)
+                ->where('d.Tipo', 'CAMBIADO')
+                ->select('d.Denominacion', DB::raw('SUM(d.Cantidad) as Total'))
+                ->groupBy('d.Denominacion')
+                ->get()
+                ->mapWithKeys(fn($i) => [(string) (int) ((float) $i->Denominacion) => $i->Total])
+                ->toArray();
 
             $bsPrestados = DB::connection('sqlsrv')
                 ->table('BovedaPrestamoDenominacion as bpd')
@@ -1922,54 +2477,69 @@ class BovedaController extends Controller
                 ->get()
                 ->keyBy('Denominacion');
 
-            $bsPorDenominacion = $bsContados->map(function ($item, $denominacion) use ($bsPrestados, $bsPrestadosUSD) {
+            // ================================================
+            // 2.1 UNIR TODAS LAS DENOMINACIONES RELEVANTES
+            // ================================================
+            $todasLasDenominacionesBs = collect()
+                ->merge($bsContados->keys())
+                ->merge(array_keys($cambiosEntregadosBs))
+                ->merge(array_keys($cambiosCambiadosBs))
+                ->merge($bsPrestados->keys())
+                ->unique()
+                ->values();
+
+            $bsPorDenominacion = $todasLasDenominacionesBs->map(function ($denominacion) use (
+                $bsContados,
+                $bsPrestados,
+                $bsPrestadosUSD,
+                $cambiosEntregadosBs,
+                $cambiosCambiadosBs
+            ) {
+                $contada     = $bsContados->get($denominacion);
                 $prestado    = $bsPrestados->get($denominacion);
                 $prestadoUSD = $bsPrestadosUSD->get($denominacion);
 
-                $cantPrestada     = $prestado->CantidadPrestada ?? 0;
+                $cantidadBase     = $contada->CantidadContada ?? 0;
+                $montoBase        = $contada->MontoContado ?? 0;
+                $montoBaseUSD     = $contada->MontoContadoUSD ?? 0;
+                $cantidadPrestada = $prestado->CantidadPrestada ?? 0;
                 $montoPrestado    = $prestado->MontoPrestado ?? 0;
                 $montoPrestadoUSD = $prestadoUSD->MontoPrestadoUSD ?? 0;
 
-                $item->CantidadPrestada = $cantPrestada;
-                $item->MontoPrestado    = $montoPrestado;
-                $item->MontoPrestadoUSD = $montoPrestadoUSD;
-                $item->CantidadNeta     = $item->CantidadContada - $cantPrestada;
-                $item->MontoNeto        = $item->MontoContado - $montoPrestado;
-                $item->MontoNetoUSD     = $item->MontoContadoUSD - $montoPrestadoUSD;
+                // Ajustar por cambios
+                $key = (string) (int) ((float) $denominacion);
+                $entregado = $cambiosEntregadosBs[$key] ?? 0;
+                $cambiado  = $cambiosCambiadosBs[$key]  ?? 0;
 
-                $item->TotalCantidad = $item->CantidadContada;
-                $item->TotalMonto    = $item->MontoContado;
+                $cantidadAjustada = $cantidadBase - $entregado + $cambiado;
+                $montoAjustado    = $cantidadAjustada * (float) $denominacion;
 
-                return $item;
-            })->values();
+                // Ajustar el USD proporcionalmente
+                $factorUSD = $cantidadBase > 0 ? $montoBaseUSD / $cantidadBase : 0;
+                $montoAjustadoUSD = $cantidadAjustada * $factorUSD;
 
-            $denominacionesExtraBs = $bsPrestados->keys()->diff($bsContados->keys());
-            foreach ($denominacionesExtraBs as $den) {
-                $prestado    = $bsPrestados->get($den);
-                $prestadoUSD = $bsPrestadosUSD->get($den);
-
-                $montoPrestadoUSD = $prestadoUSD->MontoPrestadoUSD ?? 0;
-
-                $bsPorDenominacion->push((object)[
-                    'Denominacion'      => $den,
-                    'CantidadContada'   => 0,
-                    'MontoContado'      => 0,
-                    'MontoContadoUSD'   => 0,
-                    'CantidadPrestada'  => $prestado->CantidadPrestada,
-                    'MontoPrestado'     => $prestado->MontoPrestado,
+                return (object) [
+                    'Denominacion'      => (float) $denominacion,
+                    'CantidadContada'   => $cantidadAjustada,
+                    'MontoContado'      => $montoAjustado,
+                    'MontoContadoUSD'   => $montoAjustadoUSD,
+                    'CantidadPrestada'  => $cantidadPrestada,
+                    'MontoPrestado'     => $montoPrestado,
                     'MontoPrestadoUSD'  => $montoPrestadoUSD,
-                    'CantidadNeta'      => -$prestado->CantidadPrestada,
-                    'MontoNeto'         => -$prestado->MontoPrestado,
-                    'MontoNetoUSD'      => -$montoPrestadoUSD,
-                    'TotalCantidad'     => 0,
-                    'TotalMonto'        => 0,
-                ]);
-            }
+                    'CantidadNeta'      => $cantidadAjustada - $cantidadPrestada,
+                    'MontoNeto'         => $montoAjustado - $montoPrestado,
+                    'MontoNetoUSD'      => $montoAjustadoUSD - $montoPrestadoUSD,
+                    'TotalCantidad'     => $cantidadAjustada,
+                    'TotalMonto'        => $montoAjustado,
+                ];
+            })->filter(function ($item) {
+                return $item->CantidadContada != 0 || $item->CantidadPrestada != 0;
+            })->values();
 
             $bsPorDenominacion = $bsPorDenominacion->sortByDesc('Denominacion')->values();
 
             // ================================================
-            // 3. TOTALES POR PUNTO DE VENTA (Bs + estimado USD)
+            // 3. TOTALES POR PUNTO DE VENTA
             // ================================================
             $puntosVentaTotales = DB::connection('sqlsrv')
                 ->table('BovedaConciliacionPDV as bcp')
@@ -1992,26 +2562,15 @@ class BovedaController extends Controller
                     DB::raw('SUM(CASE WHEN ISNULL(dv.Valor, 0) > 0 THEN bcp.MontoDepositado / dv.Valor ELSE 0 END) as TotalDepositadoUSD'),
                     DB::raw('SUM(CASE WHEN ISNULL(dv.Valor, 0) > 0 THEN bcp.Diferencia / dv.Valor ELSE 0 END) as TotalDiferenciaUSD')
                 )
-                ->groupBy(
-                    'pdv.PuntoDeVentaId',
-                    'pdv.Descripcion',
-                    'pdv.Codigo',
-                    'b.Nombre',
-                    's.Nombre'
-                )
+                ->groupBy('pdv.PuntoDeVentaId', 'pdv.Descripcion', 'pdv.Codigo', 'b.Nombre', 's.Nombre')
                 ->orderBy('s.Nombre')
                 ->orderBy('pdv.Descripcion')
                 ->get();
 
             // ================================================
-            // 4. TOTALES POR OTROS CONCEPTOS (Bs + estimado USD)
+            // 4. TOTALES POR OTROS CONCEPTOS
             // ================================================
-            $tiposOtros = [
-                1 => 'Biopago',
-                2 => 'Transferencia',
-                3 => 'Cashea',
-                4 => 'Zelle'
-            ];
+            $tiposOtros = [1 => 'Biopago', 2 => 'Transferencia', 3 => 'Cashea', 4 => 'Zelle'];
 
             $otrosTotales = DB::connection('sqlsrv')
                 ->table('BovedaConciliacionOtros as bco')
@@ -2034,7 +2593,6 @@ class BovedaController extends Controller
                     $item->Moneda     = $item->Tipo == 4 ? 'USD' : 'Bs';
                     $item->Simbolo    = $item->Tipo == 4 ? '$' : 'Bs.';
 
-                    // Zelle ya está en USD → USD = mismo monto
                     if ($item->Tipo == 4) {
                         $item->TotalSistemaUSD    = $item->TotalSistema;
                         $item->TotalDepositadoUSD = $item->TotalDepositado;
@@ -2044,7 +2602,7 @@ class BovedaController extends Controller
                 });
 
             // ================================================
-            // 5. TOTALES DE EFECTIVO (Bs + estimado USD)
+            // 5. TOTALES DE EFECTIVO
             // ================================================
             $efectivoTotales = DB::connection('sqlsrv')
                 ->table('BovedaConciliacionEfectivo as bce')
@@ -2067,7 +2625,6 @@ class BovedaController extends Controller
                     $item->Moneda     = $item->Tipo == 1 ? 'USD' : 'Bs';
                     $item->Simbolo    = $item->Tipo == 1 ? '$' : 'Bs.';
 
-                    // Divisas ya están en USD → USD = mismo monto
                     if ($item->Tipo == 1) {
                         $item->TotalSistemaUSD    = $item->TotalSistema;
                         $item->TotalDepositadoUSD = $item->TotalDepositado;
@@ -2077,7 +2634,7 @@ class BovedaController extends Controller
                 });
 
             // ================================================
-            // 6. PRÉSTAMOS PENDIENTES POR SUCURSAL (SIN CONVERSIÓN)
+            // 6. PRÉSTAMOS PENDIENTES POR SUCURSAL
             // ================================================
             $prestamosPendientes = DB::connection('sqlsrv')
                 ->table('BovedaPrestamo as bp')
@@ -2100,44 +2657,36 @@ class BovedaController extends Controller
             // ================================================
             // 7. TOTALES GENERALES
             // ================================================
-            // Divisas (ya en USD)
             $totalDivisasContadas = $divisasPorDenominacion->sum('MontoContado');
             $totalDivisas         = $divisasPorDenominacion->sum('MontoNeto');
 
-            // Bolívares (Bs + USD)
             $totalBsContados    = $bsPorDenominacion->sum('MontoContado');
             $totalBsContadosUSD = $bsPorDenominacion->sum('MontoContadoUSD');
             $totalBs            = $bsPorDenominacion->sum('MontoNeto');
             $totalBsUSD         = $bsPorDenominacion->sum('MontoNetoUSD');
 
-            // Puntos de venta
             $totalPdvSistema       = $puntosVentaTotales->sum('TotalSistema');
             $totalPdvSistemaUSD    = $puntosVentaTotales->sum('TotalSistemaUSD');
             $totalPdvDepositado    = $puntosVentaTotales->sum('TotalDepositado');
             $totalPdvDepositadoUSD = $puntosVentaTotales->sum('TotalDepositadoUSD');
 
-            // Préstamos
             $totalPrestamosPendientesUSD = $prestamosPendientes->sum('TotalPendienteUSD');
             $totalPrestamosPendientesBs  = $prestamosPendientes->sum('TotalPendienteBs');
 
-            // Disponible
             $disponibleDivisas = $totalDivisas;
             $disponibleBs      = $totalBs;
             $disponibleBsUSD   = $totalBsUSD;
 
             // ================================================
-            // 7.1 TOTALES ESPECÍFICOS PARA "CONSOLIDADO EN BS"
+            // 7.1 CONSOLIDADO EN BS
             // ================================================
-            // Otros: solo los que están en Bs (Biopago, Transferencia, Cashea)
             $totalOtrosBs    = $otrosTotales->where('Moneda', 'Bs')->sum('TotalSistema');
             $totalOtrosBsUSD = $otrosTotales->where('Moneda', 'Bs')->sum('TotalSistemaUSD');
 
-            // Efectivo: solo el tipo 2 (Bolívares)
             $efectivoBsRow      = $efectivoTotales->where('Tipo', 2)->first();
             $totalEfectivoBs    = $efectivoBsRow->TotalSistema ?? 0;
             $totalEfectivoBsUSD = $efectivoBsRow->TotalSistemaUSD ?? 0;
 
-            // Total consolidado en Bs = físico neto + PDV + Otros Bs + Efectivo Bs
             $totalConsolidadoBs    = $disponibleBs + $totalPdvSistema + $totalOtrosBs + $totalEfectivoBs;
             $totalConsolidadoBsUSD = $disponibleBsUSD + $totalPdvSistemaUSD + $totalOtrosBsUSD + $totalEfectivoBsUSD;
 
@@ -2145,11 +2694,7 @@ class BovedaController extends Controller
             $tasaValor = $tasa ? $tasa->Valor : 0;
 
             // ================================================
-            // 7.2 GASTOS Y PAGOS A PROVEEDORES DEL PERÍODO
-            //     Tipo 0 = Pago Proveedor Mercancía
-            //     Tipo 2 = Gasto
-            //     Tipo 3 = Gasto de Caja
-            //     Tipo 5 = Pago Proveedor Servicio
+            // 7.2 GASTOS DEL PERÍODO
             // ================================================
             $tiposSalidas = [0, 2, 3, 5];
 
@@ -2160,23 +2705,14 @@ class BovedaController extends Controller
                 ->whereDate('t.Fecha', '>=', $fechaInicio)
                 ->whereDate('t.Fecha', '<=', $fechaFin)
                 ->select(
-                    't.ID',
-                    't.Fecha',
-                    't.Descripcion',
-                    't.Nombre as CategoriaNombre',
-                    't.CategoriaId',
-                    't.Tipo',
-                    't.MontoDivisaAbonado',
-                    't.MontoAbonado',
-                    't.TasaDeCambio',
-                    't.NumeroOperacion',
-                    't.SucursalId',
+                    't.ID', 't.Fecha', 't.Descripcion', 't.Nombre as CategoriaNombre',
+                    't.CategoriaId', 't.Tipo', 't.MontoDivisaAbonado', 't.MontoAbonado',
+                    't.TasaDeCambio', 't.NumeroOperacion', 't.SucursalId',
                     's.Nombre as SucursalNombre'
                 )
                 ->orderBy('t.Fecha', 'desc')
                 ->get();
 
-            // Mapeo de tipos a etiquetas legibles
             $tiposDescripcion = [
                 0 => 'Pago Proveedor Mercancía',
                 2 => 'Gastos',
@@ -2184,18 +2720,14 @@ class BovedaController extends Controller
                 5 => 'Pago Proveedor Servicio',
             ];
 
-            // Totales
             $totalGastosUSD = $gastosPeriodo->sum(fn($g) => (float) ($g->MontoDivisaAbonado ?? 0));
             $totalGastosBs  = $gastosPeriodo->sum(fn($g) => (float) ($g->MontoAbonado ?? 0));
 
-            // Agrupados por categoría (usa Nombre si existe, sino el tipo)
             $gastosPorCategoria = $gastosPeriodo
                 ->groupBy(function ($g) use ($tiposDescripcion) {
-                    // Si tiene Nombre (categoría de gasto), usarlo
                     if (!empty($g->CategoriaNombre)) {
                         return $g->CategoriaNombre;
                     }
-                    // Si no, usar el nombre del tipo
                     return $tiposDescripcion[$g->Tipo] ?? 'Otro';
                 })
                 ->map(function ($items, $categoria) {
@@ -2210,13 +2742,13 @@ class BovedaController extends Controller
                 ->values();
 
             // ================================================
-            // 7.3 AJUSTAR EL TOTAL CONSOLIDADO RESTANDO SALIDAS
+            // 7.3 AJUSTAR CONSOLIDADO RESTANDO SALIDAS
             // ================================================
             $totalConsolidadoBsFinal    = $totalConsolidadoBs - $totalGastosBs;
             $totalConsolidadoBsUSDFinal = $totalConsolidadoBsUSD - $totalGastosUSD;
 
             // ================================================
-            // 8. HISTORIAL DE BÓVEDAS (FILTRADO)
+            // 8. HISTORIAL DE BÓVEDAS
             // ================================================
             $historialBovedas = DB::connection('sqlsrv')
                 ->table('Boveda as b')
@@ -2411,6 +2943,527 @@ class BovedaController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
             return false;
+        }
+    }
+
+    /**
+     * Vista para el cambio de denominaciones en Divisas.
+     */
+    public function cambioDivisa(Request $request)
+    {
+        session([
+            'menu_active'    => 'Billetera',
+            'submenu_active' => 'Cambio Divisa'
+        ]);
+
+        try {
+            // Denominaciones oficiales de dólar
+            $denominacionesOficiales = [100.00, 50.00, 20.00, 10.00, 5.00, 2.00, 1.00];
+
+            // 1. Totales históricos por denominación
+            $totalesHistoricos = DB::connection('sqlsrv')
+                ->table('BovedaDenominacionDivisa')
+                ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                ->groupBy('Denominacion')
+                ->pluck('Total', 'Denominacion')
+                ->toArray();
+
+            // 2. Entregados en cambios
+            $entregados = DB::connection('sqlsrv')
+                ->table('BovedaCambioDivisaDetalle')
+                ->where('Tipo', 'ENTREGADO')
+                ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                ->groupBy('Denominacion')
+                ->pluck('Total', 'Denominacion')
+                ->toArray();
+
+            // 3. Cambiados en cambios
+            $cambiados = DB::connection('sqlsrv')
+                ->table('BovedaCambioDivisaDetalle')
+                ->where('Tipo', 'CAMBIADO')
+                ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                ->groupBy('Denominacion')
+                ->pluck('Total', 'Denominacion')
+                ->toArray();
+
+            // 4. Préstamos PENDIENTES por denominación (solo divisas, Estatus 0)
+            $prestamosPendientes = DB::connection('sqlsrv')
+                ->table('BovedaPrestamoDenominacion as bpd')
+                ->join('BovedaPrestamo as bp', 'bpd.BovedaPrestamoId', '=', 'bp.BovedaPrestamoId')
+                ->where('bp.Estatus', 0)
+                ->where('bp.TipoMoneda', 0) // 0 = Divisas
+                ->select('bpd.Denominacion', DB::raw('SUM(bpd.Cantidad) as Total'))
+                ->groupBy('bpd.Denominacion')
+                ->pluck('Total', 'bpd.Denominacion')
+                ->toArray();
+
+            // 5. Armar el listado con las denominaciones OFICIALES
+            $disponibles = [];
+            foreach ($denominacionesOficiales as $den) {
+                $key = number_format($den, 2, '.', '');
+
+                $total     = $totalesHistoricos[$key]    ?? 0;
+                $ent       = $entregados[$key]           ?? 0;
+                $cam       = $cambiados[$key]            ?? 0;
+                $prestado  = $prestamosPendientes[$key]  ?? 0;
+
+                $disponibles[] = (object) [
+                    'Denominacion' => $den,
+                    'TotalBase'    => (int) $total,
+                    'Entregado'    => (int) $ent,
+                    'Cambiado'     => (int) $cam,
+                    'Prestado'     => (int) $prestado,
+                    'Disponible'   => (int) ($total - $ent + $cam - $prestado),
+                ];
+            }
+
+            // Historial de cambios recientes
+            $historial = DB::connection('sqlsrv')
+                ->table('BovedaCambioDivisa as c')
+                ->orderByDesc('c.CambioId')
+                ->limit(20)
+                ->get()
+                ->map(function ($cambio) {
+                    $cambio->Detalles = DB::connection('sqlsrv')
+                        ->table('BovedaCambioDivisaDetalle')
+                        ->where('CambioId', $cambio->CambioId)
+                        ->get();
+
+                    $cambio->FechaFormateada = \Carbon\Carbon::parse($cambio->FechaCambio)
+                        ->format('d/m/Y H:i');
+
+                    return $cambio;
+                });
+
+            return view('cpanel.boveda.cambio_divisa', [
+                'disponibles' => collect($disponibles),
+                'historial'   => $historial,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en BovedaController::cambioDivisa: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar el cambio de divisa: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Guarda un cambio de divisa.
+     */
+    public function guardarCambioDivisa(Request $request)
+    {
+        $request->validate([
+            'denominacion_cambiada'      => 'required|numeric|min:0.01',
+            'cantidad_cambiada'          => 'required|integer|min:1',
+            'recibidas'                  => 'required|array|min:1',
+            'recibidas.*.denominacion'   => 'required|numeric|min:0.01',
+            'recibidas.*.cantidad'       => 'required|integer|min:1',
+        ]);
+
+        try {
+            $denCambiada = (float) $request->denominacion_cambiada;
+            $cantCambiada = (int) $request->cantidad_cambiada;
+            $montoCambiado = $denCambiada * $cantCambiada;
+
+            // ================================================
+            // 1. Calcular monto a recibir y validar que coincida
+            // ================================================
+            $montoRecibido = 0;
+            foreach ($request->recibidas as $recibida) {
+                $montoRecibido += (float) $recibida['denominacion'] * (int) $recibida['cantidad'];
+            }
+
+            // Redondear para evitar problemas de precisión
+            $montoCambiado = round($montoCambiado, 2);
+            $montoRecibido = round($montoRecibido, 2);
+
+            if (abs($montoCambiado - $montoRecibido) > 0.01) {
+                return back()->withInput()->with('error',
+                    'El monto a recibir ($' . number_format($montoRecibido, 2) . ') ' .
+                    'debe ser igual al monto cambiado ($' . number_format($montoCambiado, 2) . ').'
+                );
+            }
+
+            // ================================================
+            // 2. Calcular disponibilidad por denominación
+            // ================================================
+            $totalesHistoricos = DB::connection('sqlsrv')
+                ->table('BovedaDenominacionDivisa')
+                ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                ->groupBy('Denominacion')
+                ->pluck('Total', 'Denominacion')
+                ->toArray();
+
+            $entregados = DB::connection('sqlsrv')
+                ->table('BovedaCambioDivisaDetalle')
+                ->where('Tipo', 'ENTREGADO')
+                ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                ->groupBy('Denominacion')
+                ->pluck('Total', 'Denominacion')
+                ->toArray();
+
+            $cambiados = DB::connection('sqlsrv')
+                ->table('BovedaCambioDivisaDetalle')
+                ->where('Tipo', 'CAMBIADO')
+                ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                ->groupBy('Denominacion')
+                ->pluck('Total', 'Denominacion')
+                ->toArray();
+
+            // Préstamos PENDIENTES
+            $prestamosPendientes = DB::connection('sqlsrv')
+                ->table('BovedaPrestamoDenominacion as bpd')
+                ->join('BovedaPrestamo as bp', 'bpd.BovedaPrestamoId', '=', 'bp.BovedaPrestamoId')
+                ->where('bp.Estatus', 0)
+                ->where('bp.TipoMoneda', 0)
+                ->select('bpd.Denominacion', DB::raw('SUM(bpd.Cantidad) as Total'))
+                ->groupBy('bpd.Denominacion')
+                ->pluck('Total', 'bpd.Denominacion')
+                ->toArray();
+
+            // Disponible por denominación
+            $disponible = function($den) use ($totalesHistoricos, $entregados, $cambiados, $prestamosPendientes) {
+                $key = number_format($den, 2, '.', '');
+                return ($totalesHistoricos[$key] ?? 0)
+                    - ($entregados[$key] ?? 0)
+                    + ($cambiados[$key] ?? 0)
+                    - ($prestamosPendientes[$key] ?? 0);
+            };
+
+            // ================================================
+            // 3. Validar que se pueda entregar cada billete
+            // ================================================
+            foreach ($request->recibidas as $recibida) {
+                $den = (float) $recibida['denominacion'];
+                $cant = (int) $recibida['cantidad'];
+                $dispo = $disponible($den);
+
+                if ($cant > $dispo) {
+                    return back()->withInput()->with('error',
+                        'No hay suficientes billetes de $' . number_format($den, 2) . '. ' .
+                        'Disponible: ' . $dispo . ', solicitado: ' . $cant . '.'
+                    );
+                }
+            }
+
+            // ================================================
+            // 4. Guardar en transacción
+            // ================================================
+            DB::connection('sqlsrv')->beginTransaction();
+
+            try {
+                $usuarioId = auth()->user()->id ?? null;
+
+                // Cabecera
+                $cambioId = DB::connection('sqlsrv')->table('BovedaCambioDivisa')->insertGetId([
+                    'FechaCambio'  => now(),
+                    'UsuarioId'    => $usuarioId,
+                    'Observacion'  => $request->observacion ?? null,
+                ]);
+
+                // Detalle: lo que se cambió (entra a la bóveda → suma)
+                DB::connection('sqlsrv')->table('BovedaCambioDivisaDetalle')->insert([
+                    'CambioId'      => $cambioId,
+                    'Denominacion'  => $denCambiada,
+                    'Cantidad'      => $cantCambiada,
+                    'Tipo'          => 'CAMBIADO',
+                ]);
+
+                // Detalle: lo que se entregó (sale de la bóveda → resta)
+                foreach ($request->recibidas as $recibida) {
+                    DB::connection('sqlsrv')->table('BovedaCambioDivisaDetalle')->insert([
+                        'CambioId'      => $cambioId,
+                        'Denominacion'  => (float) $recibida['denominacion'],
+                        'Cantidad'      => (int) $recibida['cantidad'],
+                        'Tipo'          => 'ENTREGADO',
+                    ]);
+                }
+
+                DB::connection('sqlsrv')->commit();
+
+                return redirect()->route('cpanel.billetera.cambio.divisa')
+                    ->with('success', 'Cambio registrado correctamente.');
+
+            } catch (\Exception $e) {
+                DB::connection('sqlsrv')->rollBack();
+                throw $e;
+            }
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withInput()->withErrors($e->errors());
+        } catch (\Exception $e) {
+            Log::error('Error en BovedaController::guardarCambioDivisa: ' . $e->getMessage());
+            return back()->withInput()->with('error', 'Error al guardar el cambio: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Vista para el cambio de denominaciones en Bolívares.
+     */
+    public function cambioBolivares(Request $request)
+    {
+        session([
+            'menu_active'    => 'Billetera',
+            'submenu_active' => 'Cambio Bolívares'
+        ]);
+
+        try {
+            // Denominaciones oficiales de bolívares (billetes)
+            $denominacionesOficiales = [500.00, 200.00, 100.00, 50.00, 20.00, 10.00, 5.00, 2.00, 1.00];
+
+            // Helper para normalizar las claves del pluck a entero
+            $normalizarClaves = function ($collection) {
+                $resultado = [];
+                foreach ($collection as $item) {
+                    $key = (string) (int) ((float) $item->Denominacion);
+                    $resultado[$key] = $item->Total;
+                }
+                return $resultado;
+            };
+
+            // 1. Totales históricos por denominación
+            $totalesHistoricos = $normalizarClaves(
+                DB::connection('sqlsrv')
+                    ->table('BovedaDenominacionBs')
+                    ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                    ->groupBy('Denominacion')
+                    ->get()
+            );
+
+            // 2. Entregados en cambios
+            $entregados = $normalizarClaves(
+                DB::connection('sqlsrv')
+                    ->table('BovedaCambioBsDetalle')
+                    ->where('Tipo', 'ENTREGADO')
+                    ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                    ->groupBy('Denominacion')
+                    ->get()
+            );
+
+            // 3. Cambiados en cambios
+            $cambiados = $normalizarClaves(
+                DB::connection('sqlsrv')
+                    ->table('BovedaCambioBsDetalle')
+                    ->where('Tipo', 'CAMBIADO')
+                    ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                    ->groupBy('Denominacion')
+                    ->get()
+            );
+
+            // 4. Préstamos PENDIENTES por denominación (solo bolívares, Estatus 0)
+            $prestamosPendientes = $normalizarClaves(
+                DB::connection('sqlsrv')
+                    ->table('BovedaPrestamoDenominacion as bpd')
+                    ->join('BovedaPrestamo as bp', 'bpd.BovedaPrestamoId', '=', 'bp.BovedaPrestamoId')
+                    ->where('bp.Estatus', 0)
+                    ->where('bp.TipoMoneda', 1)
+                    ->select('bpd.Denominacion', DB::raw('SUM(bpd.Cantidad) as Total'))
+                    ->groupBy('bpd.Denominacion')
+                    ->get()
+            );
+
+            // 5. Armar el listado con las denominaciones OFICIALES
+            $disponibles = [];
+            foreach ($denominacionesOficiales as $den) {
+                $key = (string) (int) $den;
+
+                $total    = $totalesHistoricos[$key]    ?? 0;
+                $ent      = $entregados[$key]           ?? 0;
+                $cam      = $cambiados[$key]            ?? 0;
+                $prestado = $prestamosPendientes[$key]  ?? 0;
+
+                $disponibles[] = (object) [
+                    'Denominacion' => $den,
+                    'TotalBase'    => (int) $total,
+                    'Entregado'    => (int) $ent,
+                    'Cambiado'     => (int) $cam,
+                    'Disponible'   => (int) ($total - $ent + $cam - $prestado),
+                ];
+            }
+
+            // Historial de cambios recientes
+            $historial = DB::connection('sqlsrv')
+                ->table('BovedaCambioBs as c')
+                ->orderByDesc('c.CambioId')
+                ->limit(20)
+                ->get()
+                ->map(function ($cambio) {
+                    $cambio->Detalles = DB::connection('sqlsrv')
+                        ->table('BovedaCambioBsDetalle')
+                        ->where('CambioId', $cambio->CambioId)
+                        ->get();
+
+                    $cambio->FechaFormateada = \Carbon\Carbon::parse($cambio->FechaCambio)
+                        ->format('d/m/Y H:i');
+
+                    return $cambio;
+                });
+
+            return view('cpanel.boveda.cambio_bolivares', [
+                'disponibles' => collect($disponibles),
+                'historial'   => $historial,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en BovedaController::cambioBolivares: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar el cambio de bolívares: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Guarda un cambio de bolívares.
+     */
+    public function guardarCambioBolivares(Request $request)
+    {
+        $request->validate([
+            'denominacion_cambiada'      => 'required|numeric|min:0.01',
+            'cantidad_cambiada'          => 'required|integer|min:1',
+            'recibidas'                  => 'required|array|min:1',
+            'recibidas.*.denominacion'   => 'required|numeric|min:0.01',
+            'recibidas.*.cantidad'       => 'required|integer|min:1',
+        ]);
+
+        try {
+            $denCambiada  = (float) $request->denominacion_cambiada;
+            $cantCambiada = (int) $request->cantidad_cambiada;
+            $montoCambiado = round($denCambiada * $cantCambiada, 2);
+
+            // ================================================
+            // 1. Validar que el monto a recibir coincida
+            // ================================================
+            $montoRecibido = 0;
+            foreach ($request->recibidas as $recibida) {
+                $montoRecibido += (float) $recibida['denominacion'] * (int) $recibida['cantidad'];
+            }
+            $montoRecibido = round($montoRecibido, 2);
+
+            if (abs($montoCambiado - $montoRecibido) > 0.01) {
+                return back()->withInput()->with('error',
+                    'El monto a recibir (Bs. ' . number_format($montoRecibido, 2) . ') ' .
+                    'debe ser igual al monto cambiado (Bs. ' . number_format($montoCambiado, 2) . ').'
+                );
+            }
+
+            // ================================================
+            // 2. Calcular disponibilidad por denominación
+            // ================================================
+            // Helper para normalizar las claves a entero
+            $normalizarClaves = function ($collection) {
+                $resultado = [];
+                foreach ($collection as $item) {
+                    $key = (string) (int) ((float) $item->Denominacion);
+                    $resultado[$key] = $item->Total;
+                }
+                return $resultado;
+            };
+
+            $totalesHistoricos = $normalizarClaves(
+                DB::connection('sqlsrv')
+                    ->table('BovedaDenominacionBs')
+                    ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                    ->groupBy('Denominacion')
+                    ->get()
+            );
+
+            $entregados = $normalizarClaves(
+                DB::connection('sqlsrv')
+                    ->table('BovedaCambioBsDetalle')
+                    ->where('Tipo', 'ENTREGADO')
+                    ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                    ->groupBy('Denominacion')
+                    ->get()
+            );
+
+            $cambiados = $normalizarClaves(
+                DB::connection('sqlsrv')
+                    ->table('BovedaCambioBsDetalle')
+                    ->where('Tipo', 'CAMBIADO')
+                    ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                    ->groupBy('Denominacion')
+                    ->get()
+            );
+
+            $prestamosPendientes = $normalizarClaves(
+                DB::connection('sqlsrv')
+                    ->table('BovedaPrestamoDenominacion as bpd')
+                    ->join('BovedaPrestamo as bp', 'bpd.BovedaPrestamoId', '=', 'bp.BovedaPrestamoId')
+                    ->where('bp.Estatus', 0)
+                    ->where('bp.TipoMoneda', 1)
+                    ->select('bpd.Denominacion', DB::raw('SUM(bpd.Cantidad) as Total'))
+                    ->groupBy('bpd.Denominacion')
+                    ->get()
+            );
+
+            $disponible = function($den) use ($totalesHistoricos, $entregados, $cambiados, $prestamosPendientes) {
+                $key = (string) (int) $den;
+                return ($totalesHistoricos[$key] ?? 0)
+                    - ($entregados[$key] ?? 0)
+                    + ($cambiados[$key] ?? 0)
+                    - ($prestamosPendientes[$key] ?? 0);
+            };
+
+            // ================================================
+            // 3. Validar disponibilidad
+            // ================================================
+            foreach ($request->recibidas as $recibida) {
+                $den   = (float) $recibida['denominacion'];
+                $cant  = (int) $recibida['cantidad'];
+                $dispo = $disponible($den);
+
+                if ($cant > $dispo) {
+                    return back()->withInput()->with('error',
+                        'No hay suficientes billetes de Bs. ' . number_format($den, 2) . '. ' .
+                        'Disponible: ' . $dispo . ', solicitado: ' . $cant . '.'
+                    );
+                }
+            }
+
+            // ================================================
+            // 4. Guardar en transacción
+            // ================================================
+            DB::connection('sqlsrv')->beginTransaction();
+
+            try {
+                $usuarioId = auth()->user()->id ?? null;
+
+                $cambioId = DB::connection('sqlsrv')->table('BovedaCambioBs')->insertGetId([
+                    'FechaCambio' => now(),
+                    'UsuarioId'   => $usuarioId,
+                    'Observacion' => $request->observacion ?? null,
+                ]);
+
+                // Lo que se cambió (entra a la bóveda → suma)
+                DB::connection('sqlsrv')->table('BovedaCambioBsDetalle')->insert([
+                    'CambioId'     => $cambioId,
+                    'Denominacion' => $denCambiada,
+                    'Cantidad'     => $cantCambiada,
+                    'Tipo'         => 'CAMBIADO',
+                ]);
+
+                // Lo que se entregó (sale de la bóveda → resta)
+                foreach ($request->recibidas as $recibida) {
+                    DB::connection('sqlsrv')->table('BovedaCambioBsDetalle')->insert([
+                        'CambioId'     => $cambioId,
+                        'Denominacion' => (float) $recibida['denominacion'],
+                        'Cantidad'     => (int) $recibida['cantidad'],
+                        'Tipo'         => 'ENTREGADO',
+                    ]);
+                }
+
+                DB::connection('sqlsrv')->commit();
+
+                return redirect()->route('cpanel.billetera.cambio.bolivares')
+                    ->with('success', 'Cambio registrado correctamente.');
+
+            } catch (\Exception $e) {
+                DB::connection('sqlsrv')->rollBack();
+                throw $e;
+            }
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withInput()->withErrors($e->errors());
+        } catch (\Exception $e) {
+            Log::error('Error en BovedaController::guardarCambioBolivares: ' . $e->getMessage());
+            return back()->withInput()->with('error', 'Error al guardar el cambio: ' . $e->getMessage());
         }
     }
 }

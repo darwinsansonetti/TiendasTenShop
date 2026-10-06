@@ -315,13 +315,12 @@
                                                         <input type="hidden" name="conciliacion_pdv[{{ $sucursal->SucursalId }}_{{ $pdv->PuntoDeVentaId }}][punto_venta_id]" value="{{ $pdv->PuntoDeVentaId }}">
                                                         <input type="hidden" name="conciliacion_pdv[{{ $sucursal->SucursalId }}_{{ $pdv->PuntoDeVentaId }}][cierre_diario_id]" value="{{ $sucursal->CierreDiarioId }}">
                                                         <input type="hidden" name="conciliacion_pdv[{{ $sucursal->SucursalId }}_{{ $pdv->PuntoDeVentaId }}][monto_sistema]" value="{{ number_format($pdv->monto_sistema, 2, '.', '') }}">
-                                                        <input type="number" 
-                                                               name="conciliacion_pdv[{{ $sucursal->SucursalId }}_{{ $pdv->PuntoDeVentaId }}][monto_depositado]" 
-                                                               class="form-control form-control-sm text-end monto-depositado"
-                                                               step="0.01" min="0" 
-                                                               value="{{ number_format($montoDepositado, 2, '.', '') }}"
-                                                               data-monto-sistema="{{ number_format($pdv->monto_sistema, 2, '.', '') }}"
-                                                               data-sucursal="{{ $sucursal->SucursalId }}">
+                                                        <input type="text" inputmode="decimal"
+                                                            name="conciliacion_pdv[{{ $sucursal->SucursalId }}_{{ $pdv->PuntoDeVentaId }}][monto_depositado]" 
+                                                            class="form-control form-control-sm text-end monto-depositado input-monto"
+                                                            value="{{ number_format($montoDepositado, 2, '.', '') }}"
+                                                            data-monto-sistema="{{ number_format($pdv->monto_sistema, 2, '.', '') }}"
+                                                            data-sucursal="{{ $sucursal->SucursalId }}">
                                                     </td>
                                                     <td class="pe-3 text-center">
                                                         <span class="badge bg-success diferencia-badge" style="font-size:0.7rem;">Bs. 0.00</span>
@@ -380,14 +379,13 @@
                                                         <input type="hidden" name="conciliacion_otros[{{ $sucursal->SucursalId }}_{{ $otro->Tipo }}][sucursal_id]" value="{{ $sucursal->SucursalId }}">
                                                         <input type="hidden" name="conciliacion_otros[{{ $sucursal->SucursalId }}_{{ $otro->Tipo }}][tipo]" value="{{ $otro->Tipo }}">
                                                         <input type="hidden" name="conciliacion_otros[{{ $sucursal->SucursalId }}_{{ $otro->Tipo }}][monto_sistema]" value="{{ number_format($otro->MontoSistema, 2, '.', '') }}">
-                                                        <input type="number" 
-                                                               name="conciliacion_otros[{{ $sucursal->SucursalId }}_{{ $otro->Tipo }}][monto_depositado]" 
-                                                               class="form-control form-control-sm text-end monto-depositado-otros"
-                                                               step="0.01" min="0" 
-                                                               value="{{ number_format($montoDepositadoOtro, 2, '.', '') }}"
-                                                               data-monto-sistema="{{ number_format($otro->MontoSistema, 2, '.', '') }}"
-                                                               data-moneda="{{ $otro->Moneda }}"
-                                                               data-sucursal="{{ $sucursal->SucursalId }}">
+                                                        <input type="text" inputmode="decimal"
+                                                            name="conciliacion_otros[{{ $sucursal->SucursalId }}_{{ $otro->Tipo }}][monto_depositado]" 
+                                                            class="form-control form-control-sm text-end monto-depositado-otros input-monto"
+                                                            value="{{ number_format($montoDepositadoOtro, 2, '.', '') }}"
+                                                            data-monto-sistema="{{ number_format($otro->MontoSistema, 2, '.', '') }}"
+                                                            data-moneda="{{ $otro->Moneda }}"
+                                                            data-sucursal="{{ $sucursal->SucursalId }}">
                                                     </td>
                                                     <td class="pe-3 text-center">
                                                         <span class="badge bg-success diferencia-badge-otros" style="font-size:0.7rem;">
@@ -436,12 +434,51 @@
 <script>
     document.addEventListener("DOMContentLoaded", function() {
         // ============================================
+        // FORMATEO TIPO CAJA REGISTRADORA PARA MONTOS
+        // ============================================
+        function extraerCentavos(valor) {
+            if (valor === null || valor === undefined || valor === '') return 0;
+            const soloDigitos = String(valor).replace(/\D/g, '');
+            return soloDigitos ? parseInt(soloDigitos, 10) : 0;
+        }
+
+        function formatearMontoVE(centavos) {
+            const entero  = Math.floor(centavos / 100);
+            const decimal = (centavos % 100).toString().padStart(2, '0');
+            const enteroStr = entero.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+            return enteroStr + ',' + decimal;
+        }
+
+        // Aplicar a los inputs de monto
+        document.querySelectorAll('.input-monto').forEach(input => {
+            let centavos = extraerCentavos(input.value);
+            if (centavos > 0) {
+                input.value = formatearMontoVE(centavos);
+            }
+            input.dataset.valorLimpio = (centavos / 100).toFixed(2);
+
+            input.addEventListener('input', function() {
+                centavos = extraerCentavos(this.value);
+                this.value = formatearMontoVE(centavos);
+                this.dataset.valorLimpio = (centavos / 100).toFixed(2);
+            });
+
+            input.addEventListener('blur', function() {
+                centavos = extraerCentavos(this.value);
+                this.value = formatearMontoVE(centavos);
+                this.dataset.valorLimpio = (centavos / 100).toFixed(2);
+            });
+
+            input.addEventListener('focus', function() {
+                this.select();
+            });
+        });
+
+        // ============================================
         // CÁLCULO DE EFECTIVO Y CONCILIACIÓN
         // ============================================
         function calcularEfectivo() {
-            // ============================================
-            // DIVISAS
-            // ============================================
+            // ===== DIVISAS =====
             const subtotalesDivisa = {};
             document.querySelectorAll('.cantidad-divisa').forEach(input => {
                 const sucursalId = input.dataset.sucursal;
@@ -449,33 +486,30 @@
                 const denom = parseFloat(input.dataset.denominacion) || 0;
                 subtotalesDivisa[sucursalId] = (subtotalesDivisa[sucursalId] || 0) + (cantidad * denom);
             });
-            
+
             Object.keys(subtotalesDivisa).forEach(sucId => {
                 const totalDivisa = subtotalesDivisa[sucId];
                 const elSubtotal = document.querySelector('.subtotal-divisa-' + sucId);
                 const elContado = document.querySelector('.total-contado-divisa-' + sucId);
                 const elDiferencia = document.querySelector('.diferencia-efectivo-divisa-' + sucId);
                 const elHidden = document.querySelector('.monto-contado-divisa-' + sucId);
-                
+
                 if (elSubtotal) elSubtotal.textContent = '$ ' + totalDivisa.toFixed(2);
                 if (elContado) elContado.textContent = '$ ' + totalDivisa.toFixed(2);
                 if (elHidden) elHidden.value = totalDivisa;
-                
+
                 if (elDiferencia) {
-                    // 🔹 Buscar el monto_sistema de DIVISAS específicamente (por el name)
                     const nameSistema = 'conciliacion_efectivo[' + sucId + '_1][monto_sistema]';
                     const inputSistema = document.querySelector('input[name="' + nameSistema + '"]');
                     const montoSistema = inputSistema ? (parseFloat(inputSistema.value) || 0) : 0;
-                    
+
                     const diferencia = montoSistema - totalDivisa;
                     elDiferencia.textContent = '$ ' + diferencia.toFixed(2);
                     elDiferencia.className = 'diferencia-efectivo-divisa-' + sucId + ' ' + (Math.abs(diferencia) < 0.01 ? 'text-success' : 'text-danger');
                 }
             });
 
-            // ============================================
-            // BOLÍVARES
-            // ============================================
+            // ===== BOLÍVARES =====
             const subtotalesBs = {};
             document.querySelectorAll('.cantidad-bs').forEach(input => {
                 const sucursalId = input.dataset.sucursal;
@@ -483,24 +517,23 @@
                 const denom = parseFloat(input.dataset.denominacion) || 0;
                 subtotalesBs[sucursalId] = (subtotalesBs[sucursalId] || 0) + (cantidad * denom);
             });
-            
+
             Object.keys(subtotalesBs).forEach(sucId => {
                 const totalBs = subtotalesBs[sucId];
                 const elSubtotal = document.querySelector('.subtotal-bs-' + sucId);
                 const elContado = document.querySelector('.total-contado-bs-' + sucId);
                 const elDiferencia = document.querySelector('.diferencia-efectivo-bs-' + sucId);
                 const elHidden = document.querySelector('.monto-contado-bs-' + sucId);
-                
+
                 if (elSubtotal) elSubtotal.textContent = 'Bs. ' + totalBs.toFixed(2);
                 if (elContado) elContado.textContent = 'Bs. ' + totalBs.toFixed(2);
                 if (elHidden) elHidden.value = totalBs;
-                
+
                 if (elDiferencia) {
-                    // 🔹 Buscar el monto_sistema de BOLÍVARES específicamente (por el name)
                     const nameSistema = 'conciliacion_efectivo[' + sucId + '_2][monto_sistema]';
                     const inputSistema = document.querySelector('input[name="' + nameSistema + '"]');
                     const montoSistema = inputSistema ? (parseFloat(inputSistema.value) || 0) : 0;
-                    
+
                     const diferencia = montoSistema - totalBs;
                     elDiferencia.textContent = 'Bs. ' + diferencia.toFixed(2);
                     elDiferencia.className = 'diferencia-efectivo-bs-' + sucId + ' ' + (Math.abs(diferencia) < 0.01 ? 'text-success' : 'text-danger');
@@ -514,11 +547,11 @@
         function calcularDiferenciasPDV() {
             document.querySelectorAll('.monto-depositado').forEach(input => {
                 const montoSistema = parseFloat(input.dataset.montoSistema) || 0;
-                const montoDepositado = parseFloat(input.value) || 0;
+                const montoDepositado = extraerCentavos(input.value) / 100;
                 const diferencia = montoSistema - montoDepositado;
 
                 const badge = input.closest('tr').querySelector('.diferencia-badge');
-                
+
                 if (Math.abs(diferencia) < 0.01) {
                     badge.className = 'badge bg-success diferencia-badge';
                     badge.textContent = 'Bs. 0.00';
@@ -535,13 +568,13 @@
         function calcularDiferenciasOtros() {
             document.querySelectorAll('.monto-depositado-otros').forEach(input => {
                 const montoSistema = parseFloat(input.dataset.montoSistema) || 0;
-                const montoDepositado = parseFloat(input.value) || 0;
+                const montoDepositado = extraerCentavos(input.value) / 100;
                 const diferencia = montoSistema - montoDepositado;
                 const moneda = input.dataset.moneda || 'Bs.';
                 const simbolo = moneda === 'USD' ? '$' : 'Bs.';
 
                 const badge = input.closest('tr').querySelector('.diferencia-badge-otros');
-                
+
                 if (Math.abs(diferencia) < 0.01) {
                     badge.className = 'badge bg-success diferencia-badge-otros';
                     badge.textContent = simbolo + ' 0.00';
@@ -552,7 +585,9 @@
             });
         }
 
-        // Event listeners
+        // ============================================
+        // EVENT LISTENERS
+        // ============================================
         document.querySelectorAll('.cantidad-divisa, .cantidad-bs').forEach(i => {
             i.addEventListener('input', calcularEfectivo);
         });
@@ -563,12 +598,20 @@
             i.addEventListener('input', calcularDiferenciasOtros);
         });
 
+        // Inicializar
         calcularEfectivo();
         calcularDiferenciasPDV();
         calcularDiferenciasOtros();
 
-        // Deshabilitar botón al enviar
+        // ============================================
+        // LIMPIAR AL ENVIAR
+        // ============================================
         document.getElementById('formBoveda').addEventListener('submit', function() {
+            document.querySelectorAll('.input-monto').forEach(input => {
+                const centavos = extraerCentavos(input.value);
+                input.value = (centavos / 100).toFixed(2);
+            });
+
             const btn = document.getElementById('btnGuardar');
             btn.disabled = true;
             btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Actualizando...';

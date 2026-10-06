@@ -956,6 +956,25 @@ Route::middleware('auth')->group(function() {
 
     Route::post('/pago-movil-publico/consultar', [BancosController::class, 'consultarPagoMovilPublico'])
         ->name('pago.movil.publico.consultar');
+
+    // ============================================
+    // BILLETERA - CAMBIO DE DENOMINACIONES
+    // ============================================
+    Route::get('/cpanel/billetera/cambio/divisa', [BovedaController::class, 'cambioDivisa'])
+        ->name('cpanel.billetera.cambio.divisa');
+
+    Route::get('/cpanel/billetera/cambio/bolivares', [BovedaController::class, 'cambioBolivares'])
+        ->name('cpanel.billetera.cambio.bolivares');
+
+    Route::post('/cpanel/billetera/cambio/divisa/guardar', [BovedaController::class, 'guardarCambioDivisa'])
+        ->name('cpanel.billetera.cambio.divisa.guardar');
+
+    // Billetera - Cambio de Bolívares
+    Route::get('/cpanel/billetera/cambio/bolivares', [BovedaController::class, 'cambioBolivares'])
+        ->name('cpanel.billetera.cambio.bolivares');
+
+    Route::post('/cpanel/billetera/cambio/bolivares/guardar', [BovedaController::class, 'guardarCambioBolivares'])
+        ->name('cpanel.billetera.cambio.bolivares.guardar');
 });
 
 
