@@ -511,6 +511,92 @@
         @endif
 
         {{-- ================================================ --}}
+        {{-- RETIROS DEL PERÍODO --}}
+        {{-- ================================================ --}}
+        @if($retirosDivisa->count() > 0 || $retirosBs->count() > 0)
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header border-0 py-2" style="background:linear-gradient(135deg,#ef4444 0%,#991b1b 100%);">
+                <div class="d-flex align-items-center justify-content-between">
+                    <h6 class="mb-0 fw-bold text-white" style="font-size:0.85rem;">
+                        <i class="bi bi-box-arrow-up me-2"></i>Retiros del Período
+                    </h6>
+                    <span class="badge bg-white text-dark">
+                        {{ $retirosDivisa->sum('Total') + $retirosBs->sum('Total') }} Billetes
+                    </span>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead style="background:#fef2f2;">
+                            <tr>
+                                <th class="ps-4 py-2 text-danger fw-semibold" style="font-size:0.75rem;">TIPO</th>
+                                <th class="py-2 text-danger fw-semibold" style="font-size:0.75rem;">DENOMINACIÓN</th>
+                                <th class="py-2 text-center text-danger fw-semibold" style="font-size:0.75rem;">CANTIDAD</th>
+                                <th class="pe-4 py-2 text-end text-danger fw-semibold" style="font-size:0.75rem;">MONTO</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{-- Retiros en Divisas --}}
+                            @foreach($retirosDivisa as $r)
+                            <tr>
+                                <td class="ps-4">
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-currency-dollar me-1"></i>Divisa
+                                    </span>
+                                </td>
+                                <td class="fw-semibold">$ {{ number_format($r->Denominacion, 2) }}</td>
+                                <td class="text-center">
+                                    <span class="badge bg-danger">−{{ number_format($r->Total, 0) }}</span>
+                                </td>
+                                <td class="pe-4 text-end fw-bold text-danger">
+                                    $ {{ number_format($r->MontoTotal, 2) }}
+                                </td>
+                            </tr>
+                            @endforeach
+
+                            {{-- Retiros en Bolívares --}}
+                            @foreach($retirosBs as $r)
+                            <tr>
+                                <td class="ps-4">
+                                    <span class="badge bg-primary">
+                                        <i class="bi bi-cash-stack me-1"></i>Bolívar
+                                    </span>
+                                </td>
+                                <td class="fw-semibold">Bs. {{ number_format($r->Denominacion, 0) }}</td>
+                                <td class="text-center">
+                                    <span class="badge bg-danger">−{{ number_format($r->Total, 0) }}</span>
+                                </td>
+                                <td class="pe-4 text-end fw-bold text-danger">
+                                    Bs. {{ number_format($r->MontoTotal, 2) }}
+                                </td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                        <tfoot style="background:#fef2f2;border-top:2px solid #ef4444;">
+                            <tr>
+                                <th colspan="3" class="ps-4 py-2 text-end">TOTAL RETIRADO:</th>
+                                <th class="pe-4 py-2 text-end">
+                                    <div class="text-danger">
+                                        @if($totalRetirosDivisa > 0)
+                                            $ {{ number_format($totalRetirosDivisa, 2) }}
+                                        @endif
+                                    </div>
+                                    <div class="text-danger">
+                                        @if($totalRetirosBs > 0)
+                                            Bs. {{ number_format($totalRetirosBs, 2) }}
+                                        @endif
+                                    </div>
+                                </th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+        @endif
+
+        {{-- ================================================ --}}
         {{-- TOTALES POR PUNTO DE VENTA --}}
         {{-- ================================================ --}}
         @if($puntosVentaTotales->count() > 0)

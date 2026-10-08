@@ -975,6 +975,19 @@ Route::middleware('auth')->group(function() {
 
     Route::post('/cpanel/billetera/cambio/bolivares/guardar', [BovedaController::class, 'guardarCambioBolivares'])
         ->name('cpanel.billetera.cambio.bolivares.guardar');
+
+    // Billetera - Retiro
+    Route::get('/cpanel/billetera/retiro/divisa', [BovedaController::class, 'retiroDivisa'])
+        ->name('cpanel.billetera.retiro.divisa');
+
+    Route::post('/cpanel/billetera/retiro/divisa/guardar', [BovedaController::class, 'guardarRetiroDivisa'])
+        ->name('cpanel.billetera.retiro.divisa.guardar');
+
+    Route::get('/cpanel/billetera/retiro/bolivares', [BovedaController::class, 'retiroBolivares'])
+        ->name('cpanel.billetera.retiro.bolivares');
+
+    Route::post('/cpanel/billetera/retiro/bolivares/guardar', [BovedaController::class, 'guardarRetiroBolivares'])
+        ->name('cpanel.billetera.retiro.bolivares.guardar');
 });
 
 

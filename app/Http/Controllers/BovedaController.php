@@ -2744,8 +2744,47 @@ class BovedaController extends Controller
             // ================================================
             // 7.3 AJUSTAR CONSOLIDADO RESTANDO SALIDAS
             // ================================================
+            // Los retiros YA están restados del disponible (son ENTREGADO en el cálculo).
+            // Solo restamos los gastos del período.
             $totalConsolidadoBsFinal    = $totalConsolidadoBs - $totalGastosBs;
             $totalConsolidadoBsUSDFinal = $totalConsolidadoBsUSD - $totalGastosUSD;
+
+            // ================================================
+            // 7.4 RETIROS DEL PERÍODO (Divisas + Bolívares)
+            // ================================================
+            $retirosDivisa = DB::connection('sqlsrv')
+                ->table('BovedaCambioDivisa as c')
+                ->join('BovedaCambioDivisaDetalle as d', 'c.CambioId', '=', 'd.CambioId')
+                ->where('c.TipoMovimiento', 'RETIRO')
+                ->whereDate('c.FechaCambio', '>=', $fechaInicio)
+                ->whereDate('c.FechaCambio', '<=', $fechaFin)
+                ->select('d.Denominacion', DB::raw('SUM(d.Cantidad) as Total'))
+                ->groupBy('d.Denominacion')
+                ->orderByDesc('d.Denominacion')
+                ->get()
+                ->map(function ($item) {
+                    $item->MontoTotal = $item->Denominacion * $item->Total;
+                    return $item;
+                });
+
+            $totalRetirosDivisa = $retirosDivisa->sum('MontoTotal');
+
+            $retirosBs = DB::connection('sqlsrv')
+                ->table('BovedaCambioBs as c')
+                ->join('BovedaCambioBsDetalle as d', 'c.CambioId', '=', 'd.CambioId')
+                ->where('c.TipoMovimiento', 'RETIRO')
+                ->whereDate('c.FechaCambio', '>=', $fechaInicio)
+                ->whereDate('c.FechaCambio', '<=', $fechaFin)
+                ->select('d.Denominacion', DB::raw('SUM(d.Cantidad) as Total'))
+                ->groupBy('d.Denominacion')
+                ->orderByDesc('d.Denominacion')
+                ->get()
+                ->map(function ($item) {
+                    $item->MontoTotal = $item->Denominacion * $item->Total;
+                    return $item;
+                });
+
+            $totalRetirosBs = $retirosBs->sum('MontoTotal');
 
             // ================================================
             // 8. HISTORIAL DE BÓVEDAS
@@ -2812,6 +2851,10 @@ class BovedaController extends Controller
                 'totalGastosBs' => $totalGastosBs,
                 'totalConsolidadoBsFinal' => $totalConsolidadoBsFinal,
                 'totalConsolidadoBsUSDFinal' => $totalConsolidadoBsUSDFinal,
+                'retirosDivisa'      => $retirosDivisa,
+                'retirosBs'          => $retirosBs,
+                'totalRetirosDivisa' => $totalRetirosDivisa,
+                'totalRetirosBs'     => $totalRetirosBs,
             ]);
 
         } catch (\Exception $e) {
@@ -3158,6 +3201,7 @@ class BovedaController extends Controller
                     'FechaCambio'  => now(),
                     'UsuarioId'    => $usuarioId,
                     'Observacion'  => $request->observacion ?? null,
+                    'TipoMovimiento'  => 'CAMBIO',
                 ]);
 
                 // Detalle: lo que se cambió (entra a la bóveda → suma)
@@ -3429,6 +3473,7 @@ class BovedaController extends Controller
                     'FechaCambio' => now(),
                     'UsuarioId'   => $usuarioId,
                     'Observacion' => $request->observacion ?? null,
+                    'TipoMovimiento'  => 'CAMBIO',
                 ]);
 
                 // Lo que se cambió (entra a la bóveda → suma)
@@ -3464,6 +3509,480 @@ class BovedaController extends Controller
         } catch (\Exception $e) {
             Log::error('Error en BovedaController::guardarCambioBolivares: ' . $e->getMessage());
             return back()->withInput()->with('error', 'Error al guardar el cambio: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Vista para el retiro de divisas.
+     */
+    public function retiroDivisa(Request $request)
+    {
+        session([
+            'menu_active'    => 'Billetera',
+            'submenu_active' => 'Retiro Divisa'
+        ]);
+
+        try {
+            $denominacionesOficiales = [100.00, 50.00, 20.00, 10.00, 5.00, 2.00, 1.00];
+
+            // Helper para normalizar claves
+            $normalizarClaves = function ($collection) {
+                $resultado = [];
+                foreach ($collection as $item) {
+                    $key = number_format((float) $item->Denominacion, 2, '.', '');
+                    $resultado[$key] = $item->Total;
+                }
+                return $resultado;
+            };
+
+            // Totales históricos
+            $totalesHistoricos = $normalizarClaves(
+                DB::connection('sqlsrv')
+                    ->table('BovedaDenominacionDivisa')
+                    ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                    ->groupBy('Denominacion')
+                    ->get()
+            );
+
+            // Entregados (salen)
+            $entregados = $normalizarClaves(
+                DB::connection('sqlsrv')
+                    ->table('BovedaCambioDivisaDetalle')
+                    ->where('Tipo', 'ENTREGADO')
+                    ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                    ->groupBy('Denominacion')
+                    ->get()
+            );
+
+            // Cambiados (entran)
+            $cambiados = $normalizarClaves(
+                DB::connection('sqlsrv')
+                    ->table('BovedaCambioDivisaDetalle')
+                    ->where('Tipo', 'CAMBIADO')
+                    ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                    ->groupBy('Denominacion')
+                    ->get()
+            );
+
+            // Préstamos pendientes
+            $prestamosPendientes = $normalizarClaves(
+                DB::connection('sqlsrv')
+                    ->table('BovedaPrestamoDenominacion as bpd')
+                    ->join('BovedaPrestamo as bp', 'bpd.BovedaPrestamoId', '=', 'bp.BovedaPrestamoId')
+                    ->where('bp.Estatus', 0)
+                    ->where('bp.TipoMoneda', 0)
+                    ->select('bpd.Denominacion', DB::raw('SUM(bpd.Cantidad) as Total'))
+                    ->groupBy('bpd.Denominacion')
+                    ->get()
+            );
+
+            $disponibles = [];
+            foreach ($denominacionesOficiales as $den) {
+                $key = number_format((float) $den, 2, '.', '');
+
+                $total    = $totalesHistoricos[$key]    ?? 0;
+                $ent      = $entregados[$key]           ?? 0;
+                $cam      = $cambiados[$key]            ?? 0;
+                $prestado = $prestamosPendientes[$key]  ?? 0;
+
+                $disponibles[] = (object) [
+                    'Denominacion' => $den,
+                    'Disponible'   => (int) ($total - $ent + $cam - $prestado),
+                ];
+            }
+
+            // Historial de retiros (últimos 20)
+            $historial = DB::connection('sqlsrv')
+                ->table('BovedaCambioDivisa as c')
+                ->where('c.TipoMovimiento', 'RETIRO')
+                ->orderByDesc('c.CambioId')
+                ->limit(20)
+                ->get()
+                ->map(function ($retiro) {
+                    $retiro->Detalles = DB::connection('sqlsrv')
+                        ->table('BovedaCambioDivisaDetalle')
+                        ->where('CambioId', $retiro->CambioId)
+                        ->get();
+                    $retiro->FechaFormateada = \Carbon\Carbon::parse($retiro->FechaCambio)
+                        ->format('d/m/Y H:i');
+                    return $retiro;
+                });
+
+            return view('cpanel.boveda.retiro_divisa', [
+                'disponibles' => collect($disponibles),
+                'historial'   => $historial,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en BovedaController::retiroDivisa: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar el retiro de divisas: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Guarda un retiro de divisas.
+     */
+    public function guardarRetiroDivisa(Request $request)
+    {
+        $request->validate([
+            'observacion'          => 'required|string|max:500',
+            'retiradas'            => 'required|array|min:1',
+            'retiradas.*.denominacion' => 'required|numeric|min:0.01',
+            'retiradas.*.cantidad'     => 'required|integer|min:1',
+        ]);
+
+        try {
+            // Validar que al menos una denominación tenga cantidad > 0
+            $hayRetiro = false;
+            foreach ($request->retiradas as $retirada) {
+                if ((int) $retirada['cantidad'] > 0) {
+                    $hayRetiro = true;
+                    break;
+                }
+            }
+
+            if (!$hayRetiro) {
+                return back()->withInput()->with('error', 'Debe indicar al menos una denominación a retirar.');
+            }
+
+            // Calcular disponibilidad
+            $normalizarClaves = function ($collection) {
+                $resultado = [];
+                foreach ($collection as $item) {
+                    $key = number_format((float) $item->Denominacion, 2, '.', '');
+                    $resultado[$key] = $item->Total;
+                }
+                return $resultado;
+            };
+
+            $totalesHistoricos = $normalizarClaves(
+                DB::connection('sqlsrv')->table('BovedaDenominacionDivisa')
+                    ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                    ->groupBy('Denominacion')->get()
+            );
+
+            $entregados = $normalizarClaves(
+                DB::connection('sqlsrv')->table('BovedaCambioDivisaDetalle')
+                    ->where('Tipo', 'ENTREGADO')
+                    ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                    ->groupBy('Denominacion')->get()
+            );
+
+            $cambiados = $normalizarClaves(
+                DB::connection('sqlsrv')->table('BovedaCambioDivisaDetalle')
+                    ->where('Tipo', 'CAMBIADO')
+                    ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                    ->groupBy('Denominacion')->get()
+            );
+
+            $prestamosPendientes = $normalizarClaves(
+                DB::connection('sqlsrv')
+                    ->table('BovedaPrestamoDenominacion as bpd')
+                    ->join('BovedaPrestamo as bp', 'bpd.BovedaPrestamoId', '=', 'bp.BovedaPrestamoId')
+                    ->where('bp.Estatus', 0)->where('bp.TipoMoneda', 0)
+                    ->select('bpd.Denominacion', DB::raw('SUM(bpd.Cantidad) as Total'))
+                    ->groupBy('bpd.Denominacion')->get()
+            );
+
+            $disponible = function($den) use ($totalesHistoricos, $entregados, $cambiados, $prestamosPendientes) {
+                $key = number_format((float) $den, 2, '.', '');
+                return ($totalesHistoricos[$key] ?? 0)
+                    - ($entregados[$key] ?? 0)
+                    + ($cambiados[$key] ?? 0)
+                    - ($prestamosPendientes[$key] ?? 0);
+            };
+
+            // Validar disponibilidad
+            foreach ($request->retiradas as $retirada) {
+                $den   = (float) $retirada['denominacion'];
+                $cant  = (int) $retirada['cantidad'];
+                $dispo = $disponible($den);
+
+                if ($cant > $dispo) {
+                    return back()->withInput()->with('error',
+                        'No hay suficientes billetes de $' . number_format($den, 2) . '. ' .
+                        'Disponible: ' . $dispo . ', solicitado: ' . $cant . '.'
+                    );
+                }
+            }
+
+            DB::connection('sqlsrv')->beginTransaction();
+
+            try {
+                $usuarioId = auth()->user()->id ?? null;
+
+                $cambioId = DB::connection('sqlsrv')->table('BovedaCambioDivisa')->insertGetId([
+                    'FechaCambio'     => now(),
+                    'UsuarioId'       => $usuarioId,
+                    'Observacion'     => $request->observacion,
+                    'TipoMovimiento'  => 'RETIRO',
+                ]);
+
+                // Solo registros ENTREGADO (salen de la bóveda)
+                foreach ($request->retiradas as $retirada) {
+                    $cant = (int) $retirada['cantidad'];
+                    if ($cant > 0) {
+                        DB::connection('sqlsrv')->table('BovedaCambioDivisaDetalle')->insert([
+                            'CambioId'     => $cambioId,
+                            'Denominacion' => (float) $retirada['denominacion'],
+                            'Cantidad'     => $cant,
+                            'Tipo'         => 'ENTREGADO',
+                        ]);
+                    }
+                }
+
+                DB::connection('sqlsrv')->commit();
+
+                return redirect()->route('cpanel.billetera.retiro.divisa')
+                    ->with('success', 'Retiro registrado correctamente.');
+
+            } catch (\Exception $e) {
+                DB::connection('sqlsrv')->rollBack();
+                throw $e;
+            }
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withInput()->withErrors($e->errors());
+        } catch (\Exception $e) {
+            Log::error('Error en BovedaController::guardarRetiroDivisa: ' . $e->getMessage());
+            return back()->withInput()->with('error', 'Error al guardar el retiro: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Vista para el retiro de bolívares.
+     */
+    public function retiroBolivares(Request $request)
+    {
+        session([
+            'menu_active'    => 'Billetera',
+            'submenu_active' => 'Retiro Bolívares'
+        ]);
+
+        try {
+            $denominacionesOficiales = [500.00, 200.00, 100.00, 50.00, 20.00, 10.00, 5.00, 2.00, 1.00];
+
+            // Helper para normalizar claves a entero
+            $normalizarClaves = function ($collection) {
+                $resultado = [];
+                foreach ($collection as $item) {
+                    $key = (string) (int) ((float) $item->Denominacion);
+                    $resultado[$key] = $item->Total;
+                }
+                return $resultado;
+            };
+
+            // Totales históricos
+            $totalesHistoricos = $normalizarClaves(
+                DB::connection('sqlsrv')
+                    ->table('BovedaDenominacionBs')
+                    ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                    ->groupBy('Denominacion')
+                    ->get()
+            );
+
+            // Entregados (salen)
+            $entregados = $normalizarClaves(
+                DB::connection('sqlsrv')
+                    ->table('BovedaCambioBsDetalle')
+                    ->where('Tipo', 'ENTREGADO')
+                    ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                    ->groupBy('Denominacion')
+                    ->get()
+            );
+
+            // Cambiados (entran)
+            $cambiados = $normalizarClaves(
+                DB::connection('sqlsrv')
+                    ->table('BovedaCambioBsDetalle')
+                    ->where('Tipo', 'CAMBIADO')
+                    ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                    ->groupBy('Denominacion')
+                    ->get()
+            );
+
+            // Préstamos pendientes
+            $prestamosPendientes = $normalizarClaves(
+                DB::connection('sqlsrv')
+                    ->table('BovedaPrestamoDenominacion as bpd')
+                    ->join('BovedaPrestamo as bp', 'bpd.BovedaPrestamoId', '=', 'bp.BovedaPrestamoId')
+                    ->where('bp.Estatus', 0)
+                    ->where('bp.TipoMoneda', 1)
+                    ->select('bpd.Denominacion', DB::raw('SUM(bpd.Cantidad) as Total'))
+                    ->groupBy('bpd.Denominacion')
+                    ->get()
+            );
+
+            $disponibles = [];
+            foreach ($denominacionesOficiales as $den) {
+                $key = (string) (int) $den;
+
+                $total    = $totalesHistoricos[$key]    ?? 0;
+                $ent      = $entregados[$key]           ?? 0;
+                $cam      = $cambiados[$key]            ?? 0;
+                $prestado = $prestamosPendientes[$key]  ?? 0;
+
+                $disponibles[] = (object) [
+                    'Denominacion' => $den,
+                    'Disponible'   => (int) ($total - $ent + $cam - $prestado),
+                ];
+            }
+
+            // Historial de retiros (últimos 20)
+            $historial = DB::connection('sqlsrv')
+                ->table('BovedaCambioBs as c')
+                ->where('c.TipoMovimiento', 'RETIRO')
+                ->orderByDesc('c.CambioId')
+                ->limit(20)
+                ->get()
+                ->map(function ($retiro) {
+                    $retiro->Detalles = DB::connection('sqlsrv')
+                        ->table('BovedaCambioBsDetalle')
+                        ->where('CambioId', $retiro->CambioId)
+                        ->get();
+                    $retiro->FechaFormateada = \Carbon\Carbon::parse($retiro->FechaCambio)
+                        ->format('d/m/Y H:i');
+                    return $retiro;
+                });
+
+            return view('cpanel.boveda.retiro_bolivares', [
+                'disponibles' => collect($disponibles),
+                'historial'   => $historial,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en BovedaController::retiroBolivares: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar el retiro de bolívares: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Guarda un retiro de bolívares.
+     */
+    public function guardarRetiroBolivares(Request $request)
+    {
+        $request->validate([
+            'observacion'               => 'required|string|max:500',
+            'retiradas'                 => 'required|array|min:1',
+            'retiradas.*.denominacion'  => 'required|numeric|min:0.01',
+            'retiradas.*.cantidad'      => 'required|integer|min:0',
+        ]);
+
+        try {
+            // Validar que al menos una denominación tenga cantidad > 0
+            $hayRetiro = false;
+            foreach ($request->retiradas as $retirada) {
+                if ((int) $retirada['cantidad'] > 0) {
+                    $hayRetiro = true;
+                    break;
+                }
+            }
+
+            if (!$hayRetiro) {
+                return back()->withInput()->with('error', 'Debe indicar al menos una denominación a retirar.');
+            }
+
+            // Normalizar claves
+            $normalizarClaves = function ($collection) {
+                $resultado = [];
+                foreach ($collection as $item) {
+                    $key = (string) (int) ((float) $item->Denominacion);
+                    $resultado[$key] = $item->Total;
+                }
+                return $resultado;
+            };
+
+            $totalesHistoricos = $normalizarClaves(
+                DB::connection('sqlsrv')->table('BovedaDenominacionBs')
+                    ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                    ->groupBy('Denominacion')->get()
+            );
+
+            $entregados = $normalizarClaves(
+                DB::connection('sqlsrv')->table('BovedaCambioBsDetalle')
+                    ->where('Tipo', 'ENTREGADO')
+                    ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                    ->groupBy('Denominacion')->get()
+            );
+
+            $cambiados = $normalizarClaves(
+                DB::connection('sqlsrv')->table('BovedaCambioBsDetalle')
+                    ->where('Tipo', 'CAMBIADO')
+                    ->select('Denominacion', DB::raw('SUM(Cantidad) as Total'))
+                    ->groupBy('Denominacion')->get()
+            );
+
+            $prestamosPendientes = $normalizarClaves(
+                DB::connection('sqlsrv')
+                    ->table('BovedaPrestamoDenominacion as bpd')
+                    ->join('BovedaPrestamo as bp', 'bpd.BovedaPrestamoId', '=', 'bp.BovedaPrestamoId')
+                    ->where('bp.Estatus', 0)->where('bp.TipoMoneda', 1)
+                    ->select('bpd.Denominacion', DB::raw('SUM(bpd.Cantidad) as Total'))
+                    ->groupBy('bpd.Denominacion')->get()
+            );
+
+            $disponible = function($den) use ($totalesHistoricos, $entregados, $cambiados, $prestamosPendientes) {
+                $key = (string) (int) $den;
+                return ($totalesHistoricos[$key] ?? 0)
+                    - ($entregados[$key] ?? 0)
+                    + ($cambiados[$key] ?? 0)
+                    - ($prestamosPendientes[$key] ?? 0);
+            };
+
+            // Validar disponibilidad
+            foreach ($request->retiradas as $retirada) {
+                $den   = (float) $retirada['denominacion'];
+                $cant  = (int) $retirada['cantidad'];
+                $dispo = $disponible($den);
+
+                if ($cant > $dispo) {
+                    return back()->withInput()->with('error',
+                        'No hay suficientes billetes de Bs. ' . number_format($den, 2) . '. ' .
+                        'Disponible: ' . $dispo . ', solicitado: ' . $cant . '.'
+                    );
+                }
+            }
+
+            DB::connection('sqlsrv')->beginTransaction();
+
+            try {
+                $usuarioId = auth()->user()->id ?? null;
+
+                $cambioId = DB::connection('sqlsrv')->table('BovedaCambioBs')->insertGetId([
+                    'FechaCambio'     => now(),
+                    'UsuarioId'       => $usuarioId,
+                    'Observacion'     => $request->observacion,
+                    'TipoMovimiento'  => 'RETIRO',
+                ]);
+
+                // Solo registros ENTREGADO
+                foreach ($request->retiradas as $retirada) {
+                    $cant = (int) $retirada['cantidad'];
+                    if ($cant > 0) {
+                        DB::connection('sqlsrv')->table('BovedaCambioBsDetalle')->insert([
+                            'CambioId'     => $cambioId,
+                            'Denominacion' => (float) $retirada['denominacion'],
+                            'Cantidad'     => $cant,
+                            'Tipo'         => 'ENTREGADO',
+                        ]);
+                    }
+                }
+
+                DB::connection('sqlsrv')->commit();
+
+                return redirect()->route('cpanel.billetera.retiro.bolivares')
+                    ->with('success', 'Retiro registrado correctamente.');
+
+            } catch (\Exception $e) {
+                DB::connection('sqlsrv')->rollBack();
+                throw $e;
+            }
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withInput()->withErrors($e->errors());
+        } catch (\Exception $e) {
+            Log::error('Error en BovedaController::guardarRetiroBolivares: ' . $e->getMessage());
+            return back()->withInput()->with('error', 'Error al guardar el retiro: ' . $e->getMessage());
         }
     }
 }

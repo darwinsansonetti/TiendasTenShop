@@ -1114,27 +1114,41 @@
                       <!-- SUB-SECCIÓN: BILLETERA -->
                       <!-- ========================================== -->
                       <li class="nav-item {{ session('menu_active') == 'Billetera' ? 'menu-open' : '' }}">
-                          <a href="#" class="nav-link">
-                              <i class="nav-icon bi bi-wallet2"></i>
-                              <p>Billetera<i class="nav-arrow bi bi-chevron-right"></i></p>
-                          </a>
-                          <ul class="nav nav-treeview">
-                              <li class="nav-item">
-                                  <a href="{{ route('cpanel.billetera.cambio.divisa') }}"
-                                    class="nav-link {{ session('submenu_active') == 'Cambio Divisa' ? 'active' : '' }}">
-                                      <i class="nav-icon bi bi-currency-dollar"></i>
-                                      <p>Cambio Divisa</p>
-                                  </a>
-                              </li>
-                              <li class="nav-item">
-                                  <a href="{{ route('cpanel.billetera.cambio.bolivares') }}"
-                                    class="nav-link {{ session('submenu_active') == 'Cambio Bolívares' ? 'active' : '' }}">
-                                      <i class="nav-icon bi bi-cash-stack"></i>
-                                      <p>Cambio Bolívares</p>
-                                  </a>
-                              </li>
-                          </ul>
-                      </li>
+                        <a href="#" class="nav-link">
+                            <i class="nav-icon bi bi-wallet2"></i>
+                            <p>Billetera<i class="nav-arrow bi bi-chevron-right"></i></p>
+                        </a>
+                        <ul class="nav nav-treeview">
+                            <li class="nav-item">
+                                <a href="{{ route('cpanel.billetera.cambio.divisa') }}"
+                                  class="nav-link {{ session('submenu_active') == 'Cambio Divisa' ? 'active' : '' }}">
+                                    <i class="nav-icon bi bi-currency-dollar"></i>
+                                    <p>Cambio Divisa</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('cpanel.billetera.cambio.bolivares') }}"
+                                  class="nav-link {{ session('submenu_active') == 'Cambio Bolívares' ? 'active' : '' }}">
+                                    <i class="nav-icon bi bi-cash-stack"></i>
+                                    <p>Cambio Bolívares</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('cpanel.billetera.retiro.divisa') }}"
+                                  class="nav-link {{ session('submenu_active') == 'Retiro Divisa' ? 'active' : '' }}">
+                                    <i class="nav-icon bi bi-cash-coin"></i>
+                                    <p>Retiro Divisa</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('cpanel.billetera.retiro.bolivares') }}"
+                                  class="nav-link {{ session('submenu_active') == 'Retiro Bolívares' ? 'active' : '' }}">
+                                    <i class="nav-icon bi bi-cash"></i>
+                                    <p>Retiro Bolívares</p>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
 
                       <li class="nav-item">
                           <a href="{{ route('cpanel.boveda.prestamos') }}"
