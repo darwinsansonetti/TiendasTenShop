@@ -198,15 +198,20 @@
                     <h6 class="mb-0 fw-bold text-white">
                         <i class="bi bi-credit-card me-2"></i>Conciliación Puntos de Venta
                     </h6>
-                    <div class="d-flex gap-2">
+                    <div class="d-flex gap-2 flex-wrap">
                         <span class="badge bg-white text-dark">
-                            Total Sistema: $ {{ number_format($totalPDVSistema, 2) }}
+                            Total Sistema: Bs. {{ number_format($totalPDVSistema, 2) }}
                         </span>
+                        @if($totalPDVComision > 0)
                         <span class="badge bg-white text-dark">
-                            Total Depositado: $ {{ number_format($totalPDVDepositado, 2) }}
+                            Comisión: Bs. {{ number_format($totalPDVComision, 2) }}
+                        </span>
+                        @endif
+                        <span class="badge bg-white text-dark">
+                            Total Depositado: Bs. {{ number_format($totalPDVDepositado, 2) }}
                         </span>
                         <span class="badge bg-{{ abs($diferenciaPDV) < 0.01 ? 'success' : 'danger' }} text-white">
-                            Diferencia: $ {{ number_format($diferenciaPDV, 2) }}
+                            Diferencia: Bs. {{ number_format($diferenciaPDV, 2) }}
                         </span>
                     </div>
                 </div>
@@ -220,6 +225,7 @@
                                 <th class="py-2 text-muted fw-semibold" style="font-size:0.75rem;">PUNTO</th>
                                 <th class="py-2 text-muted fw-semibold" style="font-size:0.75rem;">BANCO</th>
                                 <th class="py-2 text-end text-muted fw-semibold" style="font-size:0.75rem;">SISTEMA</th>
+                                <th class="py-2 text-end text-muted fw-semibold" style="font-size:0.75rem;">COMISIÓN</th>
                                 <th class="py-2 text-end text-muted fw-semibold" style="font-size:0.75rem;">DEPOSITADO</th>
                                 <th class="py-2 text-center text-muted fw-semibold" style="font-size:0.75rem;">DIFERENCIA</th>
                                 <th class="pe-4 py-2 text-muted fw-semibold" style="font-size:0.75rem;">OBSERVACIÓN</th>
@@ -227,20 +233,34 @@
                         </thead>
                         <tbody>
                             @foreach($conciliacionPDV as $item)
-                            <tr class="{{ $item->TieneDiferencia ? 'table-danger' : '' }}">
+                            @php
+                                // Recalcular la diferencia real con la comisión
+                                $diferenciaReal = (float) $item->MontoSistema - (float) $item->MontoEfectivo;
+                            @endphp
+                            <tr class="{{ abs($diferenciaReal) > 0.01 ? 'table-danger' : '' }}">
                                 <td class="ps-4">{{ $item->sucursal_nombre ?? 'N/A' }}</td>
                                 <td>
                                     <span class="fw-semibold">{{ $item->pdv_descripcion ?? 'N/A' }}</span>
                                     <small class="d-block text-muted">{{ $item->pdv_codigo ?? '' }}</small>
                                 </td>
                                 <td>{{ $item->banco_nombre ?? 'N/A' }}</td>
-                                <td class="text-end">$ {{ number_format($item->MontoSistema, 2) }}</td>
-                                <td class="text-end">$ {{ number_format($item->MontoDepositado, 2) }}</td>
-                                <td class="text-center">
-                                    @if(abs($item->Diferencia) < 0.01)
-                                        <span class="badge bg-success">$ 0.00</span>
+                                <td class="text-end fw-semibold">Bs. {{ number_format($item->MontoSistema, 2) }}</td>
+                                <td class="text-end text-danger">
+                                    @if(($item->MontoComision ?? 0) > 0)
+                                        <div>−Bs. {{ number_format($item->MontoComision, 2) }}</div>
+                                        <small class="text-muted" style="font-size:0.7rem;">
+                                            {{ number_format($item->porcentaje_comision ?? 0, 2) }}%
+                                        </small>
                                     @else
-                                        <span class="badge bg-danger">$ {{ number_format($item->Diferencia, 2) }}</span>
+                                        <span class="text-muted">—</span>
+                                    @endif
+                                </td>
+                                <td class="text-end">Bs. {{ number_format($item->MontoDepositado, 2) }}</td>
+                                <td class="text-center">
+                                    @if(abs($diferenciaReal) < 0.01)
+                                        <span class="badge bg-success">Bs. 0.00</span>
+                                    @else
+                                        <span class="badge bg-danger">Bs. {{ number_format($diferenciaReal, 2) }}</span>
                                     @endif
                                 </td>
                                 <td class="pe-4">
@@ -276,13 +296,17 @@
                                 <th class="ps-4 py-2 text-muted fw-semibold" style="font-size:0.75rem;">SUCURSAL</th>
                                 <th class="py-2 text-muted fw-semibold" style="font-size:0.75rem;">TIPO</th>
                                 <th class="py-2 text-end text-muted fw-semibold" style="font-size:0.75rem;">SISTEMA</th>
+                                <th class="py-2 text-end text-muted fw-semibold" style="font-size:0.75rem;">COMISIÓN</th>
                                 <th class="py-2 text-end text-muted fw-semibold" style="font-size:0.75rem;">DEPOSITADO</th>
-                                <th class="py-2 text-center text-muted fw-semibold" style="font-size:0.75rem;">DIFERENCIA</th>
+                                <th class="py-2 text-center text-muted fw-semibold" style="font-size:0.75rem;">DIF. REAL</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($conciliacionOtros as $item)
-                            <tr class="{{ $item->TieneDiferencia ? 'table-danger' : '' }}">
+                            @php
+                                $diferenciaReal = (float) $item->MontoSistema - (float) $item->MontoEfectivo;
+                            @endphp
+                            <tr class="{{ abs($diferenciaReal) > 0.01 ? 'table-danger' : '' }}">
                                 <td class="ps-4">{{ $item->sucursal_nombre ?? 'N/A' }}</td>
                                 <td>
                                     <span class="badge bg-{{ $item->Tipo == 1 ? 'info' : ($item->Tipo == 2 ? 'primary' : ($item->Tipo == 3 ? 'warning' : 'success')) }}">
@@ -290,12 +314,20 @@
                                     </span>
                                 </td>
                                 <td class="text-end">Bs. {{ number_format($item->MontoSistema, 2) }}</td>
+                                <td class="text-end text-danger">
+                                    @if(($item->MontoComision ?? 0) > 0)
+                                        <div>−Bs. {{ number_format($item->MontoComision, 2) }}</div>
+                                        <small class="text-muted" style="font-size:0.7rem;">3.50%</small>
+                                    @else
+                                        <span class="text-muted">—</span>
+                                    @endif
+                                </td>
                                 <td class="text-end">Bs. {{ number_format($item->MontoDepositado, 2) }}</td>
                                 <td class="text-center">
-                                    @if(abs($item->Diferencia) < 0.01)
+                                    @if(abs($diferenciaReal) < 0.01)
                                         <span class="badge bg-success">Bs. 0.00</span>
                                     @else
-                                        <span class="badge bg-danger">Bs. {{ number_format($item->Diferencia, 2) }}</span>
+                                        <span class="badge bg-danger">Bs. {{ number_format($diferenciaReal, 2) }}</span>
                                     @endif
                                 </td>
                             </tr>

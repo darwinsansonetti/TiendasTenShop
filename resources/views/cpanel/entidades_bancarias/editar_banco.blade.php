@@ -81,6 +81,29 @@
                             @enderror
                         </div>
 
+                        {{-- Porcentaje de Comisión PDV --}}
+                        <div class="col-md-6">
+                            <label for="porcentaje_comision" class="form-label fw-semibold">
+                                <i class="bi bi-percent me-1" style="color:#3b82f6;"></i>Porcentaje de Comisión PDV
+                            </label>
+                            <div class="input-group">
+                                <input type="number"
+                                    name="porcentaje_comision"
+                                    id="porcentaje_comision"
+                                    class="form-control @error('porcentaje_comision') is-invalid @enderror"
+                                    step="0.01"
+                                    min="0"
+                                    max="100"
+                                    value="{{ old('porcentaje_comision', number_format($banco->PorcentajeComision ?? 0, 2, '.', '')) }}"
+                                    placeholder="Ej: 2.50">
+                                <span class="input-group-text">%</span>
+                                @error('porcentaje_comision')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+                            <small class="text-muted">Comisión que cobra el banco por cada venta con punto de venta.</small>
+                        </div>
+
                         {{-- Logo actual --}}
                         <div class="col-md-12">
                             <label class="form-label fw-semibold">

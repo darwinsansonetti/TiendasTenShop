@@ -374,29 +374,52 @@
                                                     <th class="ps-3 py-2 text-muted fw-semibold" style="font-size:0.7rem;">PUNTO</th>
                                                     <th class="py-2 text-muted fw-semibold" style="font-size:0.7rem;">BANCO</th>
                                                     <th class="py-2 text-end text-muted fw-semibold" style="font-size:0.7rem;">SISTEMA (Bs.)</th>
+                                                    <th class="py-2 text-end text-muted fw-semibold" style="font-size:0.7rem;">COMISIÓN</th>
+                                                    <th class="py-2 text-end text-muted fw-semibold" style="font-size:0.7rem;">NETO ESPERADO</th>
                                                     <th class="py-2 text-end text-muted fw-semibold" style="font-size:0.7rem;">DEPOSITADO (Bs.)</th>
                                                     <th class="pe-3 py-2 text-center text-muted fw-semibold" style="font-size:0.7rem;">DIF.</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 @foreach($sucursal->PuntosVenta as $pdv)
+                                                @php
+                                                    $porcentaje = (float) ($pdv->porcentaje_comision ?? 0);
+                                                    $montoSistema = (float) $pdv->monto_sistema;
+                                                    $montoComision = round($montoSistema * ($porcentaje / 100), 2);
+                                                    $montoNeto = round($montoSistema - $montoComision, 2);
+                                                @endphp
                                                 <tr>
                                                     <td class="ps-3">
                                                         <span class="fw-semibold" style="font-size:0.85rem;">{{ $pdv->pdv_descripcion }}</span>
                                                         <small class="d-block text-muted">{{ $pdv->pdv_codigo ?? '-' }}</small>
                                                     </td>
                                                     <td>{{ $pdv->banco_nombre ?? 'N/A' }}</td>
-                                                    <td class="text-end fw-semibold">Bs. {{ number_format($pdv->monto_sistema, 2) }}</td>
+                                                    <td class="text-end fw-semibold">Bs. {{ number_format($montoSistema, 2) }}</td>
+                                                    <td class="text-end text-danger">
+                                                        @if($montoComision > 0)
+                                                            <div>−Bs. {{ number_format($montoComision, 2) }}</div>
+                                                            <small class="text-muted" style="font-size:0.7rem;">
+                                                                {{ number_format($porcentaje, 2) }}%
+                                                            </small>
+                                                        @else
+                                                            <span class="text-muted">—</span>
+                                                        @endif
+                                                    </td>
+                                                    <td class="text-end fw-bold text-success">
+                                                        Bs. {{ number_format($montoNeto, 2) }}
+                                                    </td>
                                                     <td class="text-end">
                                                         <input type="hidden" name="conciliacion_pdv[{{ $sucursal->SucursalId }}_{{ $pdv->PuntoDeVentaId }}][sucursal_id]" value="{{ $sucursal->SucursalId }}">
                                                         <input type="hidden" name="conciliacion_pdv[{{ $sucursal->SucursalId }}_{{ $pdv->PuntoDeVentaId }}][punto_venta_id]" value="{{ $pdv->PuntoDeVentaId }}">
                                                         <input type="hidden" name="conciliacion_pdv[{{ $sucursal->SucursalId }}_{{ $pdv->PuntoDeVentaId }}][cierre_diario_id]" value="{{ $sucursal->CierreDiarioId }}">
-                                                        <input type="hidden" name="conciliacion_pdv[{{ $sucursal->SucursalId }}_{{ $pdv->PuntoDeVentaId }}][monto_sistema]" value="{{ $pdv->monto_sistema }}">
+                                                        <input type="hidden" name="conciliacion_pdv[{{ $sucursal->SucursalId }}_{{ $pdv->PuntoDeVentaId }}][monto_sistema]" value="{{ $montoSistema }}">
+                                                        <input type="hidden" name="conciliacion_pdv[{{ $sucursal->SucursalId }}_{{ $pdv->PuntoDeVentaId }}][monto_comision]" value="{{ number_format($montoComision, 2, '.', '') }}">
                                                         <input type="text" inputmode="decimal"
                                                             name="conciliacion_pdv[{{ $sucursal->SucursalId }}_{{ $pdv->PuntoDeVentaId }}][monto_depositado]" 
                                                             class="form-control form-control-sm text-end monto-depositado input-monto"
-                                                            value="{{ number_format($pdv->monto_sistema, 2, '.', '') }}"
-                                                            data-monto-sistema="{{ number_format($pdv->monto_sistema, 2, '.', '') }}"
+                                                            value="{{ number_format($montoNeto, 2, '.', '') }}"
+                                                            data-monto-sistema="{{ number_format($montoSistema, 2, '.', '') }}"
+                                                            data-porcentaje-comision="{{ number_format($porcentaje, 2, '.', '') }}"
                                                             data-sucursal="{{ $sucursal->SucursalId }}">
                                                     </td>
                                                     <td class="pe-3 text-center">
@@ -427,12 +450,22 @@
                                                     <th class="ps-3 py-2 text-muted fw-semibold" style="font-size:0.7rem;">TIPO</th>
                                                     <th class="py-2 text-muted fw-semibold" style="font-size:0.7rem;">MONEDA</th>
                                                     <th class="py-2 text-end text-muted fw-semibold" style="font-size:0.7rem;">SISTEMA</th>
+                                                    <th class="py-2 text-end text-muted fw-semibold" style="font-size:0.7rem;">COMISIÓN</th>
+                                                    <th class="py-2 text-end text-muted fw-semibold" style="font-size:0.7rem;">NETO ESPERADO</th>
                                                     <th class="py-2 text-end text-muted fw-semibold" style="font-size:0.7rem;">DEPOSITADO</th>
                                                     <th class="pe-3 py-2 text-center text-muted fw-semibold" style="font-size:0.7rem;">DIF.</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 @foreach($sucursal->OtrosConceptos as $otro)
+                                                @php
+                                                    // 🔥 Comisión solo para Biopago (Tipo 1), 3.50% fijo
+                                                    $esBiopago = $otro->Tipo == 1;
+                                                    $porcentajeComision = $esBiopago ? 3.50 : 0;
+                                                    $montoSistema = (float) $otro->MontoSistema;
+                                                    $montoComision = $esBiopago ? round($montoSistema * ($porcentajeComision / 100), 2) : 0;
+                                                    $montoNeto = round($montoSistema - $montoComision, 2);
+                                                @endphp
                                                 <tr>
                                                     <td class="ps-3">
                                                         <span class="badge bg-{{ $otro->Tipo == 1 ? 'info' : ($otro->Tipo == 2 ? 'primary' : ($otro->Tipo == 3 ? 'warning' : 'success')) }}">
@@ -445,22 +478,44 @@
                                                         </span>
                                                     </td>
                                                     <td class="text-end fw-semibold">
-                                                        {{ $otro->Moneda == 'USD' ? '$' : 'Bs.' }} {{ number_format($otro->MontoSistema, 2) }}
+                                                        {{ $otro->Moneda == 'USD' ? '$' : 'Bs.' }} {{ number_format($montoSistema, 2) }}
                                                     </td>
+
+                                                    {{-- 🔥 NUEVA COLUMNA: COMISIÓN --}}
+                                                    <td class="text-end text-danger">
+                                                        @if($montoComision > 0)
+                                                            <div>−{{ $otro->Moneda == 'USD' ? '$' : 'Bs.' }} {{ number_format($montoComision, 2) }}</div>
+                                                            <small class="text-muted" style="font-size:0.7rem;">{{ number_format($porcentajeComision, 2) }}%</small>
+                                                        @else
+                                                            <span class="text-muted">—</span>
+                                                        @endif
+                                                    </td>
+
+                                                    {{-- 🔥 NUEVA COLUMNA: NETO ESPERADO --}}
+                                                    <td class="text-end fw-bold text-success">
+                                                        @if($montoComision > 0)
+                                                            {{ $otro->Moneda == 'USD' ? '$' : 'Bs.' }} {{ number_format($montoNeto, 2) }}
+                                                        @else
+                                                            <span class="text-muted">—</span>
+                                                        @endif
+                                                    </td>
+
                                                     <td class="text-end">
                                                         <input type="hidden" name="conciliacion_otros[{{ $sucursal->SucursalId }}_{{ $otro->Tipo }}][sucursal_id]" value="{{ $sucursal->SucursalId }}">
                                                         <input type="hidden" name="conciliacion_otros[{{ $sucursal->SucursalId }}_{{ $otro->Tipo }}][tipo]" value="{{ $otro->Tipo }}">
-                                                        <input type="hidden" name="conciliacion_otros[{{ $sucursal->SucursalId }}_{{ $otro->Tipo }}][monto_sistema]" value="{{ $otro->MontoSistema }}">
+                                                        <input type="hidden" name="conciliacion_otros[{{ $sucursal->SucursalId }}_{{ $otro->Tipo }}][monto_sistema]" value="{{ $montoSistema }}">
+                                                        <input type="hidden" name="conciliacion_otros[{{ $sucursal->SucursalId }}_{{ $otro->Tipo }}][monto_comision]" value="{{ number_format($montoComision, 2, '.', '') }}">
                                                         <input type="text" inputmode="decimal"
                                                             name="conciliacion_otros[{{ $sucursal->SucursalId }}_{{ $otro->Tipo }}][monto_depositado]" 
                                                             class="form-control form-control-sm text-end monto-depositado-otros input-monto"
-                                                            value="{{ number_format($otro->MontoSistema, 2, '.', '') }}"
-                                                            data-monto-sistema="{{ number_format($otro->MontoSistema, 2, '.', '') }}"
+                                                            value="{{ number_format($esBiopago ? $montoNeto : $montoSistema, 2, '.', '') }}"
+                                                            data-monto-sistema="{{ number_format($montoSistema, 2, '.', '') }}"
+                                                            data-porcentaje-comision="{{ number_format($porcentajeComision, 2, '.', '') }}"
                                                             data-moneda="{{ $otro->Moneda }}"
                                                             data-sucursal="{{ $sucursal->SucursalId }}">
                                                     </td>
                                                     <td class="pe-3 text-center">
-                                                        <span class="badge bg-success diferencia-badge-otros" style="font-size:0.7rem;">
+                                                        <span class="badge bg-success diferencia-badge-otros">
                                                             {{ $otro->Moneda == 'USD' ? '$' : 'Bs.' }} 0.00
                                                         </span>
                                                     </td>
@@ -662,9 +717,18 @@
         // ============================================
         function calcularDiferenciasPDV() {
             document.querySelectorAll('.monto-depositado').forEach(input => {
-                const montoSistema = parseFloat(input.dataset.montoSistema) || 0;
-                const montoDepositado = extraerCentavos(input.value) / 100;
-                const diferencia = montoSistema - montoDepositado;
+                const montoSistema         = parseFloat(input.dataset.montoSistema) || 0;
+                const porcentajeComision   = parseFloat(input.dataset.porcentajeComision) || 0;
+                const montoDepositado      = extraerCentavos(input.value) / 100;
+
+                // 🔥 Calcular la comisión (sin mostrarla)
+                const comisionCalculada = montoSistema * (porcentajeComision / 100);
+
+                // 🔥 Monto efectivo = lo depositado + la comisión que se llevó el banco
+                const montoEfectivo = montoDepositado + comisionCalculada;
+
+                // Diferencia real
+                const diferencia = montoSistema - montoEfectivo;
 
                 const badge = input.closest('tr').querySelector('.diferencia-badge');
 
@@ -683,10 +747,16 @@
         // ============================================
         function calcularDiferenciasOtros() {
             document.querySelectorAll('.monto-depositado-otros').forEach(input => {
-                const montoSistema = parseFloat(input.dataset.montoSistema) || 0;
-                const montoDepositado = extraerCentavos(input.value) / 100;
-                const diferencia = montoSistema - montoDepositado;
-                const moneda = input.dataset.moneda || 'Bs.';
+                const montoSistema       = parseFloat(input.dataset.montoSistema) || 0;
+                const porcentajeComision = parseFloat(input.dataset.porcentajeComision) || 0;
+                const montoDepositado    = extraerCentavos(input.value) / 100;
+
+                // 🔥 Calcular comisión (solo aplica si porcentaje > 0)
+                const comisionCalculada = montoSistema * (porcentajeComision / 100);
+                const montoEfectivo     = montoDepositado + comisionCalculada;
+                const diferencia        = montoSistema - montoEfectivo;
+
+                const moneda  = input.dataset.moneda || 'Bs.';
                 const simbolo = moneda === 'USD' ? '$' : 'Bs.';
 
                 const badge = input.closest('tr').querySelector('.diferencia-badge-otros');

@@ -76,6 +76,18 @@
                                     </span>
                                 </p>
                             </div>
+                            <div class="col-md-6">
+                                <p class="text-muted mb-1" style="font-size:0.75rem;">Porcentaje de Comisión PDV</p>
+                                <p>
+                                    @if(($banco->PorcentajeComision ?? 0) > 0)
+                                        <span class="badge bg-info text-dark" style="font-size:0.9rem;">
+                                            <i class="bi bi-percent me-1"></i>{{ number_format($banco->PorcentajeComision, 2) }}%
+                                        </span>
+                                    @else
+                                        <span class="text-muted">Sin comisión</span>
+                                    @endif
+                                </p>
+                            </div>
                             <div class="col-md-12">
                                 <p class="text-muted mb-1" style="font-size:0.75rem;">Nombre</p>
                                 <p class="fw-bold text-dark fs-5">{{ $banco->Nombre ?? 'N/A' }}</p>

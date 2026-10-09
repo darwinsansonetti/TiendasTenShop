@@ -602,13 +602,23 @@
         @if($puntosVentaTotales->count() > 0)
         <div class="card border-0 shadow-sm mb-4">
             <div class="card-header border-0 py-2" style="background:linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%);">
-                <div class="d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
                     <h6 class="mb-0 fw-bold text-white" style="font-size:0.85rem;">
                         <i class="bi bi-credit-card me-2"></i>Totales por Punto de Venta (Bs. + estimado USD)
                     </h6>
-                    <span class="badge bg-white text-dark">
-                        {{ $puntosVentaTotales->count() }} Puntos
-                    </span>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <span class="badge bg-white text-dark">
+                            {{ $puntosVentaTotales->count() }} Puntos
+                        </span>
+                        @if(($totalPdvComision ?? 0) > 0)
+                            <span class="badge bg-warning text-dark">
+                                Comisión Total: Bs. {{ number_format($totalPdvComision, 2) }}
+                            </span>
+                        @endif
+                        <span class="badge bg-{{ abs($totalPdvDiferenciaReal ?? 0) < 0.01 ? 'success' : 'danger' }} text-white">
+                            Diferencia Real: Bs. {{ number_format($totalPdvDiferenciaReal ?? 0, 2) }}
+                        </span>
+                    </div>
                 </div>
             </div>
             <div class="card-body p-0">
@@ -620,12 +630,17 @@
                                 <th class="py-2 text-muted fw-semibold" style="font-size:0.75rem;">PUNTO DE VENTA</th>
                                 <th class="py-2 text-muted fw-semibold" style="font-size:0.75rem;">BANCO</th>
                                 <th class="py-2 text-end text-muted fw-semibold" style="font-size:0.75rem;">SISTEMA</th>
+                                <th class="py-2 text-end text-muted fw-semibold" style="font-size:0.75rem;">COMISIÓN</th>
                                 <th class="py-2 text-end text-muted fw-semibold" style="font-size:0.75rem;">DEPOSITADO</th>
-                                <th class="pe-4 py-2 text-end text-muted fw-semibold" style="font-size:0.75rem;">DIFERENCIA</th>
+                                <th class="pe-4 py-2 text-end text-muted fw-semibold" style="font-size:0.75rem;">DIF. REAL</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($puntosVentaTotales as $pdv)
+                            @php
+                                $diferenciaReal = $pdv->TotalDiferenciaReal ?? 0;
+                                $porcentaje     = (float) ($pdv->porcentaje_comision ?? 0);
+                            @endphp
                             <tr>
                                 <td class="ps-4">{{ $pdv->sucursal_nombre ?? 'N/A' }}</td>
                                 <td>
@@ -637,17 +652,25 @@
                                     <div>Bs. {{ number_format($pdv->TotalSistema, 2) }}</div>
                                     <small class="text-info">≈ $ {{ number_format($pdv->TotalSistemaUSD, 2) }}</small>
                                 </td>
+                                <td class="text-end text-danger">
+                                    @if(($pdv->TotalComision ?? 0) > 0)
+                                        <div>−Bs. {{ number_format($pdv->TotalComision, 2) }}</div>
+                                        <small class="text-muted" style="font-size:0.7rem;">{{ number_format($porcentaje, 2) }}%</small>
+                                    @else
+                                        <span class="text-muted">—</span>
+                                    @endif
+                                </td>
                                 <td class="text-end">
                                     <div>Bs. {{ number_format($pdv->TotalDepositado, 2) }}</div>
                                     <small class="text-info">≈ $ {{ number_format($pdv->TotalDepositadoUSD, 2) }}</small>
                                 </td>
                                 <td class="pe-4 text-end fw-bold">
-                                    @if(abs($pdv->TotalDiferencia) < 0.01)
+                                    @if(abs($diferenciaReal) < 0.01)
                                         <div class="text-success">Bs. 0.00</div>
                                         <small class="text-success">≈ $ 0.00</small>
                                     @else
-                                        <div class="text-danger">Bs. {{ number_format($pdv->TotalDiferencia, 2) }}</div>
-                                        <small class="text-danger">≈ $ {{ number_format($pdv->TotalDiferenciaUSD, 2) }}</small>
+                                        <div class="text-danger">Bs. {{ number_format($diferenciaReal, 2) }}</div>
+                                        <small class="text-danger">≈ $ {{ number_format($pdv->TotalDiferenciaRealUSD ?? 0, 2) }}</small>
                                     @endif
                                 </td>
                             </tr>
@@ -660,19 +683,21 @@
                                     <div>Bs. {{ number_format($totalPdvSistema, 2) }}</div>
                                     <small class="text-info">≈ $ {{ number_format($totalPdvSistemaUSD, 2) }}</small>
                                 </th>
+                                <th class="py-2 text-end text-danger">
+                                    <div>−Bs. {{ number_format($totalPdvComision ?? 0, 2) }}</div>
+                                    <small class="text-info">≈ $ {{ number_format($totalPdvComisionUSD ?? 0, 2) }}</small>
+                                </th>
                                 <th class="py-2 text-end">
                                     <div>Bs. {{ number_format($totalPdvDepositado, 2) }}</div>
                                     <small class="text-info">≈ $ {{ number_format($totalPdvDepositadoUSD, 2) }}</small>
                                 </th>
                                 <th class="pe-4 py-2 text-end fw-bold">
-                                    @php $difTotal = $totalPdvSistema - $totalPdvDepositado; @endphp
-                                    @php $difTotalUSD = $totalPdvSistemaUSD - $totalPdvDepositadoUSD; @endphp
-                                    @if(abs($difTotal) < 0.01)
+                                    @if(abs($totalPdvDiferenciaReal ?? 0) < 0.01)
                                         <div class="text-success">Bs. 0.00</div>
                                         <small class="text-success">≈ $ 0.00</small>
                                     @else
-                                        <div class="text-danger">Bs. {{ number_format($difTotal, 2) }}</div>
-                                        <small class="text-danger">≈ $ {{ number_format($difTotalUSD, 2) }}</small>
+                                        <div class="text-danger">Bs. {{ number_format($totalPdvDiferenciaReal ?? 0, 2) }}</div>
+                                        <small class="text-danger">≈ $ {{ number_format($totalPdvDiferenciaRealUSD ?? 0, 2) }}</small>
                                     @endif
                                 </th>
                             </tr>
@@ -701,46 +726,60 @@
                                 <th class="ps-4 py-2 text-warning fw-semibold" style="font-size:0.75rem;">CONCEPTO</th>
                                 <th class="py-2 text-center text-warning fw-semibold" style="font-size:0.75rem;">MONEDA</th>
                                 <th class="py-2 text-end text-warning fw-semibold" style="font-size:0.75rem;">SISTEMA</th>
+                                <th class="py-2 text-end text-warning fw-semibold" style="font-size:0.75rem;">COMISIÓN</th>
                                 <th class="py-2 text-end text-warning fw-semibold" style="font-size:0.75rem;">DEPOSITADO</th>
-                                <th class="pe-4 py-2 text-end text-warning fw-semibold" style="font-size:0.75rem;">DIFERENCIA</th>
+                                <th class="pe-4 py-2 text-end text-warning fw-semibold" style="font-size:0.75rem;">DIF. REAL</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($otrosTotales as $otro)
                             <tr>
+                                {{-- CONCEPTO --}}
                                 <td class="ps-4">
                                     <span class="badge bg-{{ $otro->Tipo == 1 ? 'info' : ($otro->Tipo == 2 ? 'primary' : ($otro->Tipo == 3 ? 'warning' : 'success')) }}">
                                         {{ $otro->TipoNombre }}
                                     </span>
                                 </td>
+
+                                {{-- MONEDA --}}
                                 <td class="text-center">
                                     <span class="badge bg-{{ $otro->Moneda == 'USD' ? 'success' : 'primary' }}">
                                         {{ $otro->Moneda }}
                                     </span>
                                 </td>
+
+                                {{-- SISTEMA --}}
                                 <td class="text-end">
                                     <div>{{ $otro->Simbolo }} {{ number_format($otro->TotalSistema, 2) }}</div>
                                     @if($otro->Moneda == 'Bs')
                                         <small class="text-info">≈ $ {{ number_format($otro->TotalSistemaUSD, 2) }}</small>
                                     @endif
                                 </td>
+
+                                {{-- COMISIÓN --}}
+                                <td class="text-end text-danger">
+                                    @if(($otro->TotalComision ?? 0) > 0)
+                                        <div>−{{ $otro->Simbolo }} {{ number_format($otro->TotalComision, 2) }}</div>
+                                        <small class="text-muted" style="font-size:0.7rem;">3.50%</small>
+                                    @else
+                                        <span class="text-muted">—</span>
+                                    @endif
+                                </td>
+
+                                {{-- DEPOSITADO --}}
                                 <td class="text-end">
                                     <div>{{ $otro->Simbolo }} {{ number_format($otro->TotalDepositado, 2) }}</div>
                                     @if($otro->Moneda == 'Bs')
                                         <small class="text-info">≈ $ {{ number_format($otro->TotalDepositadoUSD, 2) }}</small>
                                     @endif
                                 </td>
+
+                                {{-- DIF. REAL --}}
                                 <td class="pe-4 text-end fw-bold">
-                                    @if(abs($otro->TotalDiferencia) < 0.01)
+                                    @if(abs($otro->TotalDiferenciaReal ?? 0) < 0.01)
                                         <div class="text-success">{{ $otro->Simbolo }} 0.00</div>
-                                        @if($otro->Moneda == 'Bs')
-                                            <small class="text-success">≈ $ 0.00</small>
-                                        @endif
                                     @else
-                                        <div class="text-danger">{{ $otro->Simbolo }} {{ number_format($otro->TotalDiferencia, 2) }}</div>
-                                        @if($otro->Moneda == 'Bs')
-                                            <small class="text-danger">≈ $ {{ number_format($otro->TotalDiferenciaUSD, 2) }}</small>
-                                        @endif
+                                        <div class="text-danger">{{ $otro->Simbolo }} {{ number_format($otro->TotalDiferenciaReal, 2) }}</div>
                                     @endif
                                 </td>
                             </tr>

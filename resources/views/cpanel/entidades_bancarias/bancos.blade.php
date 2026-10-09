@@ -92,6 +92,9 @@
                                 <th class="py-3 text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;min-width:200px;">
                                     NOMBRE
                                 </th>
+                                <th class="py-3 text-center text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;width:120px;">
+                                    COMISIÓN PDV
+                                </th>
                                 <th class="py-3 text-center text-muted fw-semibold" style="font-size:0.75rem;letter-spacing:.06em;width:100px;">
                                     ESTATUS
                                 </th>
@@ -115,6 +118,15 @@
                                     </td>
                                     <td>
                                         <span class="fw-semibold text-dark">{{ $banco->Nombre ?? 'N/A' }}</span>
+                                    </td>
+                                    <td class="text-center">
+                                        @if(($banco->PorcentajeComision ?? 0) > 0)
+                                            <span class="badge bg-info text-dark" style="font-size:0.75rem;">
+                                                {{ number_format($banco->PorcentajeComision, 2) }}%
+                                            </span>
+                                        @else
+                                            <span class="text-muted" style="font-size:0.8rem;">—</span>
+                                        @endif
                                     </td>
                                     <td class="text-center">
                                         <span class="badge bg-{{ $banco->EstatusBadge ?? 'secondary' }}" style="font-size:0.75rem;">
@@ -143,7 +155,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="4" class="text-center py-4 text-muted">
+                                    <td colspan="5" class="text-center py-4 text-muted">
                                         <i class="bi bi-inbox me-2"></i>
                                         No hay bancos registrados
                                     </td>

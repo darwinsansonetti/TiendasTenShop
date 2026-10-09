@@ -69,7 +69,8 @@ class BancosController extends Controller
                     'ID',
                     'Nombre',
                     'EsActivo',
-                    'Logo'
+                    'Logo',
+                    'PorcentajeComision',
                 ])
                 ->get();
 
@@ -126,6 +127,7 @@ class BancosController extends Controller
             $request->validate([
                 'nombre' => 'required|string|max:100',
                 'es_activo' => 'required|in:0,1',
+                'porcentaje_comision' => 'nullable|numeric|min:0|max:100',
                 'logo' => 'nullable|image|mimes:jpg,jpeg,png,gif|max:2048'
             ]);
 
@@ -181,6 +183,7 @@ class BancosController extends Controller
             $id = DB::connection('sqlsrv')->table('Bancos')->insertGetId([
                 'Nombre' => $request->nombre,
                 'EsActivo' => $request->es_activo,
+                'PorcentajeComision' => $request->porcentaje_comision ?? 0,
                 'Logo' => $logoName
             ]);
 
@@ -302,6 +305,7 @@ class BancosController extends Controller
             $request->validate([
                 'nombre' => 'required|string|max:100',
                 'es_activo' => 'required|in:0,1',
+                'porcentaje_comision' => 'nullable|numeric|min:0|max:100',
                 'logo' => 'nullable|image|mimes:jpg,jpeg,png,gif|max:2048'
             ]);
 
@@ -388,6 +392,7 @@ class BancosController extends Controller
                 ->update([
                     'Nombre' => $request->nombre,
                     'EsActivo' => $request->es_activo,
+                    'PorcentajeComision' => $request->porcentaje_comision ?? 0,
                     'Logo' => $logoName
                 ]);
 

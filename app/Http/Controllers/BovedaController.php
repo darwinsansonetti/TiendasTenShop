@@ -472,6 +472,7 @@ class BovedaController extends Controller
                         'pdv.Descripcion as pdv_descripcion',
                         'pdv.Codigo as pdv_codigo',
                         'b.Nombre as banco_nombre',
+                        'b.PorcentajeComision as porcentaje_comision',
                         'ppv.Monto as monto_sistema'
                     ])
                     ->get();
@@ -593,31 +594,35 @@ class BovedaController extends Controller
                 // 2. Denominaciones
                 if ($request->has('denominaciones')) {
                     foreach ($request->denominaciones as $sucId => $denominaciones) {
+
                         // Divisas
                         if (isset($denominaciones['divisa'])) {
-                            foreach ($denominaciones['divisa'] as $item) {
+                            foreach ($denominaciones['divisa'] as $key => $item) {
+
                                 if (($item['cantidad'] ?? 0) > 0) {
                                     DB::connection('sqlsrv')->table('BovedaDenominacionDivisa')->insert([
                                         'BovedaId' => $bovedaId,
                                         'SucursalId' => $sucId,
                                         'Denominacion' => $item['denominacion'],
                                         'Cantidad' => $item['cantidad'],
-                                        'MontoTotal' => $item['denominacion'] * $item['cantidad'],
+                                        'MontoTotal' => round($item['denominacion'] * $item['cantidad'], 2),
                                         'FechaCreacion' => Carbon::now()
                                     ]);
                                 }
                             }
                         }
+
                         // Bolívares
                         if (isset($denominaciones['bs'])) {
-                            foreach ($denominaciones['bs'] as $item) {
+                            foreach ($denominaciones['bs'] as $key => $item) {
+
                                 if (($item['cantidad'] ?? 0) > 0) {
                                     DB::connection('sqlsrv')->table('BovedaDenominacionBs')->insert([
                                         'BovedaId' => $bovedaId,
                                         'SucursalId' => $sucId,
                                         'Denominacion' => $item['denominacion'],
                                         'Cantidad' => $item['cantidad'],
-                                        'MontoTotal' => $item['denominacion'] * $item['cantidad'],
+                                        'MontoTotal' => round($item['denominacion'] * $item['cantidad'], 2),
                                         'FechaCreacion' => Carbon::now()
                                     ]);
                                 }
@@ -630,76 +635,86 @@ class BovedaController extends Controller
 
                 // 3. Conciliación EFECTIVO
                 if ($request->has('conciliacion_efectivo')) {
-                    foreach ($request->conciliacion_efectivo as $item) {
-                        $montoSistema = (float) ($item['monto_sistema'] ?? 0);
+                    foreach ($request->conciliacion_efectivo as $key => $item) {
+
+                        $montoSistema    = (float) ($item['monto_sistema'] ?? 0);
                         $montoDepositado = (float) ($item['monto_depositado'] ?? 0);
-                        $diferencia = $montoSistema - $montoDepositado;
+
+                        $diferencia      = round($montoSistema - $montoDepositado, 2);
                         $tieneDiferencia = abs($diferencia) > 0.01;
-                        
+
                         if ($tieneDiferencia) $tieneDiferencias = true;
 
                         DB::connection('sqlsrv')->table('BovedaConciliacionEfectivo')->insert([
-                            'BovedaId' => $bovedaId,
-                            'SucursalId' => $item['sucursal_id'],
-                            'CierreDiarioId' => $item['cierre_diario_id'] ?? null,
-                            'Tipo' => $item['tipo'],
-                            'MontoSistema' => $montoSistema,
-                            'MontoDepositado' => $montoDepositado,
-                            'Diferencia' => $diferencia,
-                            'Observacion' => $item['observacion'] ?? null,
-                            'TieneDiferencia' => $tieneDiferencia ? 1 : 0,
-                            'FechaCreacion' => Carbon::now()
+                            'BovedaId'         => $bovedaId,
+                            'SucursalId'       => $item['sucursal_id'],
+                            'CierreDiarioId'   => $item['cierre_diario_id'] ?? null,
+                            'Tipo'             => $item['tipo'],
+                            'MontoSistema'     => round($montoSistema, 2),
+                            'MontoDepositado'  => round($montoDepositado, 2),
+                            'Diferencia'       => $diferencia,
+                            'Observacion'      => $item['observacion'] ?? null,
+                            'TieneDiferencia'  => $tieneDiferencia ? 1 : 0,
+                            'FechaCreacion'    => Carbon::now()
                         ]);
                     }
                 }
 
                 // 4. Conciliación PDV
                 if ($request->has('conciliacion_pdv')) {
-                    foreach ($request->conciliacion_pdv as $item) {
-                        $montoSistema = (float) ($item['monto_sistema'] ?? 0);
+                    foreach ($request->conciliacion_pdv as $key => $item) {
+
+                        $montoSistema    = (float) ($item['monto_sistema'] ?? 0);
+                        $montoComision   = (float) ($item['monto_comision'] ?? 0);
                         $montoDepositado = (float) ($item['monto_depositado'] ?? 0);
-                        $diferencia = $montoSistema - $montoDepositado;
+
+                        $montoEfectivo   = $montoDepositado + $montoComision;
+                        $diferencia      = round($montoSistema - $montoEfectivo, 2);
                         $tieneDiferencia = abs($diferencia) > 0.01;
-                        
+
                         if ($tieneDiferencia) $tieneDiferencias = true;
 
                         DB::connection('sqlsrv')->table('BovedaConciliacionPDV')->insert([
-                            'BovedaId' => $bovedaId,
-                            'SucursalId' => $item['sucursal_id'],
-                            'PuntoDeVentaId' => $item['punto_venta_id'],
-                            'CierreDiarioId' => $item['cierre_diario_id'] ?? null,
-                            'MontoSistema' => $montoSistema,
-                            'MontoDepositado' => $montoDepositado,
-                            'Diferencia' => $diferencia,
-                            'FechaDeposito' => $fechaCierre,
-                            'Observacion' => $item['observacion'] ?? null,
-                            'TieneDiferencia' => $tieneDiferencia ? 1 : 0,
-                            'FechaCreacion' => Carbon::now()
+                            'BovedaId'         => $bovedaId,
+                            'SucursalId'       => $item['sucursal_id'],
+                            'PuntoDeVentaId'   => $item['punto_venta_id'],
+                            'CierreDiarioId'   => $item['cierre_diario_id'] ?? null,
+                            'MontoSistema'     => round($montoSistema, 2),
+                            'MontoDepositado'  => round($montoDepositado, 2),
+                            'Diferencia'       => $diferencia,
+                            'FechaDeposito'    => $fechaCierre,
+                            'Observacion'      => $item['observacion'] ?? null,
+                            'TieneDiferencia'  => $tieneDiferencia ? 1 : 0,
+                            'FechaCreacion'    => Carbon::now()
                         ]);
                     }
                 }
 
                 // 5. Conciliación Otros
                 if ($request->has('conciliacion_otros')) {
-                    foreach ($request->conciliacion_otros as $item) {
-                        $montoSistema = (float) ($item['monto_sistema'] ?? 0);
+                    foreach ($request->conciliacion_otros as $key => $item) {
+
+                        $montoSistema    = (float) ($item['monto_sistema'] ?? 0);
+                        $montoComision   = (float) ($item['monto_comision'] ?? 0);
                         $montoDepositado = (float) ($item['monto_depositado'] ?? 0);
-                        $diferencia = $montoSistema - $montoDepositado;
+
+                        $montoEfectivo   = $montoDepositado + $montoComision;
+                        $diferencia      = round($montoSistema - $montoEfectivo, 2);
                         $tieneDiferencia = abs($diferencia) > 0.01;
-                        
+
                         if ($tieneDiferencia) $tieneDiferencias = true;
 
                         DB::connection('sqlsrv')->table('BovedaConciliacionOtros')->insert([
-                            'BovedaId' => $bovedaId,
-                            'SucursalId' => $item['sucursal_id'],
-                            'Tipo' => $item['tipo'],
-                            'MontoSistema' => $montoSistema,
-                            'MontoDepositado' => $montoDepositado,
-                            'Diferencia' => $diferencia,
-                            'FechaDeposito' => $fechaCierre,
-                            'Observacion' => $item['observacion'] ?? null,
-                            'TieneDiferencia' => $tieneDiferencia ? 1 : 0,
-                            'FechaCreacion' => Carbon::now()
+                            'BovedaId'         => $bovedaId,
+                            'SucursalId'       => $item['sucursal_id'],
+                            'Tipo'             => $item['tipo'],
+                            'MontoSistema'     => round($montoSistema, 2),
+                            'MontoDepositado'  => round($montoDepositado, 2),
+                            'Diferencia'       => $diferencia,
+                            'FechaDeposito'    => $fechaCierre,
+                            'Observacion'      => $item['observacion'] ?? null,
+                            'TieneDiferencia'  => $tieneDiferencia ? 1 : 0,
+                            'FechaCreacion'    => Carbon::now()
                         ]);
                     }
                 }
@@ -750,6 +765,10 @@ class BovedaController extends Controller
                 return redirect()->route('cpanel.boveda.index')->with('error', 'Bóveda no encontrada');
             }
 
+            // 🔥 Fecha de corte: bóvedas creadas ANTES no aplican comisión
+            $fechaCorteComision = '2026-10-08 00:00:00'; // ← misma fecha que en consolidado
+            $aplicaComision = $boveda->FechaCreacion >= $fechaCorteComision;
+
             // Denominaciones
             $denominacionesDivisa = DB::connection('sqlsrv')
                 ->table('BovedaDenominacionDivisa as bdd')
@@ -765,7 +784,7 @@ class BovedaController extends Controller
                 ->select(['bdb.*', 's.Nombre as sucursal_nombre'])
                 ->get();
 
-            // Conciliación PDV
+            // Conciliación PDV (comisión condicionada al corte)
             $conciliacionPDV = DB::connection('sqlsrv')
                 ->table('BovedaConciliacionPDV as bcp')
                 ->leftJoin('Sucursales as s', 'bcp.SucursalId', '=', 's.ID')
@@ -777,17 +796,42 @@ class BovedaController extends Controller
                     's.Nombre as sucursal_nombre',
                     'pdv.Descripcion as pdv_descripcion',
                     'pdv.Codigo as pdv_codigo',
-                    'b.Nombre as banco_nombre'
+                    'b.Nombre as banco_nombre',
+                    'b.PorcentajeComision as porcentaje_comision'
                 ])
-                ->get();
+                ->get()
+                ->map(function ($item) use ($aplicaComision) {
+                    $porcentaje   = (float) ($item->porcentaje_comision ?? 0);
+                    $montoSistema = (float) $item->MontoSistema;
 
-            // Conciliación Otros
+                    $montoComision = $aplicaComision
+                        ? round($montoSistema * ($porcentaje / 100), 2)
+                        : 0;
+
+                    $item->MontoComision = $montoComision;
+                    $item->MontoEfectivo = round((float) $item->MontoDepositado + $montoComision, 2);
+
+                    return $item;
+                });
+
+            // Conciliación Otros (comisión Biopago condicionada al corte)
             $conciliacionOtros = DB::connection('sqlsrv')
                 ->table('BovedaConciliacionOtros as bco')
                 ->leftJoin('Sucursales as s', 'bco.SucursalId', '=', 's.ID')
                 ->where('bco.BovedaId', $id)
                 ->select(['bco.*', 's.Nombre as sucursal_nombre'])
-                ->get();
+                ->get()
+                ->map(function ($item) use ($aplicaComision) {
+                    // 🔥 Comisión solo para Biopago (Tipo 1) y solo si la bóveda es nueva
+                    $montoComision = ($aplicaComision && $item->Tipo == 1)
+                        ? round((float) $item->MontoSistema * 0.035, 2)
+                        : 0;
+
+                    $item->MontoComision = $montoComision;
+                    $item->MontoEfectivo = round((float) $item->MontoDepositado + $montoComision, 2);
+
+                    return $item;
+                });
 
             // Préstamos
             $prestamos = DB::connection('sqlsrv')
@@ -802,49 +846,68 @@ class BovedaController extends Controller
             $boveda->EstatusBadge = $boveda->Estatus == 0 ? 'success' : 'secondary';
             $boveda->FechaFormateada = $boveda->Fecha ? Carbon::parse($boveda->Fecha)->format('d/m/Y') : 'N/A';
 
-            // Totales
+            // Totales - PDV
             $totalDivisa = $denominacionesDivisa->sum('MontoTotal');
-            $totalBs = $denominacionesBs->sum('MontoTotal');
-            $totalPDVSistema = $conciliacionPDV->sum('MontoSistema');
-            $totalPDVDepositado = $conciliacionPDV->sum('MontoDepositado');
-            $diferenciaPDV = $totalPDVSistema - $totalPDVDepositado;
-            $totalOtrosSistema = $conciliacionOtros->sum('MontoSistema');
+            $totalBs     = $denominacionesBs->sum('MontoTotal');
+
+            $totalPDVSistema     = $conciliacionPDV->sum('MontoSistema');
+            $totalPDVDepositado  = $conciliacionPDV->sum('MontoDepositado');
+            $totalPDVComision    = $conciliacionPDV->sum('MontoComision');
+            $totalPDVEfectivo    = $conciliacionPDV->sum('MontoEfectivo');
+            $diferenciaPDV       = $totalPDVSistema - $totalPDVEfectivo;
+
+            // Totales - Otros
+            $totalOtrosSistema    = $conciliacionOtros->sum('MontoSistema');
             $totalOtrosDepositado = $conciliacionOtros->sum('MontoDepositado');
-            $diferenciaOtros = $totalOtrosSistema - $totalOtrosDepositado;
+            $totalOtrosComision   = $conciliacionOtros->sum('MontoComision');
+            $totalOtrosEfectivo   = $conciliacionOtros->sum('MontoEfectivo');
+            $diferenciaOtros      = $totalOtrosSistema - $totalOtrosEfectivo;
+
+            // Préstamos pendientes
             $prestamosPendientes = $prestamos->where('Estatus', 0)->sum('MontoDivisa');
 
             // Conciliación general
-            $tieneDiferencias = ($conciliacionPDV->where('TieneDiferencia', 1)->count() > 0) || 
-                               ($conciliacionOtros->where('TieneDiferencia', 1)->count() > 0);
+            $tieneDiferencias = ($conciliacionPDV->where('TieneDiferencia', 1)->count() > 0) ||
+                            ($conciliacionOtros->where('TieneDiferencia', 1)->count() > 0);
 
             $conciliacionTexto = [0 => 'Pendiente', 1 => 'Conciliado', 2 => 'Con Diferencia'];
             $conciliacionBadge = [0 => 'warning', 1 => 'success', 2 => 'danger'];
 
             return view('cpanel.boveda.detalle', [
-                'boveda' => $boveda,
-                'denominacionesDivisa' => $denominacionesDivisa,
-                'denominacionesBs' => $denominacionesBs,
-                'conciliacionPDV' => $conciliacionPDV,
-                'conciliacionOtros' => $conciliacionOtros,
-                'prestamos' => $prestamos,
-                'totalDivisa' => $totalDivisa,
-                'totalBs' => $totalBs,
-                'totalPDVSistema' => $totalPDVSistema,
-                'totalPDVDepositado' => $totalPDVDepositado,
-                'diferenciaPDV' => $diferenciaPDV,
-                'totalOtrosSistema' => $totalOtrosSistema,
-                'totalOtrosDepositado' => $totalOtrosDepositado,
-                'diferenciaOtros' => $diferenciaOtros,
-                'prestamosPendientes' => $prestamosPendientes,
-                'tieneDiferencias' => $tieneDiferencias,
-                'puedeCerrar' => $boveda->Estatus == 0,
-                'conciliacionTexto' => $conciliacionTexto,
-                'conciliacionBadge' => $conciliacionBadge,
-                'tiposOtros' => $this->tiposOtros
+                'boveda'                => $boveda,
+                'denominacionesDivisa'  => $denominacionesDivisa,
+                'denominacionesBs'      => $denominacionesBs,
+                'conciliacionPDV'       => $conciliacionPDV,
+                'conciliacionOtros'     => $conciliacionOtros,
+                'prestamos'             => $prestamos,
+                'totalDivisa'           => $totalDivisa,
+                'totalBs'               => $totalBs,
+
+                // PDV
+                'totalPDVSistema'       => $totalPDVSistema,
+                'totalPDVDepositado'    => $totalPDVDepositado,
+                'totalPDVComision'      => $totalPDVComision,
+                'totalPDVEfectivo'      => $totalPDVEfectivo,
+                'diferenciaPDV'         => $diferenciaPDV,
+
+                // Otros
+                'totalOtrosSistema'     => $totalOtrosSistema,
+                'totalOtrosDepositado'  => $totalOtrosDepositado,
+                'totalOtrosComision'    => $totalOtrosComision,
+                'totalOtrosEfectivo'    => $totalOtrosEfectivo,
+                'diferenciaOtros'       => $diferenciaOtros,
+
+                // Generales
+                'prestamosPendientes'   => $prestamosPendientes,
+                'tieneDiferencias'      => $tieneDiferencias,
+                'puedeCerrar'           => $boveda->Estatus == 0,
+                'conciliacionTexto'     => $conciliacionTexto,
+                'conciliacionBadge'     => $conciliacionBadge,
+                'tiposOtros'            => $this->tiposOtros,
             ]);
 
         } catch (\Exception $e) {
-            return back()->with('error', 'Error al cargar el detalle');
+            return back()->with('error', 'Error al cargar el detalle: ' . $e->getMessage());
         }
     }
 
@@ -1087,6 +1150,7 @@ class BovedaController extends Controller
                         'pdv.Descripcion as pdv_descripcion',
                         'pdv.Codigo as pdv_codigo',
                         'b.Nombre as banco_nombre',
+                        'b.PorcentajeComision as porcentaje_comision',
                         'ppv.Monto as monto_sistema'
                     ])
                     ->get();
@@ -1192,11 +1256,11 @@ class BovedaController extends Controller
                             foreach ($denominaciones['divisa'] as $item) {
                                 if (($item['cantidad'] ?? 0) > 0) {
                                     DB::connection('sqlsrv')->table('BovedaDenominacionDivisa')->insert([
-                                        'BovedaId' => $id,
-                                        'SucursalId' => $sucId,
-                                        'Denominacion' => $item['denominacion'],
-                                        'Cantidad' => $item['cantidad'],
-                                        'MontoTotal' => $item['denominacion'] * $item['cantidad'],
+                                        'BovedaId'      => $id,
+                                        'SucursalId'    => $sucId,
+                                        'Denominacion'  => $item['denominacion'],
+                                        'Cantidad'      => $item['cantidad'],
+                                        'MontoTotal'    => round($item['denominacion'] * $item['cantidad'], 2),
                                         'FechaCreacion' => Carbon::now()
                                     ]);
                                 }
@@ -1206,11 +1270,11 @@ class BovedaController extends Controller
                             foreach ($denominaciones['bs'] as $item) {
                                 if (($item['cantidad'] ?? 0) > 0) {
                                     DB::connection('sqlsrv')->table('BovedaDenominacionBs')->insert([
-                                        'BovedaId' => $id,
-                                        'SucursalId' => $sucId,
-                                        'Denominacion' => $item['denominacion'],
-                                        'Cantidad' => $item['cantidad'],
-                                        'MontoTotal' => $item['denominacion'] * $item['cantidad'],
+                                        'BovedaId'      => $id,
+                                        'SucursalId'    => $sucId,
+                                        'Denominacion'  => $item['denominacion'],
+                                        'Cantidad'      => $item['cantidad'],
+                                        'MontoTotal'    => round($item['denominacion'] * $item['cantidad'], 2),
                                         'FechaCreacion' => Carbon::now()
                                     ]);
                                 }
@@ -1224,50 +1288,54 @@ class BovedaController extends Controller
                 // 5. Conciliación Efectivo
                 if ($request->has('conciliacion_efectivo')) {
                     foreach ($request->conciliacion_efectivo as $item) {
-                        $montoSistema = (float) ($item['monto_sistema'] ?? 0);
+                        $montoSistema    = (float) ($item['monto_sistema'] ?? 0);
                         $montoDepositado = (float) ($item['monto_depositado'] ?? 0);
-                        $diferencia = $montoSistema - $montoDepositado;
+                        $diferencia      = round($montoSistema - $montoDepositado, 2);
                         $tieneDiferencia = abs($diferencia) > 0.01;
-                        
+
                         if ($tieneDiferencia) $tieneDiferencias = true;
 
                         DB::connection('sqlsrv')->table('BovedaConciliacionEfectivo')->insert([
-                            'BovedaId' => $id,
-                            'SucursalId' => $item['sucursal_id'],
-                            'CierreDiarioId' => $item['cierre_diario_id'] ?? null,
-                            'Tipo' => $item['tipo'],
-                            'MontoSistema' => $montoSistema,
-                            'MontoDepositado' => $montoDepositado,
-                            'Diferencia' => $diferencia,
-                            'Observacion' => $item['observacion'] ?? null,
-                            'TieneDiferencia' => $tieneDiferencia ? 1 : 0,
-                            'FechaCreacion' => Carbon::now()
+                            'BovedaId'         => $id,
+                            'SucursalId'       => $item['sucursal_id'],
+                            'CierreDiarioId'   => $item['cierre_diario_id'] ?? null,
+                            'Tipo'             => $item['tipo'],
+                            'MontoSistema'     => round($montoSistema, 2),
+                            'MontoDepositado'  => round($montoDepositado, 2),
+                            'Diferencia'       => $diferencia,
+                            'Observacion'      => $item['observacion'] ?? null,
+                            'TieneDiferencia'  => $tieneDiferencia ? 1 : 0,
+                            'FechaCreacion'    => Carbon::now()
                         ]);
                     }
                 }
 
-                // 6. Conciliación PDV
+                // 6. Conciliación PDV (con comisión)
                 if ($request->has('conciliacion_pdv')) {
                     foreach ($request->conciliacion_pdv as $item) {
-                        $montoSistema = (float) ($item['monto_sistema'] ?? 0);
+                        $montoSistema    = (float) ($item['monto_sistema'] ?? 0);
+                        $montoComision   = (float) ($item['monto_comision'] ?? 0);
                         $montoDepositado = (float) ($item['monto_depositado'] ?? 0);
-                        $diferencia = $montoSistema - $montoDepositado;
+
+                        // 🔥 Sumar la comisión al depositado antes de comparar
+                        $montoEfectivo   = $montoDepositado + $montoComision;
+                        $diferencia      = round($montoSistema - $montoEfectivo, 2);
                         $tieneDiferencia = abs($diferencia) > 0.01;
-                        
+
                         if ($tieneDiferencia) $tieneDiferencias = true;
 
                         DB::connection('sqlsrv')->table('BovedaConciliacionPDV')->insert([
-                            'BovedaId' => $id,
-                            'SucursalId' => $item['sucursal_id'],
-                            'PuntoDeVentaId' => $item['punto_venta_id'],
-                            'CierreDiarioId' => $item['cierre_diario_id'] ?? null,
-                            'MontoSistema' => $montoSistema,
-                            'MontoDepositado' => $montoDepositado,
-                            'Diferencia' => $diferencia,
-                            'FechaDeposito' => $fechaDeposito,   // 🔹 normalizado
-                            'Observacion' => $item['observacion'] ?? null,
-                            'TieneDiferencia' => $tieneDiferencia ? 1 : 0,
-                            'FechaCreacion' => Carbon::now()
+                            'BovedaId'         => $id,
+                            'SucursalId'       => $item['sucursal_id'],
+                            'PuntoDeVentaId'   => $item['punto_venta_id'],
+                            'CierreDiarioId'   => $item['cierre_diario_id'] ?? null,
+                            'MontoSistema'     => round($montoSistema, 2),
+                            'MontoDepositado'  => round($montoDepositado, 2),
+                            'Diferencia'       => $diferencia,
+                            'FechaDeposito'    => $fechaDeposito,
+                            'Observacion'      => $item['observacion'] ?? null,
+                            'TieneDiferencia'  => $tieneDiferencia ? 1 : 0,
+                            'FechaCreacion'    => Carbon::now()
                         ]);
                     }
                 }
@@ -1275,24 +1343,27 @@ class BovedaController extends Controller
                 // 7. Conciliación Otros
                 if ($request->has('conciliacion_otros')) {
                     foreach ($request->conciliacion_otros as $item) {
-                        $montoSistema = (float) ($item['monto_sistema'] ?? 0);
+                        $montoSistema    = (float) ($item['monto_sistema'] ?? 0);
+                        $montoComision   = (float) ($item['monto_comision'] ?? 0);
                         $montoDepositado = (float) ($item['monto_depositado'] ?? 0);
-                        $diferencia = $montoSistema - $montoDepositado;
+
+                        $montoEfectivo   = $montoDepositado + $montoComision;
+                        $diferencia      = round($montoSistema - $montoEfectivo, 2);
                         $tieneDiferencia = abs($diferencia) > 0.01;
-                        
+
                         if ($tieneDiferencia) $tieneDiferencias = true;
 
                         DB::connection('sqlsrv')->table('BovedaConciliacionOtros')->insert([
-                            'BovedaId' => $id,
-                            'SucursalId' => $item['sucursal_id'],
-                            'Tipo' => $item['tipo'],
-                            'MontoSistema' => $montoSistema,
-                            'MontoDepositado' => $montoDepositado,
-                            'Diferencia' => $diferencia,
-                            'FechaDeposito' => $fechaDeposito,   // 🔹 normalizado
-                            'Observacion' => $item['observacion'] ?? null,
-                            'TieneDiferencia' => $tieneDiferencia ? 1 : 0,
-                            'FechaCreacion' => Carbon::now()
+                            'BovedaId'         => $id,
+                            'SucursalId'       => $item['sucursal_id'],
+                            'Tipo'             => $item['tipo'],
+                            'MontoSistema'     => round($montoSistema, 2),
+                            'MontoDepositado'  => round($montoDepositado, 2),
+                            'Diferencia'       => $diferencia,
+                            'FechaDeposito'    => $fechaDeposito,
+                            'Observacion'      => $item['observacion'] ?? null,
+                            'TieneDiferencia'  => $tieneDiferencia ? 1 : 0,
+                            'FechaCreacion'    => Carbon::now()
                         ]);
                     }
                 }
@@ -2541,31 +2612,74 @@ class BovedaController extends Controller
             // ================================================
             // 3. TOTALES POR PUNTO DE VENTA
             // ================================================
+            
+
+            // ================================================
+            // FECHA DE CORTE PARA APLICAR COMISIÓN
+            // ================================================
+            // Bóvedas creadas ANTES de esta fecha: el MontoDepositado fue registrado
+            // como BRUTO (sin descontar la comisión del banco). No se le suma comisión.
+            //
+            // Bóvedas creadas DESDE esta fecha: el MontoDepositado se registra como
+            // NETO (lo que efectivamente acreditó el banco después de comisión).
+            // Se le suma la comisión para reconstruir el bruto y calcular el faltante real.
+            $fechaCorteComision = '2026-10-08 00:00:00';
+
             $puntosVentaTotales = DB::connection('sqlsrv')
-                ->table('BovedaConciliacionPDV as bcp')
-                ->join('PuntosDeVenta as pdv', 'bcp.PuntoDeVentaId', '=', 'pdv.PuntoDeVentaId')
-                ->leftJoin('Bancos as b', 'pdv.BancoId', '=', 'b.ID')
-                ->leftJoin('Sucursales as s', 'pdv.SucursalId', '=', 's.ID')
-                ->join('Boveda as bo', 'bcp.BovedaId', '=', 'bo.BovedaId')
-                ->leftJoin('DivisaValor as dv', 'bo.DivisaValorId', '=', 'dv.ID')
-                ->whereIn('bcp.BovedaId', $bovedasFiltradas)
-                ->select(
-                    'pdv.PuntoDeVentaId',
-                    'pdv.Descripcion as pdv_descripcion',
-                    'pdv.Codigo as pdv_codigo',
-                    'b.Nombre as banco_nombre',
-                    's.Nombre as sucursal_nombre',
-                    DB::raw('SUM(bcp.MontoSistema) as TotalSistema'),
-                    DB::raw('SUM(bcp.MontoDepositado) as TotalDepositado'),
-                    DB::raw('SUM(bcp.Diferencia) as TotalDiferencia'),
-                    DB::raw('SUM(CASE WHEN ISNULL(dv.Valor, 0) > 0 THEN bcp.MontoSistema / dv.Valor ELSE 0 END) as TotalSistemaUSD'),
-                    DB::raw('SUM(CASE WHEN ISNULL(dv.Valor, 0) > 0 THEN bcp.MontoDepositado / dv.Valor ELSE 0 END) as TotalDepositadoUSD'),
-                    DB::raw('SUM(CASE WHEN ISNULL(dv.Valor, 0) > 0 THEN bcp.Diferencia / dv.Valor ELSE 0 END) as TotalDiferenciaUSD')
-                )
-                ->groupBy('pdv.PuntoDeVentaId', 'pdv.Descripcion', 'pdv.Codigo', 'b.Nombre', 's.Nombre')
-                ->orderBy('s.Nombre')
-                ->orderBy('pdv.Descripcion')
-                ->get();
+                    ->table('BovedaConciliacionPDV as bcp')
+                    ->join('PuntosDeVenta as pdv', 'bcp.PuntoDeVentaId', '=', 'pdv.PuntoDeVentaId')
+                    ->leftJoin('Bancos as b', 'pdv.BancoId', '=', 'b.ID')
+                    ->leftJoin('Sucursales as s', 'pdv.SucursalId', '=', 's.ID')
+                    ->join('Boveda as bo', 'bcp.BovedaId', '=', 'bo.BovedaId')
+                    ->leftJoin('DivisaValor as dv', 'bo.DivisaValorId', '=', 'dv.ID')
+                    ->whereIn('bcp.BovedaId', $bovedasFiltradas)
+                    ->select(
+                        'pdv.PuntoDeVentaId',
+                        'pdv.Descripcion as pdv_descripcion',
+                        'pdv.Codigo as pdv_codigo',
+                        'b.Nombre as banco_nombre',
+                        'b.PorcentajeComision as porcentaje_comision',
+                        's.Nombre as sucursal_nombre',
+                        DB::raw('SUM(bcp.MontoSistema) as TotalSistema'),
+                        DB::raw('SUM(bcp.MontoDepositado) as TotalDepositado'),
+                        DB::raw('SUM(bcp.Diferencia) as TotalDiferencia'),
+                        DB::raw('SUM(CASE WHEN ISNULL(dv.Valor, 0) > 0 THEN bcp.MontoSistema / dv.Valor ELSE 0 END) as TotalSistemaUSD'),
+                        DB::raw('SUM(CASE WHEN ISNULL(dv.Valor, 0) > 0 THEN bcp.MontoDepositado / dv.Valor ELSE 0 END) as TotalDepositadoUSD'),
+                        DB::raw('SUM(CASE WHEN ISNULL(dv.Valor, 0) > 0 THEN bcp.Diferencia / dv.Valor ELSE 0 END) as TotalDiferenciaUSD'),
+
+                        // 🔥 Comisión: SOLO para bóvedas creadas desde la fecha de corte
+                        DB::raw("SUM(CASE 
+                            WHEN bo.FechaCreacion >= '{$fechaCorteComision}'
+                            THEN bcp.MontoSistema * (ISNULL(b.PorcentajeComision, 0) / 100.0)
+                            ELSE 0
+                        END) as TotalComision")
+                    )
+                    ->groupBy('pdv.PuntoDeVentaId', 'pdv.Descripcion', 'pdv.Codigo', 'b.Nombre', 'b.PorcentajeComision', 's.Nombre')
+                    ->orderBy('s.Nombre')
+                    ->orderBy('pdv.Descripcion')
+                    ->get()
+                    ->map(function ($item) {
+                        $montoSistema    = (float) $item->TotalSistema;
+                        $montoDepositado = (float) $item->TotalDepositado;
+                        $montoComision   = round((float) $item->TotalComision, 2);
+
+                        // La comisión se suma SOLO si aplica (ya viene condicionada desde SQL)
+                        $montoEfectivo  = $montoDepositado + $montoComision;
+                        $diferenciaReal = round($montoSistema - $montoEfectivo, 2);
+
+                        // Factor USD proporcional (basado en Sistema y SistemaUSD)
+                        $factorUsd = $montoSistema > 0 && (float) $item->TotalSistemaUSD > 0
+                            ? ((float) $item->TotalSistemaUSD / $montoSistema)
+                            : 0;
+
+                        $item->TotalComision          = $montoComision;
+                        $item->TotalEfectivo          = $montoEfectivo;
+                        $item->TotalDiferenciaReal    = $diferenciaReal;
+                        $item->TotalComisionUSD       = round($montoComision * $factorUsd, 2);
+                        $item->TotalDiferenciaRealUSD = round($diferenciaReal * $factorUsd, 2);
+
+                        return $item;
+                    });
 
             // ================================================
             // 4. TOTALES POR OTROS CONCEPTOS
@@ -2584,7 +2698,15 @@ class BovedaController extends Controller
                     DB::raw('SUM(bco.Diferencia) as TotalDiferencia'),
                     DB::raw('SUM(CASE WHEN ISNULL(dv.Valor, 0) > 0 THEN bco.MontoSistema / dv.Valor ELSE 0 END) as TotalSistemaUSD'),
                     DB::raw('SUM(CASE WHEN ISNULL(dv.Valor, 0) > 0 THEN bco.MontoDepositado / dv.Valor ELSE 0 END) as TotalDepositadoUSD'),
-                    DB::raw('SUM(CASE WHEN ISNULL(dv.Valor, 0) > 0 THEN bco.Diferencia / dv.Valor ELSE 0 END) as TotalDiferenciaUSD')
+                    DB::raw('SUM(CASE WHEN ISNULL(dv.Valor, 0) > 0 THEN bco.Diferencia / dv.Valor ELSE 0 END) as TotalDiferenciaUSD'),
+
+                    // 🔥 Comisión para Biopago (Tipo 1), solo bóvedas nuevas
+                    DB::raw("SUM(CASE 
+                        WHEN bco.Tipo = 1 
+                        AND bo.FechaCreacion >= '{$fechaCorteComision}'
+                        THEN bco.MontoSistema * 0.035
+                        ELSE 0
+                    END) as TotalComision")
                 )
                 ->groupBy('bco.Tipo')
                 ->get()
@@ -2598,6 +2720,16 @@ class BovedaController extends Controller
                         $item->TotalDepositadoUSD = $item->TotalDepositado;
                         $item->TotalDiferenciaUSD = $item->TotalDiferencia;
                     }
+
+                    // 🔥 Diferencia real (Sistema − Depositado − Comisión)
+                    $montoSistema   = (float) $item->TotalSistema;
+                    $montoDepositado = (float) $item->TotalDepositado;
+                    $montoComision  = round((float) $item->TotalComision, 2);
+
+                    $item->TotalComision       = $montoComision;
+                    $item->TotalEfectivo       = $montoDepositado + $montoComision;
+                    $item->TotalDiferenciaReal = round($montoSistema - $item->TotalEfectivo, 2);
+
                     return $item;
                 });
 
@@ -2665,10 +2797,17 @@ class BovedaController extends Controller
             $totalBs            = $bsPorDenominacion->sum('MontoNeto');
             $totalBsUSD         = $bsPorDenominacion->sum('MontoNetoUSD');
 
-            $totalPdvSistema       = $puntosVentaTotales->sum('TotalSistema');
-            $totalPdvSistemaUSD    = $puntosVentaTotales->sum('TotalSistemaUSD');
-            $totalPdvDepositado    = $puntosVentaTotales->sum('TotalDepositado');
-            $totalPdvDepositadoUSD = $puntosVentaTotales->sum('TotalDepositadoUSD');
+            $totalPdvSistema          = $puntosVentaTotales->sum('TotalSistema');
+            $totalPdvSistemaUSD       = $puntosVentaTotales->sum('TotalSistemaUSD');
+            $totalPdvDepositado       = $puntosVentaTotales->sum('TotalDepositado');
+            $totalPdvDepositadoUSD    = $puntosVentaTotales->sum('TotalDepositadoUSD');
+
+            // 🔥 NUEVOS TOTALES
+            $totalPdvComision         = $puntosVentaTotales->sum('TotalComision');
+            $totalPdvComisionUSD      = $puntosVentaTotales->sum('TotalComisionUSD');
+            $totalPdvEfectivo         = $puntosVentaTotales->sum('TotalEfectivo');
+            $totalPdvDiferenciaReal   = $puntosVentaTotales->sum('TotalDiferenciaReal');
+            $totalPdvDiferenciaRealUSD = $puntosVentaTotales->sum('TotalDiferenciaRealUSD');
 
             $totalPrestamosPendientesUSD = $prestamosPendientes->sum('TotalPendienteUSD');
             $totalPrestamosPendientesBs  = $prestamosPendientes->sum('TotalPendienteBs');
@@ -2855,6 +2994,12 @@ class BovedaController extends Controller
                 'retirosBs'          => $retirosBs,
                 'totalRetirosDivisa' => $totalRetirosDivisa,
                 'totalRetirosBs'     => $totalRetirosBs,
+
+                'totalPdvComision'         => $totalPdvComision,
+                'totalPdvComisionUSD'      => $totalPdvComisionUSD,
+                'totalPdvEfectivo'         => $totalPdvEfectivo,
+                'totalPdvDiferenciaReal'   => $totalPdvDiferenciaReal,
+                'totalPdvDiferenciaRealUSD' => $totalPdvDiferenciaRealUSD,
             ]);
 
         } catch (\Exception $e) {
