@@ -4552,4 +4552,512 @@ class BovedaController extends Controller
             return back()->withInput()->with('error', 'Error al guardar: ' . $e->getMessage());
         }
     }
+
+    public function apiConciliacionDetallada(Request $request)
+    {
+        try {
+            $fechaMinima = '2026-09-01';
+
+            $defaultInicio = Carbon::now()->startOfMonth()->format('Y-m-d');
+            if ($defaultInicio < $fechaMinima) {
+                $defaultInicio = $fechaMinima;
+            }
+
+            $fechaInicio = $request->input('fecha_inicio', $defaultInicio);
+            $fechaFin    = $request->input('fecha_fin', Carbon::now()->format('Y-m-d'));
+
+            if ($fechaInicio < $fechaMinima) {
+                $fechaInicio = $fechaMinima;
+            }
+
+            $sucursalId = $request->input('sucursal_id', '');
+
+            // ================================================
+            // BÓVEDAS FILTRADAS (con más datos que solo IDs)
+            // ================================================
+            $bovedasDetalle = DB::connection('sqlsrv')
+                ->table('Boveda')
+                ->whereDate('Fecha', '>=', $fechaInicio)
+                ->whereDate('Fecha', '<=', $fechaFin)
+                ->when($sucursalId != '', fn($q) => $q->where('SucursalId', $sucursalId))
+                ->select('BovedaId', 'SucursalId', 'Fecha', 'Estatus', 'EstatusConciliacion', 'Observacion')
+                ->get();
+
+            $bovedasFiltradas = $bovedasDetalle->pluck('BovedaId')->toArray();
+
+            // Agrupar bóvedas por SucursalId
+            $bovedasPorSucursal = $bovedasDetalle->groupBy(fn($b) => (int) $b->SucursalId);
+
+            // ================================================
+            // SUCURSALES CON MOVIMIENTOS
+            // ================================================
+            $sucursalesIds = DB::connection('sqlsrv')
+                ->table('BovedaConciliacionEfectivo')
+                ->whereIn('BovedaId', $bovedasFiltradas)
+                ->distinct()
+                ->pluck('SucursalId')
+                ->merge(
+                    DB::connection('sqlsrv')
+                        ->table('BovedaConciliacionPDV')
+                        ->whereIn('BovedaId', $bovedasFiltradas)
+                        ->distinct()
+                        ->pluck('SucursalId')
+                )
+                ->merge(
+                    DB::connection('sqlsrv')
+                        ->table('BovedaConciliacionOtros')
+                        ->whereIn('BovedaId', $bovedasFiltradas)
+                        ->distinct()
+                        ->pluck('SucursalId')
+                )
+                ->unique()
+                ->values()
+                ->toArray();
+
+            $sucursalesInfo = DB::connection('sqlsrv')
+                ->table('Sucursales')
+                ->whereIn('ID', $sucursalesIds)
+                ->select('ID', 'Nombre')
+                ->get()
+                ->keyBy('ID');
+
+
+            // ================================================
+            // DATOS POR SUCURSAL
+            // ================================================
+            $datosPorSucursal = [];
+            $resumenGeneral = [
+                'totalEfectivoDivisas'  => 0,
+                'totalEfectivoBs'       => 0,
+                'totalPdvSistema'       => 0,
+                'totalPdvDepositado'    => 0,
+                'totalPdvDiferencia'    => 0,
+                'totalOtrosSistema'     => 0,
+                'totalOtrosDepositado'  => 0,
+                'totalOtrosDiferencia'  => 0,
+                'totalPrestamosOtorgados' => 0,
+                'totalPrestamosMontoUSD'  => 0,
+                'totalPrestamosMontoBs'   => 0,
+                'totalPrestamosPendientesUSD' => 0,
+                'totalPrestamosPendientesBs'  => 0,
+            ];
+
+            foreach ($sucursalesIds as $sucId) {
+                $sucInfo = $sucursalesInfo[$sucId] ?? null;
+
+                // ---------- ESTATUS DE BÓVEDAS ----------
+                $bovedasSuc = $bovedasPorSucursal->get((int) $sucId) ?? collect();
+                $cantidadCierres = $bovedasSuc->count();
+                $todasCerradas = $bovedasSuc->every(fn($b) => (int) $b->Estatus === 1);
+                $conciliacionGlobal = $bovedasSuc->contains(fn($b) => (int) $b->EstatusConciliacion === 2)
+                    ? 2
+                    : ((int) $bovedasSuc->max('EstatusConciliacion') ?: 1);
+                $fechasRango = $bovedasSuc->sortBy('Fecha')->pluck('Fecha')->map(fn($f) => Carbon::parse($f)->format('d/m'))->values();
+
+                Log::info("API CONCILIACION: Bóvedas para sucursal {$sucId}", [
+                    'bovedas_encontradas' => $bovedasSuc->count(),
+                    'bovedas_por_sucursal_keys' => $bovedasPorSucursal->keys()->toArray(),
+                ]);
+
+                // ---------- EFECTIVO ----------
+                $efectivo = DB::connection('sqlsrv')
+                    ->table('BovedaConciliacionEfectivo')
+                    ->whereIn('BovedaId', $bovedasFiltradas)
+                    ->where('SucursalId', $sucId)
+                    ->select(
+                        DB::raw('SUM(CASE WHEN Tipo = 1 THEN MontoDepositado ELSE 0 END) as EfectivoDivisas'),
+                        DB::raw('SUM(CASE WHEN Tipo = 2 THEN MontoDepositado ELSE 0 END) as EfectivoBs')
+                    )
+                    ->first();
+
+                $efectivoDivisas = round((float) ($efectivo->EfectivoDivisas ?? 0), 2);
+                $efectivoBs      = round((float) ($efectivo->EfectivoBs ?? 0), 2);
+
+                // ---------- DENOMINACIONES CONTADAS ----------
+                $denominacionesDivisa = DB::connection('sqlsrv')
+                    ->table('BovedaDenominacionDivisa')
+                    ->whereIn('BovedaId', $bovedasFiltradas)
+                    ->where('SucursalId', $sucId)
+                    ->select('Denominacion', DB::raw('SUM(Cantidad) as TotalCantidad'))
+                    ->groupBy('Denominacion')
+                    ->orderByDesc('Denominacion')
+                    ->get()
+                    ->map(fn($d) => [
+                        'Denominacion'  => (float) $d->Denominacion,
+                        'Cantidad'      => (int) $d->TotalCantidad,
+                        'MontoTotal'    => round((float) $d->Denominacion * (int) $d->TotalCantidad, 2),
+                    ])->values();
+
+                $denominacionesBs = DB::connection('sqlsrv')
+                    ->table('BovedaDenominacionBs')
+                    ->whereIn('BovedaId', $bovedasFiltradas)
+                    ->where('SucursalId', $sucId)
+                    ->select('Denominacion', DB::raw('SUM(Cantidad) as TotalCantidad'))
+                    ->groupBy('Denominacion')
+                    ->orderByDesc('Denominacion')
+                    ->get()
+                    ->map(fn($d) => [
+                        'Denominacion'  => (float) $d->Denominacion,
+                        'Cantidad'      => (int) $d->TotalCantidad,
+                        'MontoTotal'    => round((float) $d->Denominacion * (int) $d->TotalCantidad, 2),
+                    ])->values();
+
+                // ---------- PDV ----------
+                $pdv = DB::connection('sqlsrv')
+                    ->table('BovedaConciliacionPDV as bcp')
+                    ->join('PuntosDeVenta as pdv', 'bcp.PuntoDeVentaId', '=', 'pdv.PuntoDeVentaId')
+                    ->leftJoin('Bancos as b', 'pdv.BancoId', '=', 'b.ID')
+                    ->whereIn('bcp.BovedaId', $bovedasFiltradas)
+                    ->where('bcp.SucursalId', $sucId)
+                    ->select(
+                        'pdv.Descripcion as pdv_descripcion',
+                        'pdv.Codigo as pdv_codigo',
+                        'b.Nombre as banco_nombre',
+                        DB::raw('SUM(bcp.MontoSistema) as TotalSistema'),
+                        DB::raw('SUM(bcp.MontoDepositado) as TotalDepositado'),
+                        DB::raw('SUM(bcp.Diferencia) as TotalDiferencia')
+                    )
+                    ->groupBy('pdv.Descripcion', 'pdv.Codigo', 'b.Nombre')
+                    ->orderBy('pdv.Descripcion')
+                    ->get()
+                    ->map(fn($p) => [
+                        'pdv_descripcion' => $p->pdv_descripcion,
+                        'pdv_codigo'      => $p->pdv_codigo,
+                        'banco_nombre'    => $p->banco_nombre,
+                        'TotalSistema'    => round((float) $p->TotalSistema, 2),
+                        'TotalDepositado' => round((float) $p->TotalDepositado, 2),
+                        'TotalDiferencia' => round((float) $p->TotalDiferencia, 2),
+                    ])->values();
+
+                // ---------- OTROS ----------
+                $otros = DB::connection('sqlsrv')
+                    ->table('BovedaConciliacionOtros')
+                    ->whereIn('BovedaId', $bovedasFiltradas)
+                    ->where('SucursalId', $sucId)
+                    ->select(
+                        'Tipo',
+                        DB::raw('SUM(MontoSistema) as TotalSistema'),
+                        DB::raw('SUM(MontoDepositado) as TotalDepositado'),
+                        DB::raw('SUM(Diferencia) as TotalDiferencia')
+                    )
+                    ->groupBy('Tipo')
+                    ->orderBy('Tipo')
+                    ->get()
+                    ->map(fn($o) => [
+                        'Tipo'            => (int) $o->Tipo,
+                        'TipoNombre'      => $this->tiposOtros[$o->Tipo] ?? 'Otro',
+                        'TotalSistema'    => round((float) $o->TotalSistema, 2),
+                        'TotalDepositado' => round((float) $o->TotalDepositado, 2),
+                        'TotalDiferencia' => round((float) $o->TotalDiferencia, 2),
+                    ])->values();
+
+                // ---------- PRÉSTAMOS ----------
+                $prestamosRaw = DB::connection('sqlsrv')
+                    ->table('BovedaPrestamo')
+                    ->where('SucursalId', $sucId)
+                    ->whereDate('FechaPrestamo', '>=', $fechaInicio)
+                    ->whereDate('FechaPrestamo', '<=', $fechaFin)
+                    ->select('BovedaPrestamoId', 'TipoMoneda', 'MontoDivisa', 'MontoBs', 'Estatus', 'SaldoPendiente', 'FechaPrestamo')
+                    ->get();
+
+                $prestamos = [
+                    'Cantidad'         => $prestamosRaw->count(),
+                    'CantidadPendientes' => $prestamosRaw->where('Estatus', 0)->count(),
+                    'MontoDivisa'      => round($prestamosRaw->sum('MontoDivisa'), 2),
+                    'MontoBs'          => round($prestamosRaw->sum('MontoBs'), 2),
+                    'PendienteUSD'     => round($prestamosRaw->where('Estatus', 0)->sum(fn($p) => $p->TipoMoneda == 0 ? $p->SaldoPendiente : 0), 2),
+                    'PendienteBs'      => round($prestamosRaw->where('Estatus', 0)->sum(fn($p) => $p->TipoMoneda == 1 ? $p->SaldoPendiente : 0), 2),
+                    'Detalles'         => $prestamosRaw->map(fn($p) => [
+                        'TipoMoneda'  => (int) $p->TipoMoneda,
+                        'Monto'       => (float) ($p->TipoMoneda == 0 ? $p->MontoDivisa : $p->MontoBs),
+                        'SaldoPendiente' => (float) $p->SaldoPendiente,
+                        'Estatus'     => (int) $p->Estatus,
+                        'FechaPrestamo' => Carbon::parse($p->FechaPrestamo)->format('d/m/Y'),
+                    ])->values(),
+                ];
+
+                // ---------- TOTALES DE LA SUCURSAL ----------
+                $totalPdvSistema    = $pdv->sum('TotalSistema');
+                $totalPdvDepositado = $pdv->sum('TotalDepositado');
+                $totalPdvDiferencia = $pdv->sum('TotalDiferencia');
+
+                $totalOtrosSistema    = $otros->sum('TotalSistema');
+                $totalOtrosDepositado = $otros->sum('TotalDepositado');
+                $totalOtrosDiferencia = $otros->sum('TotalDiferencia');
+
+                $totalSucursalSistema    = $totalPdvSistema + $totalOtrosSistema;
+                $totalSucursalDepositado = $totalPdvDepositado + $totalOtrosDepositado;
+                $totalSucursalDiferencia = $totalPdvDiferencia + $totalOtrosDiferencia;
+
+                // ---------- DIFERENCIAS DETECTADAS ----------
+                $diferencias = [];
+                foreach ($pdv as $p) {
+                    if (abs($p['TotalDiferencia']) > 0.01) {
+                        $diferencias[] = [
+                            'Concepto'   => 'PDV ' . $p['pdv_descripcion'] . ' (' . $p['banco_nombre'] . ')',
+                            'Sistema'    => $p['TotalSistema'],
+                            'Depositado' => $p['TotalDepositado'],
+                            'Diferencia' => $p['TotalDiferencia'],
+                        ];
+                    }
+                }
+                foreach ($otros as $o) {
+                    if (abs($o['TotalDiferencia']) > 0.01) {
+                        $diferencias[] = [
+                            'Concepto'   => $o['TipoNombre'],
+                            'Sistema'    => $o['TotalSistema'],
+                            'Depositado' => $o['TotalDepositado'],
+                            'Diferencia' => $o['TotalDiferencia'],
+                        ];
+                    }
+                }
+
+                // ---------- ACUMULAR EN RESUMEN GENERAL ----------
+                $resumenGeneral['totalEfectivoDivisas'] += $efectivoDivisas;
+                $resumenGeneral['totalEfectivoBs'] += $efectivoBs;
+                $resumenGeneral['totalPdvSistema'] += $totalPdvSistema;
+                $resumenGeneral['totalPdvDepositado'] += $totalPdvDepositado;
+                $resumenGeneral['totalPdvDiferencia'] += $totalPdvDiferencia;
+                $resumenGeneral['totalOtrosSistema'] += $totalOtrosSistema;
+                $resumenGeneral['totalOtrosDepositado'] += $totalOtrosDepositado;
+                $resumenGeneral['totalOtrosDiferencia'] += $totalOtrosDiferencia;
+                $resumenGeneral['totalPrestamosOtorgados'] += $prestamos['Cantidad'];
+                $resumenGeneral['totalPrestamosMontoUSD'] += $prestamos['MontoDivisa'];
+                $resumenGeneral['totalPrestamosMontoBs'] += $prestamos['MontoBs'];
+                $resumenGeneral['totalPrestamosPendientesUSD'] += $prestamos['PendienteUSD'];
+                $resumenGeneral['totalPrestamosPendientesBs'] += $prestamos['PendienteBs'];
+
+                $datosPorSucursal[] = [
+                    'SucursalId'      => $sucId,
+                    'SucursalNombre'  => $sucInfo->Nombre ?? 'N/A',
+                    'CantidadCierres' => $cantidadCierres,
+                    'TodasCerradas'   => $todasCerradas,
+                    'Conciliacion'    => $conciliacionGlobal,
+                    'FechasRango'     => $fechasRango,
+                    'EfectivoDivisas' => $efectivoDivisas,
+                    'EfectivoBs'      => $efectivoBs,
+                    'DenominacionesDivisa' => $denominacionesDivisa,
+                    'DenominacionesBs'     => $denominacionesBs,
+                    'PDV'             => $pdv,
+                    'Otros'           => $otros,
+                    'Prestamos'       => $prestamos,
+                    'Totales'         => [
+                        'Sistema'    => round($totalSucursalSistema, 2),
+                        'Depositado' => round($totalSucursalDepositado, 2),
+                        'Diferencia' => round($totalSucursalDiferencia, 2),
+                    ],
+                    'Diferencias'     => $diferencias,
+                ];
+            }
+
+            // ================================================
+            // GASTOS
+            // ================================================
+            $tiposSalidas = [0, 2, 3, 5];
+
+            $gastosPeriodo = DB::connection('sqlsrv')
+                ->table('Transacciones as t')
+                ->whereIn('t.Tipo', $tiposSalidas)
+                ->whereDate('t.Fecha', '>=', $fechaInicio)
+                ->whereDate('t.Fecha', '<=', $fechaFin)
+                ->select('t.Nombre as CategoriaNombre', 't.Tipo', 't.MontoAbonado', 't.MontoDivisaAbonado')
+                ->get();
+
+            $tiposDescripcion = [
+                0 => 'Pago Proveedor Mercancía',
+                2 => 'Gastos',
+                3 => 'Gastos de Caja',
+                5 => 'Pago Proveedor Servicio',
+            ];
+
+            $gastosPorCategoria = $gastosPeriodo
+                ->groupBy(function ($g) use ($tiposDescripcion) {
+                    if (!empty($g->CategoriaNombre)) {
+                        return $g->CategoriaNombre;
+                    }
+                    return $tiposDescripcion[$g->Tipo] ?? 'Otro';
+                })
+                ->map(fn($items, $categoria) => [
+                    'Categoria' => $categoria,
+                    'Cantidad'  => $items->count(),
+                    'TotalUSD'  => round($items->sum(fn($g) => (float) ($g->MontoDivisaAbonado ?? 0)), 2),
+                    'TotalBs'   => round($items->sum(fn($g) => (float) ($g->MontoAbonado ?? 0)), 2),
+                ])
+                ->sortByDesc('TotalBs')
+                ->values();
+
+            $totalGastosUSD = round($gastosPeriodo->sum(fn($g) => (float) ($g->MontoDivisaAbonado ?? 0)), 2);
+            $totalGastosBs  = round($gastosPeriodo->sum(fn($g) => (float) ($g->MontoAbonado ?? 0)), 2);
+
+            // ================================================
+            // CAMBIOS
+            // ================================================
+            $cambios = DB::connection('sqlsrv')
+                ->table('BovedaCambioDivisa as c')
+                ->where('c.TipoMovimiento', 'CAMBIO')
+                ->whereDate('c.FechaCambio', '>=', $fechaInicio)
+                ->whereDate('c.FechaCambio', '<=', $fechaFin)
+                ->orderByDesc('c.CambioId')
+                ->get()
+                ->map(function ($c) {
+                    $detalles = DB::connection('sqlsrv')
+                        ->table('BovedaCambioDivisaDetalle')
+                        ->where('CambioId', $c->CambioId)
+                        ->get();
+                    return [
+                        'Fecha'       => Carbon::parse($c->FechaCambio)->format('d/m/Y H:i'),
+                        'Moneda'      => 'USD',
+                        'Entregado'   => $detalles->where('Tipo', 'ENTREGADO')
+                            ->map(fn($d) => $d->Cantidad . ' × $' . number_format($d->Denominacion, 0))
+                            ->implode(', '),
+                        'Recibido'    => $detalles->where('Tipo', 'CAMBIADO')
+                            ->map(fn($d) => $d->Cantidad . ' × $' . number_format($d->Denominacion, 0))
+                            ->implode(', '),
+                        'Observacion' => $c->Observacion ?? '-',
+                    ];
+                })->values();
+
+            $cambiosBs = DB::connection('sqlsrv')
+                ->table('BovedaCambioBs as c')
+                ->where('c.TipoMovimiento', 'CAMBIO')
+                ->whereDate('c.FechaCambio', '>=', $fechaInicio)
+                ->whereDate('c.FechaCambio', '<=', $fechaFin)
+                ->orderByDesc('c.CambioId')
+                ->get()
+                ->map(function ($c) {
+                    $detalles = DB::connection('sqlsrv')
+                        ->table('BovedaCambioBsDetalle')
+                        ->where('CambioId', $c->CambioId)
+                        ->get();
+                    return [
+                        'Fecha'       => Carbon::parse($c->FechaCambio)->format('d/m/Y H:i'),
+                        'Moneda'      => 'Bs.',
+                        'Entregado'   => $detalles->where('Tipo', 'ENTREGADO')
+                            ->map(fn($d) => $d->Cantidad . ' × Bs. ' . number_format($d->Denominacion, 0))
+                            ->implode(', '),
+                        'Recibido'    => $detalles->where('Tipo', 'CAMBIADO')
+                            ->map(fn($d) => $d->Cantidad . ' × Bs. ' . number_format($d->Denominacion, 0))
+                            ->implode(', '),
+                        'Observacion' => $c->Observacion ?? '-',
+                    ];
+                })->values();
+
+            // ================================================
+            // RETIROS
+            // ================================================
+            $retirosDivisa = DB::connection('sqlsrv')
+                ->table('BovedaCambioDivisa as c')
+                ->where('c.TipoMovimiento', 'RETIRO')
+                ->whereDate('c.FechaCambio', '>=', $fechaInicio)
+                ->whereDate('c.FechaCambio', '<=', $fechaFin)
+                ->orderByDesc('c.CambioId')
+                ->get()
+                ->map(function ($c) {
+                    $detalles = DB::connection('sqlsrv')
+                        ->table('BovedaCambioDivisaDetalle')
+                        ->where('CambioId', $c->CambioId)
+                        ->get();
+                    return [
+                        'Fecha'          => Carbon::parse($c->FechaCambio)->format('d/m/Y H:i'),
+                        'Moneda'         => 'USD',
+                        'Denominaciones' => $detalles->map(fn($d) => $d->Cantidad . ' × $' . number_format($d->Denominacion, 0))->implode(', '),
+                        'MontoTotal'     => round($detalles->sum(fn($d) => $d->Denominacion * $d->Cantidad), 2),
+                        'Observacion'    => $c->Observacion ?? '-',
+                    ];
+                })->values();
+
+            $retirosBs = DB::connection('sqlsrv')
+                ->table('BovedaCambioBs as c')
+                ->where('c.TipoMovimiento', 'RETIRO')
+                ->whereDate('c.FechaCambio', '>=', $fechaInicio)
+                ->whereDate('c.FechaCambio', '<=', $fechaFin)
+                ->orderByDesc('c.CambioId')
+                ->get()
+                ->map(function ($c) {
+                    $detalles = DB::connection('sqlsrv')
+                        ->table('BovedaCambioBsDetalle')
+                        ->where('CambioId', $c->CambioId)
+                        ->get();
+                    return [
+                        'Fecha'          => Carbon::parse($c->FechaCambio)->format('d/m/Y H:i'),
+                        'Moneda'         => 'Bs.',
+                        'Denominaciones' => $detalles->map(fn($d) => $d->Cantidad . ' × Bs. ' . number_format($d->Denominacion, 0))->implode(', '),
+                        'MontoTotal'     => round($detalles->sum(fn($d) => $d->Denominacion * $d->Cantidad), 2),
+                        'Observacion'    => $c->Observacion ?? '-',
+                    ];
+                })->values();
+
+            // ================================================
+            // CONVERSIONES
+            // ================================================
+            $conversiones = DB::connection('sqlsrv')
+                ->table('BovedaCambioDivisa as c')
+                ->where('c.TipoMovimiento', 'INGRESO')
+                ->whereDate('c.FechaCambio', '>=', $fechaInicio)
+                ->whereDate('c.FechaCambio', '<=', $fechaFin)
+                ->orderByDesc('c.CambioId')
+                ->get()
+                ->map(function ($c) {
+                    $detalles = DB::connection('sqlsrv')
+                        ->table('BovedaCambioDivisaDetalle')
+                        ->where('CambioId', $c->CambioId)
+                        ->get();
+                    return [
+                        'Fecha'          => Carbon::parse($c->FechaCambio)->format('d/m/Y H:i'),
+                        'TotalUSD'       => round($detalles->sum(fn($d) => $d->Denominacion * $d->Cantidad), 2),
+                        'Denominaciones' => $detalles->map(fn($d) => $d->Cantidad . ' × $' . number_format($d->Denominacion, 0))->implode(', '),
+                        'Observacion'    => $c->Observacion ?? '-',
+                    ];
+                })->values();
+
+            // ================================================
+            // TASA
+            // ================================================
+            $tasa = $this->obtenerTasaCambioActual();
+
+            // ================================================
+            // VALIDACIÓN
+            // ================================================
+            $hayDatos = !empty($datosPorSucursal)
+                || $gastosPorCategoria->count() > 0
+                || $cambios->count() > 0
+                || $cambiosBs->count() > 0
+                || $retirosDivisa->count() > 0
+                || $retirosBs->count() > 0
+                || $conversiones->count() > 0;
+
+            if (!$hayDatos) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No hay movimientos para el rango seleccionado.',
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'meta' => [
+                    'fechaInicio' => Carbon::parse($fechaInicio)->format('d/m/Y'),
+                    'fechaFin'    => Carbon::parse($fechaFin)->format('d/m/Y'),
+                    'tasa'        => $tasa ? round($tasa->Valor, 2) : 0,
+                    'generado'    => Carbon::now()->format('d/m/Y H:i'),
+                ],
+                'resumenGeneral' => $resumenGeneral,
+                'sucursales'    => $datosPorSucursal,
+                'gastos'        => $gastosPorCategoria,
+                'totalGastosUSD' => $totalGastosUSD,
+                'totalGastosBs' => $totalGastosBs,
+                'cambios'       => $cambios,
+                'cambiosBs'     => $cambiosBs,
+                'retirosDivisa' => $retirosDivisa,
+                'retirosBs'     => $retirosBs,
+                'conversiones'  => $conversiones,
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al generar los datos: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
 }

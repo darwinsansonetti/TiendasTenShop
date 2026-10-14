@@ -912,6 +912,9 @@ Route::middleware('auth')->group(function() {
     Route::post('/cpanel/boveda/enviar-correo/{id}', [BovedaController::class, 'enviarPorCorreo'])
     ->name('cpanel.boveda.enviar_correo');
 
+    Route::get('/cpanel/boveda/api/conciliacion', [BovedaController::class, 'apiConciliacionDetallada'])
+    ->name('cpanel.boveda.api.conciliacion');
+
     // Verificacion de Pago Movil
     Route::get('/cpanel/pago/movil/verify', [BancosController::class, 'verifyPagoMovil'])
     ->name('cpanel.pago.movil.index');

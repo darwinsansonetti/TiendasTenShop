@@ -112,6 +112,11 @@
                     {{-- ✅ BOTONES DE EXPORTACIÓN --}}
                     <div class="row mt-3">
                         <div class="col-12 d-flex justify-content-end gap-2">
+                            <button type="button" class="btn btn-primary btn-sm fw-semibold" 
+                                    onclick="exportarConciliacionPDF()"
+                                    id="btnExportarConciliacion">
+                                <i class="bi bi-file-earmark-text me-1"></i>Exportar Conciliación
+                            </button>
                             <button type="button" class="btn btn-success btn-sm fw-semibold" onclick="exportarConsolidadoExcel()">
                                 <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
                             </button>
@@ -1183,7 +1188,6 @@
                     theme: 'grid',
                     headStyles: { fillColor: [124, 58, 237], textColor: 255, fontSize: 8, fontStyle: 'bold' },
                     bodyStyles: { fontSize: 7.5, cellPadding: 1.5 },
-                    alternateRowStyles: { fillColor: [245, 245, 250] },
                     margin: { left: 14, right: 14 },
                 });
                 return doc.lastAutoTable.finalY + 8;
@@ -1269,6 +1273,437 @@
             console.error(e);
             Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo generar el PDF: ' + e.message });
         }
+    }
+
+    // ============================================
+    // EXPORTAR CONCILIACIÓN DETALLADA POR SUCURSAL
+    // Llama a la API y arma el PDF en el cliente
+    // ============================================
+    async function exportarConciliacionPDF() {
+        const btn = document.getElementById('btnExportarConciliacion');
+
+        try {
+            // ---------- 1. OBTENER FILTROS ACTUALES ----------
+            const fechaInicio = document.getElementById('fecha_inicio').value;
+            const fechaFin = document.getElementById('fecha_fin').value;
+            const sucursalId = document.getElementById('sucursal_id').value;
+
+            // ---------- 2. MOSTRAR LOADING ----------
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Generando...';
+
+            // ---------- 3. LLAMAR A LA API ----------
+            const url = new URL("{{ route('cpanel.boveda.api.conciliacion') }}", window.location.origin);
+            url.searchParams.append('fecha_inicio', fechaInicio);
+            url.searchParams.append('fecha_fin', fechaFin);
+            if (sucursalId) url.searchParams.append('sucursal_id', sucursalId);
+
+            const response = await fetch(url.toString(), {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`Error HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            // ---------- 4. VALIDAR RESPUESTA ----------
+            if (!data.success) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Sin datos',
+                    text: data.message || 'No hay información para exportar'
+                });
+                return;
+            }
+
+            // ---------- 5. GENERAR PDF ----------
+            generarPDFConciliacion(data);
+
+            // ---------- 6. FEEDBACK ----------
+            Swal.fire({
+                icon: 'success',
+                title: 'PDF generado',
+                text: 'Se exportó la conciliación detallada',
+                timer: 2000,
+                showConfirmButton: false
+            });
+
+        } catch (e) {
+            console.error('Error al exportar conciliación:', e);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'No se pudo generar la conciliación: ' + e.message
+            });
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-file-earmark-text me-1"></i>Exportar Conciliación';
+        }
+    }
+
+    // ============================================
+    // GENERAR PDF A PARTIR DE LOS DATOS DE LA API
+    // ============================================
+    function generarPDFConciliacion(data) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('portrait', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        let y = 15;
+
+        const meta = data.meta;
+
+        // ---------- FORMATEADOR ----------
+        const fmt = (n) => {
+            const num = Number(n || 0);
+            const partes = num.toFixed(2).split('.');
+            partes[0] = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+            return partes.join(',');
+        };
+
+        const escaparNombre = (nombre) => (nombre || '').replace(/&/g, 'y');
+
+        // ---------- HELPER PARA TABLAS ----------
+        const addTable = (titulo, head, body, startY) => {
+            if (!body || !body.length) {
+                doc.setFontSize(10);
+                doc.setTextColor(120, 120, 120);
+                doc.text(titulo + ' (sin registros)', 14, startY);
+                return startY + 8;
+            }
+
+            if (startY > pageHeight - 30) {
+                doc.addPage();
+                startY = 15;
+            }
+
+            doc.setFontSize(11);
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(124, 58, 237);
+            doc.text(titulo, 14, startY);
+            doc.setFont(undefined, 'normal');
+
+            doc.autoTable({
+                head: [head],
+                body: body,
+                startY: startY + 3,
+                theme: 'grid',
+                headStyles: {
+                    fillColor: [124, 58, 237],
+                    textColor: 255,
+                    fontSize: 8,
+                    fontStyle: 'bold',
+                    cellPadding: 2,
+                },
+                bodyStyles: {
+                    fontSize: 7.5,
+                    cellPadding: 2,
+                    valign: 'middle',
+                },
+                styles: {
+                    cellPadding: 2,
+                    overflow: 'linebreak',
+                    valign: 'middle',
+                },
+                margin: { left: 14, right: 14 },
+            });
+
+            return doc.lastAutoTable.finalY + 8;
+        };
+
+        // ================================================
+        // PORTADA: ENCABEZADO + RESUMEN EJECUTIVO + ÍNDICE
+        // ================================================
+        doc.setFontSize(16);
+        doc.setFont(undefined, 'bold');
+        doc.setTextColor(124, 58, 237);
+        doc.text('CONCILIACIÓN DETALLADA POR SUCURSAL', 14, y);
+        doc.setFont(undefined, 'normal');
+        y += 8;
+
+        doc.setFontSize(9);
+        doc.setTextColor(80, 80, 80);
+        doc.text(`Período: ${meta.fechaInicio} al ${meta.fechaFin}`, 14, y); y += 5;
+        doc.text(`Tasa de cambio: Bs. ${fmt(meta.tasa)}`, 14, y); y += 5;
+        doc.text(`Generado: ${meta.generado}`, 14, y); y += 10;
+
+        // ---------- RESUMEN EJECUTIVO ----------
+        doc.setFontSize(13);
+        doc.setFont(undefined, 'bold');
+        doc.setTextColor(139, 92, 246);
+        doc.text('RESUMEN EJECUTIVO', 14, y);
+        doc.setFont(undefined, 'normal');
+        y += 8;
+
+        const R = data.resumenGeneral || {};
+        const resumenBody = [
+            ['Efectivo Divisas (USD)', '$ ' + fmt(R.totalEfectivoDivisas || 0)],
+            ['Efectivo Bolívares (Bs.)', 'Bs. ' + fmt(R.totalEfectivoBs || 0)],
+            ['PDV Sistema (Bs.)', 'Bs. ' + fmt(R.totalPdvSistema || 0)],
+            ['PDV Depositado (Bs.)', 'Bs. ' + fmt(R.totalPdvDepositado || 0)],
+            ['PDV Diferencia (Bs.)', 'Bs. ' + fmt(R.totalPdvDiferencia || 0)],
+            ['Otros Sistema (Bs.)', 'Bs. ' + fmt(R.totalOtrosSistema || 0)],
+            ['Otros Depositado (Bs.)', 'Bs. ' + fmt(R.totalOtrosDepositado || 0)],
+            ['Otros Diferencia (Bs.)', 'Bs. ' + fmt(R.totalOtrosDiferencia || 0)],
+            ['Gastos del Período (Bs.)', 'Bs. ' + fmt(data.totalGastosBs || 0)],
+            ['Préstamos otorgados', (R.totalPrestamosOtorgados || 0) + ' préstamos'],
+            ['Préstamos monto USD', '$ ' + fmt(R.totalPrestamosMontoUSD || 0)],
+            ['Préstamos monto Bs.', 'Bs. ' + fmt(R.totalPrestamosMontoBs || 0)],
+            ['Préstamos pendientes USD', '$ ' + fmt(R.totalPrestamosPendientesUSD || 0)],
+            ['Préstamos pendientes Bs.', 'Bs. ' + fmt(R.totalPrestamosPendientesBs || 0)],
+            ['Cambios realizados', ((data.cambios || []).length + (data.cambiosBs || []).length) + ' operaciones'],
+            ['Retiros realizados', ((data.retirosDivisa || []).length + (data.retirosBs || []).length) + ' operaciones'],
+            ['Conversiones', (data.conversiones || []).length + ' operaciones'],
+        ];
+
+        y = addTable('Totales Generales', ['Concepto', 'Valor'], resumenBody, y);
+
+        // ---------- ÍNDICE ----------
+        doc.setFontSize(13);
+        doc.setFont(undefined, 'bold');
+        doc.setTextColor(139, 92, 246);
+        doc.text('ÍNDICE', 14, y);
+        doc.setFont(undefined, 'normal');
+        y += 8;
+
+        const indice = [
+            ...data.sucursales.map((s, i) => `${i + 1}. ${escaparNombre(s.SucursalNombre)}`),
+            `${data.sucursales.length + 1}. Gastos del Período`,
+            `${data.sucursales.length + 2}. Cambios Realizados`,
+            `${data.sucursales.length + 3}. Retiros`,
+            `${data.sucursales.length + 4}. Conversiones Bs a USD`,
+        ];
+
+        doc.setFontSize(10);
+        doc.setTextColor(60, 60, 60);
+        indice.forEach(item => {
+            doc.text(item, 20, y);
+            y += 5;
+        });
+
+        // ================================================
+        // SECCIÓN 1: POR SUCURSAL
+        // ================================================
+        doc.addPage();
+        y = 15;
+
+        data.sucursales.forEach((suc, index) => {
+
+            if (y > pageHeight - 50) { doc.addPage(); y = 15; }
+
+            // ---------- ENCABEZADO SUCURSAL ----------
+            doc.setFillColor(139, 92, 246);
+            doc.rect(14, y - 6, pageWidth - 28, 9, 'F');
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(255, 255, 255);
+            doc.text(`${index + 1}. ${escaparNombre(suc.SucursalNombre)}`, 16, y);
+            doc.setFont(undefined, 'normal');
+            y += 10;
+
+            // ---------- INFO DE LA SUCURSAL ----------
+            doc.setFontSize(9);
+            doc.setTextColor(80, 80, 80);
+
+            if (suc.FechasRango && suc.FechasRango.length > 0) {
+                const fechas = suc.FechasRango.join(', ');
+                doc.text(`Fechas: ${fechas}`, 14, y);
+                y += 5;
+            }
+
+            const estatusTexto = suc.TodasCerradas ? 'Cerradas' : 'Abiertas';
+            const conciliacionTexto = suc.Conciliacion === 2
+                ? 'Con Diferencia'
+                : (suc.Conciliacion === 1 ? 'Conciliadas' : 'Pendientes');
+            doc.text(`Estatus: ${estatusTexto} | Conciliación: ${conciliacionTexto}`, 14, y);
+            y += 8;
+
+            // ---------- EFECTIVO ----------
+            y = addTable('Efectivo',
+                ['Tipo', 'Recibido'],
+                [
+                    ['Efectivo Divisas (USD)', '$ ' + fmt(suc.EfectivoDivisas)],
+                    ['Efectivo Bolívares (Bs.)', 'Bs. ' + fmt(suc.EfectivoBs)],
+                ],
+                y);
+
+            // ---------- DENOMINACIONES DIVISAS ----------
+            if (suc.DenominacionesDivisa && suc.DenominacionesDivisa.length > 0) {
+                y = addTable('Denominaciones Divisas',
+                    ['Denominación', 'Cantidad', 'Monto'],
+                    suc.DenominacionesDivisa.map(d => [
+                        '$ ' + fmt(d.Denominacion),
+                        d.Cantidad,
+                        '$ ' + fmt(d.MontoTotal),
+                    ]),
+                    y);
+            }
+
+            // ---------- DENOMINACIONES BS ----------
+            if (suc.DenominacionesBs && suc.DenominacionesBs.length > 0) {
+                y = addTable('Denominaciones Bolívares',
+                    ['Denominación', 'Cantidad', 'Monto'],
+                    suc.DenominacionesBs.map(d => [
+                        'Bs. ' + fmt(d.Denominacion),
+                        d.Cantidad,
+                        'Bs. ' + fmt(d.MontoTotal),
+                    ]),
+                    y);
+            }
+
+            // ---------- PDV ----------
+            if (suc.PDV && suc.PDV.length > 0) {
+                y = addTable('Puntos de Venta',
+                    ['Punto', 'Banco', 'Sistema', 'Depositado', 'Diferencia'],
+                    suc.PDV.map(p => [
+                        p.pdv_descripcion + ' (' + (p.pdv_codigo || '-') + ')',
+                        p.banco_nombre || 'N/A',
+                        'Bs. ' + fmt(p.TotalSistema),
+                        'Bs. ' + fmt(p.TotalDepositado),
+                        'Bs. ' + fmt(p.TotalDiferencia),
+                    ]),
+                    y);
+            }
+
+            // ---------- OTROS ----------
+            if (suc.Otros && suc.Otros.length > 0) {
+                y = addTable('Otros Conceptos',
+                    ['Concepto', 'Sistema', 'Depositado', 'Diferencia'],
+                    suc.Otros.map(o => [
+                        o.TipoNombre,
+                        'Bs. ' + fmt(o.TotalSistema),
+                        'Bs. ' + fmt(o.TotalDepositado),
+                        'Bs. ' + fmt(o.TotalDiferencia),
+                    ]),
+                    y);
+            }
+
+            // ---------- PRÉSTAMOS ----------
+            if (suc.Prestamos && suc.Prestamos.Cantidad > 0) {
+                const prestamosBody = [
+                    ['Préstamos otorgados', suc.Prestamos.Cantidad],
+                    ['Préstamos pendientes', suc.Prestamos.CantidadPendientes],
+                    ['Monto prestado USD', '$ ' + fmt(suc.Prestamos.MontoDivisa)],
+                    ['Monto prestado Bs.', 'Bs. ' + fmt(suc.Prestamos.MontoBs)],
+                    ['Pendiente USD', '$ ' + fmt(suc.Prestamos.PendienteUSD)],
+                    ['Pendiente Bs.', 'Bs. ' + fmt(suc.Prestamos.PendienteBs)],
+                ];
+                y = addTable('Préstamos', ['Concepto', 'Valor'], prestamosBody, y);
+            }
+
+            // ---------- TOTALES DE LA SUCURSAL ----------
+            const totalesBody = [
+                ['Sistema Total', 'Bs. ' + fmt(suc.Totales.Sistema)],
+                ['Depositado Total', 'Bs. ' + fmt(suc.Totales.Depositado)],
+                ['Diferencia Total', 'Bs. ' + fmt(suc.Totales.Diferencia)],
+            ];
+            y = addTable('Totales de la Sucursal', ['Concepto', 'Valor'], totalesBody, y);
+
+            // ---------- DIFERENCIAS DETECTADAS ----------
+            if (suc.Diferencias && suc.Diferencias.length > 0) {
+                y = addTable('DIFERENCIAS DETECTADAS',
+                    ['Concepto', 'Sistema', 'Depositado', 'Diferencia'],
+                    suc.Diferencias.map(d => [
+                        d.Concepto,
+                        'Bs. ' + fmt(d.Sistema),
+                        'Bs. ' + fmt(d.Depositado),
+                        'Bs. ' + fmt(d.Diferencia),
+                    ]),
+                    y);
+            }
+
+            y += 5;
+        });
+
+        // ================================================
+        // SECCIÓN 2: GENERALES
+        // ================================================
+        doc.addPage();
+        y = 15;
+
+        doc.setFontSize(14);
+        doc.setFont(undefined, 'bold');
+        doc.setTextColor(124, 58, 237);
+        doc.text('SECCIONES GENERALES', 14, y);
+        doc.setFont(undefined, 'normal');
+        y += 6;
+
+        doc.setFontSize(9);
+        doc.setTextColor(80, 80, 80);
+        doc.text(`Período: ${meta.fechaInicio} al ${meta.fechaFin}`, 14, y);
+        y += 8;
+
+        // ---------- GASTOS ----------
+        y = addTable('Gastos del Período',
+            ['Categoría', 'Cantidad', 'Total USD', 'Total Bs.'],
+            (data.gastos || []).map(g => [
+                g.Categoria,
+                g.Cantidad,
+                '$ ' + fmt(g.TotalUSD),
+                'Bs. ' + fmt(g.TotalBs),
+            ]),
+            y);
+
+        if (data.gastos && data.gastos.length > 0) {
+            doc.setFontSize(9);
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(220, 38, 38);
+            doc.text('TOTAL GASTOS:', 14, y);
+            doc.text('$ ' + fmt(data.totalGastosUSD), pageWidth - 60, y);
+            doc.text('Bs. ' + fmt(data.totalGastosBs), pageWidth - 35, y);
+            doc.setFont(undefined, 'normal');
+            y += 8;
+        }
+
+        // ---------- CAMBIOS ----------
+        const cambiosTotal = [...(data.cambios || []), ...(data.cambiosBs || [])];
+        y = addTable('Cambios Realizados',
+            ['Fecha', 'Moneda', 'Entregado', 'Recibido', 'Observación'],
+            cambiosTotal.map(c => [c.Fecha, c.Moneda, c.Entregado, c.Recibido, c.Observacion]),
+            y);
+
+        // ---------- RETIROS ----------
+        const retirosTotal = [...(data.retirosDivisa || []), ...(data.retirosBs || [])];
+        y = addTable('Retiros',
+            ['Fecha', 'Moneda', 'Denominaciones', 'Monto', 'Observación'],
+            retirosTotal.map(r => [
+                r.Fecha,
+                r.Moneda,
+                r.Denominaciones,
+                (r.Moneda === 'USD' ? '$ ' : 'Bs. ') + fmt(r.MontoTotal),
+                r.Observacion,
+            ]),
+            y);
+
+        // ---------- CONVERSIONES ----------
+        y = addTable('Conversiones Bs a USD',
+            ['Fecha', 'Total USD', 'Denominaciones', 'Observación'],
+            (data.conversiones || []).map(c => [
+                c.Fecha,
+                '$ ' + fmt(c.TotalUSD),
+                c.Denominaciones,
+                c.Observacion,
+            ]),
+            y);
+
+        // ---------- FOOTER ----------
+        const totalPag = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= totalPag; i++) {
+            doc.setPage(i);
+            doc.setFontSize(7);
+            doc.setTextColor(150, 150, 150);
+            doc.text(`Página ${i} de ${totalPag}`, pageWidth - 25, pageHeight - 8);
+            doc.text('Conciliación Detallada', 14, pageHeight - 8);
+        }
+
+        // ---------- GUARDAR ----------
+        const fecha = new Date().toISOString().slice(0, 10);
+        doc.save(`conciliacion_detallada_${fecha}.pdf`);
     }
 </script>
 @endsection
