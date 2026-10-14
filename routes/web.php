@@ -963,9 +963,6 @@ Route::middleware('auth')->group(function() {
     Route::get('/cpanel/billetera/cambio/divisa', [BovedaController::class, 'cambioDivisa'])
         ->name('cpanel.billetera.cambio.divisa');
 
-    Route::get('/cpanel/billetera/cambio/bolivares', [BovedaController::class, 'cambioBolivares'])
-        ->name('cpanel.billetera.cambio.bolivares');
-
     Route::post('/cpanel/billetera/cambio/divisa/guardar', [BovedaController::class, 'guardarCambioDivisa'])
         ->name('cpanel.billetera.cambio.divisa.guardar');
 
@@ -988,6 +985,13 @@ Route::middleware('auth')->group(function() {
 
     Route::post('/cpanel/billetera/retiro/bolivares/guardar', [BovedaController::class, 'guardarRetiroBolivares'])
         ->name('cpanel.billetera.retiro.bolivares.guardar');
+
+    // Conversión Bs → USD
+    Route::get('/cpanel/billetera/conversion/divisa', [BovedaController::class, 'conversionDivisa'])
+        ->name('cpanel.billetera.conversion.divisa');
+
+    Route::post('/cpanel/billetera/conversion/divisa/guardar', [BovedaController::class, 'guardarConversionDivisa'])
+        ->name('cpanel.billetera.conversion.divisa.guardar');
 });
 
 

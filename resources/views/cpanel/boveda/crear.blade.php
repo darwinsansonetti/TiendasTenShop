@@ -236,6 +236,7 @@
                                                                 class="form-control form-control-sm text-center cantidad-divisa"
                                                                 data-sucursal="{{ $sucursal->SucursalId }}"
                                                                 data-denominacion="{{ $denominacion }}"
+                                                                data-monto-sistema="{{ $sucursal->EfectivoDivisas ?? 0 }}"
                                                                 min="0" value="0">
                                                         </div>
                                                     </div>
@@ -307,6 +308,7 @@
                                                                 class="form-control form-control-sm text-center cantidad-bs"
                                                                 data-sucursal="{{ $sucursal->SucursalId }}"
                                                                 data-denominacion="{{ $denominacion }}"
+                                                                data-monto-sistema="{{ $sucursal->EfectivoBs ?? 0 }}"
                                                                 min="0" value="0">
                                                         </div>
                                                     </div>
@@ -654,60 +656,116 @@
         // CÁLCULO DE SUBTOTALES Y CONCILIACIÓN DE EFECTIVO
         // ============================================
         function calcularEfectivo() {
-            // ===== DIVISAS =====
-            const subtotalesDivisa = {};
+
+            // ============================================
+            // CONCILIACIÓN DE EFECTIVO EN DIVISAS (USD)
+            // ============================================
+
+            const totalesDivisa = {};
+
             document.querySelectorAll('.cantidad-divisa').forEach(input => {
                 const sucursalId = input.dataset.sucursal;
-                const cantidad = parseInt(input.value) || 0;
-                const denom = parseFloat(input.dataset.denominacion) || 0;
-                subtotalesDivisa[sucursalId] = (subtotalesDivisa[sucursalId] || 0) + (cantidad * denom);
+                const cantidad = Math.max(0, parseInt(input.value, 10) || 0);
+                const denominacion = parseFloat(input.dataset.denominacion) || 0;
+
+                if (!totalesDivisa[sucursalId]) {
+                    totalesDivisa[sucursalId] = {
+                        total: 0,
+                        sistema: parseFloat(input.dataset.montoSistema) || 0
+                    };
+                }
+
+                totalesDivisa[sucursalId].total += cantidad * denominacion;
             });
 
-            Object.keys(subtotalesDivisa).forEach(sucId => {
-                const total = subtotalesDivisa[sucId];
-                const elSubtotal = document.querySelector('.subtotal-divisa-' + sucId);
-                const elContado = document.querySelector('.total-contado-divisa-' + sucId);
-                const elDiferencia = document.querySelector('.diferencia-efectivo-divisa-' + sucId);
-                const elHidden = document.querySelector('.monto-contado-divisa-' + sucId);
+            Object.entries(totalesDivisa).forEach(([sucursalId, datos]) => {
+                const total = Math.round(datos.total * 100) / 100;
+                const diferencia = Math.round((datos.sistema - total) * 100) / 100;
 
-                if (elSubtotal) elSubtotal.textContent = '$ ' + total.toFixed(2);
-                if (elContado) elContado.textContent = '$ ' + total.toFixed(2);
-                if (elHidden) elHidden.value = total;
+                const subtotal = document.querySelector(
+                    '.subtotal-divisa-' + sucursalId
+                );
 
-                // Diferencia
-                if (elDiferencia) {
-                    const montoSistema = parseFloat(elHidden.closest('.row').querySelector('input[name$="[monto_sistema]"]').value) || 0;
-                    const diferencia = montoSistema - total;
-                    elDiferencia.textContent = '$ ' + diferencia.toFixed(2);
-                    elDiferencia.className = 'fw-bold mb-0 ' + (Math.abs(diferencia) < 0.01 ? 'text-success' : 'text-danger');
+                const contado = document.querySelector(
+                    '.total-contado-divisa-' + sucursalId
+                );
+
+                const diferenciaEl = document.querySelector(
+                    '.diferencia-efectivo-divisa-' + sucursalId
+                );
+
+                const hidden = document.querySelector(
+                    '.monto-contado-divisa-' + sucursalId
+                );
+
+                if (subtotal) subtotal.textContent = '$ ' + total.toFixed(2);
+                if (contado) contado.textContent = '$ ' + total.toFixed(2);
+                if (hidden) hidden.value = total.toFixed(2);
+
+                if (diferenciaEl) {
+                    diferenciaEl.textContent = '$ ' + diferencia.toFixed(2);
+                    diferenciaEl.className =
+                        'fw-bold mb-0 diferencia-efectivo-divisa-' +
+                        sucursalId + ' ' +
+                        (Math.abs(diferencia) < 0.01
+                            ? 'text-success'
+                            : 'text-danger');
                 }
             });
 
-            // ===== BOLÍVARES =====
-            const subtotalesBs = {};
+            // ============================================
+            // CONCILIACIÓN DE EFECTIVO EN BOLÍVARES (Bs.)
+            // ============================================
+
+            const totalesBs = {};
+
             document.querySelectorAll('.cantidad-bs').forEach(input => {
                 const sucursalId = input.dataset.sucursal;
-                const cantidad = parseInt(input.value) || 0;
-                const denom = parseFloat(input.dataset.denominacion) || 0;
-                subtotalesBs[sucursalId] = (subtotalesBs[sucursalId] || 0) + (cantidad * denom);
+                const cantidad = Math.max(0, parseInt(input.value, 10) || 0);
+                const denominacion = parseFloat(input.dataset.denominacion) || 0;
+
+                if (!totalesBs[sucursalId]) {
+                    totalesBs[sucursalId] = {
+                        total: 0,
+                        sistema: parseFloat(input.dataset.montoSistema) || 0
+                    };
+                }
+
+                totalesBs[sucursalId].total += cantidad * denominacion;
             });
 
-            Object.keys(subtotalesBs).forEach(sucId => {
-                const total = subtotalesBs[sucId];
-                const elSubtotal = document.querySelector('.subtotal-bs-' + sucId);
-                const elContado = document.querySelector('.total-contado-bs-' + sucId);
-                const elDiferencia = document.querySelector('.diferencia-efectivo-bs-' + sucId);
-                const elHidden = document.querySelector('.monto-contado-bs-' + sucId);
+            Object.entries(totalesBs).forEach(([sucursalId, datos]) => {
+                const total = Math.round(datos.total * 100) / 100;
+                const diferencia = Math.round((datos.sistema - total) * 100) / 100;
 
-                if (elSubtotal) elSubtotal.textContent = 'Bs. ' + total.toFixed(2);
-                if (elContado) elContado.textContent = 'Bs. ' + total.toFixed(2);
-                if (elHidden) elHidden.value = total;
+                const subtotal = document.querySelector(
+                    '.subtotal-bs-' + sucursalId
+                );
 
-                if (elDiferencia) {
-                    const montoSistema = parseFloat(elHidden.closest('.row').querySelector('input[name$="[monto_sistema]"]').value) || 0;
-                    const diferencia = montoSistema - total;
-                    elDiferencia.textContent = 'Bs. ' + diferencia.toFixed(2);
-                    elDiferencia.className = 'fw-bold mb-0 ' + (Math.abs(diferencia) < 0.01 ? 'text-success' : 'text-danger');
+                const contado = document.querySelector(
+                    '.total-contado-bs-' + sucursalId
+                );
+
+                const diferenciaEl = document.querySelector(
+                    '.diferencia-efectivo-bs-' + sucursalId
+                );
+
+                const hidden = document.querySelector(
+                    '.monto-contado-bs-' + sucursalId
+                );
+
+                if (subtotal) subtotal.textContent = 'Bs. ' + total.toFixed(2);
+                if (contado) contado.textContent = 'Bs. ' + total.toFixed(2);
+                if (hidden) hidden.value = total.toFixed(2);
+
+                if (diferenciaEl) {
+                    diferenciaEl.textContent = 'Bs. ' + diferencia.toFixed(2);
+                    diferenciaEl.className =
+                        'fw-bold mb-0 diferencia-efectivo-bs-' +
+                        sucursalId + ' ' +
+                        (Math.abs(diferencia) < 0.01
+                            ? 'text-success'
+                            : 'text-danger');
                 }
             });
         }

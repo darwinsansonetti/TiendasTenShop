@@ -1147,8 +1147,15 @@
                                     <p>Retiro Bolívares</p>
                                 </a>
                             </li>
+                            <li class="nav-item">
+                              <a href="{{ route('cpanel.billetera.conversion.divisa') }}"
+                                class="nav-link {{ session('submenu_active') == 'Conversión Divisa' ? 'active' : '' }}">
+                                  <i class="nav-icon bi bi-arrow-left-right"></i>
+                                  <p>Conversión Divisa</p>
+                              </a>
+                          </li>
                         </ul>
-                    </li>
+                      </li>
 
                       <li class="nav-item">
                           <a href="{{ route('cpanel.boveda.prestamos') }}"

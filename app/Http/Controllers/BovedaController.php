@@ -725,6 +725,91 @@ class BovedaController extends Controller
                     ->where('BovedaId', $bovedaId)
                     ->update(['EstatusConciliacion' => $estatusConciliacion]);
 
+                // ================================================
+                // REGISTRAR COMISIONES COMO GASTOS
+                // ================================================
+
+                // Obtener IDs de categorías por nombre
+                $catComisionPdv = DB::connection('sqlsrv')
+                    ->table('CategoriaGastos')
+                    ->where('Nombre', 'COMISION PDV')
+                    ->value('CategoriaId');
+
+                $catComisionBiopago = DB::connection('sqlsrv')
+                    ->table('CategoriaGastos')
+                    ->where('Nombre', 'COMISION BIOPAGO')
+                    ->value('CategoriaId');
+
+                $tasaValor = $tasa ? $tasa->Valor : 0;
+
+                // -------- Comisión PDV --------
+                $totalComisionPdv = 0;
+                foreach ($request->conciliacion_pdv ?? [] as $item) {
+                    $totalComisionPdv += (float) ($item['monto_comision'] ?? 0);
+                }
+
+                if ($totalComisionPdv > 0 && $catComisionPdv) {
+                    $tasaValor = $tasa ? $tasa->Valor : 0;
+                    $montoDivisa = $tasaValor > 0 
+                        ? round($totalComisionPdv / $tasaValor, 2) 
+                        : 0;
+
+                    DB::connection('sqlsrv')->table('Transacciones')->insert([
+                        'Descripcion'        => 'Comision por PDV',
+                        'MontoAbonado'       => round($totalComisionPdv, 2),
+                        'MontoDivisaAbonado' => $montoDivisa,   // ← CAMBIO
+                        'NumeroOperacion'    => 'COMPDV-' . $bovedaId,
+                        'DivisaId'           => 0,
+                        'TasaDeCambio'       => $tasaValor,
+                        'Tipo'               => 2,
+                        'FormaDePago'        => 3,
+                        'Estatus'            => 2,
+                        'Fecha'              => Carbon::parse($fechaCierre),
+                        'UrlComprobante'     => null,
+                        'SucursalOrigenId'   => $sucursalId,
+                        'SucursalId'         => $sucursalId,
+                        'Observacion'        => 'Comisión cobrada por bancos en PDV',
+                        'Nombre'             => 'COMISION PDV',
+                        'Cedula'             => '',
+                        'CategoriaId'        => $catComisionPdv,
+                    ]);
+                }
+
+                // -------- Comisión Biopago --------
+                $totalComisionBiopago = 0;
+                foreach ($request->conciliacion_otros ?? [] as $item) {
+                    if ((int) ($item['tipo'] ?? 0) === 1) { // Biopago
+                        $totalComisionBiopago += (float) ($item['monto_comision'] ?? 0);
+                    }
+                }
+
+                if ($totalComisionBiopago > 0 && $catComisionBiopago) {
+                    $tasaValor = $tasa ? $tasa->Valor : 0;
+                    $montoDivisa = $tasaValor > 0 
+                        ? round($totalComisionBiopago / $tasaValor, 2) 
+                        : 0;
+
+                    DB::connection('sqlsrv')->table('Transacciones')->insert([
+                        'Descripcion'        => 'Comision por Biopago',
+                        'MontoAbonado'       => round($totalComisionBiopago, 2),
+                        'MontoDivisaAbonado' => $montoDivisa,   // ← CAMBIO
+                        'NumeroOperacion'    => 'COMPBP-' . $bovedaId,
+                        'DivisaId'           => 0,
+                        'TasaDeCambio'       => $tasaValor,
+                        'Tipo'               => 2,
+                        'FormaDePago'        => 3,
+                        'Estatus'            => 2,
+                        'Fecha'              => Carbon::parse($fechaCierre),
+                        'UrlComprobante'     => null,
+                        'SucursalOrigenId'   => $sucursalId,
+                        'SucursalId'         => $sucursalId,
+                        'Observacion'        => 'Comisión cobrada por Biopago',
+                        'Nombre'             => 'COMISION BIOPAGO',
+                        'Cedula'             => '',
+                        'CategoriaId'        => $catComisionBiopago,
+                    ]);
+                }
+
                 DB::connection('sqlsrv')->commit();
 
                 return redirect()->route('cpanel.boveda.detalle', $bovedaId)
@@ -1229,6 +1314,9 @@ class BovedaController extends Controller
                     ->with('error', 'La bóveda no existe o ya está cerrada');
             }
 
+            $tasa = $this->obtenerTasaCambioActual();
+            $sucursalId = $this->obtenerOficinaPrincipal();
+
             // 🔹 Normalizar fecha para FechaDeposito
             $fechaDeposito = Carbon::parse($boveda->Fecha)->format('Y-m-d');
 
@@ -1248,6 +1336,17 @@ class BovedaController extends Controller
                 DB::connection('sqlsrv')->table('BovedaConciliacionPDV')->where('BovedaId', $id)->delete();
                 DB::connection('sqlsrv')->table('BovedaConciliacionOtros')->where('BovedaId', $id)->delete();
                 DB::connection('sqlsrv')->table('BovedaConciliacionEfectivo')->where('BovedaId', $id)->delete();
+
+                // ================================================
+                // LIMPIAR COMISIONES ANTERIORES DE ESTA BÓVEDA
+                // ================================================
+                DB::connection('sqlsrv')
+                    ->table('Transacciones')
+                    ->where(function ($q) use ($id) {
+                        $q->where('NumeroOperacion', 'COMPDV-' . $id)
+                        ->orWhere('NumeroOperacion', 'COMPBP-' . $id);
+                    })
+                    ->delete();
 
                 // 4. Reinsertar denominaciones
                 if ($request->has('denominaciones')) {
@@ -1373,6 +1472,91 @@ class BovedaController extends Controller
                 DB::connection('sqlsrv')->table('Boveda')
                     ->where('BovedaId', $id)
                     ->update(['EstatusConciliacion' => $estatusConciliacion]);
+
+                // ================================================
+                // REGISTRAR COMISIONES COMO GASTOS
+                // ================================================
+
+                // Obtener IDs de categorías por nombre
+                $catComisionPdv = DB::connection('sqlsrv')
+                    ->table('CategoriaGastos')
+                    ->where('Nombre', 'COMISION PDV')
+                    ->value('CategoriaId');
+
+                $catComisionBiopago = DB::connection('sqlsrv')
+                    ->table('CategoriaGastos')
+                    ->where('Nombre', 'COMISION BIOPAGO')
+                    ->value('CategoriaId');
+
+                $tasaValor = $tasa ? $tasa->Valor : 0;
+
+                // -------- Comisión PDV --------
+                $totalComisionPdv = 0;
+                foreach ($request->conciliacion_pdv ?? [] as $item) {
+                    $totalComisionPdv += (float) ($item['monto_comision'] ?? 0);
+                }
+
+                if ($totalComisionPdv > 0 && $catComisionPdv) {
+                    $tasaValor = $tasa ? $tasa->Valor : 0;
+                    $montoDivisa = $tasaValor > 0 
+                        ? round($totalComisionPdv / $tasaValor, 2) 
+                        : 0;
+
+                    DB::connection('sqlsrv')->table('Transacciones')->insert([
+                        'Descripcion'        => 'Comision por PDV',
+                        'MontoAbonado'       => round($totalComisionPdv, 2),
+                        'MontoDivisaAbonado' => $montoDivisa,   // ← CAMBIO
+                        'NumeroOperacion'    => 'COMPDV-' . $bovedaId,
+                        'DivisaId'           => 0,
+                        'TasaDeCambio'       => $tasaValor,
+                        'Tipo'               => 2,
+                        'FormaDePago'        => 3,
+                        'Estatus'            => 2,
+                        'Fecha'              => Carbon::parse($fechaCierre),
+                        'UrlComprobante'     => null,
+                        'SucursalOrigenId'   => $sucursalId,
+                        'SucursalId'         => $sucursalId,
+                        'Observacion'        => 'Comisión cobrada por bancos en PDV',
+                        'Nombre'             => 'COMISION PDV',
+                        'Cedula'             => '',
+                        'CategoriaId'        => $catComisionPdv,
+                    ]);
+                }
+
+                // -------- Comisión Biopago --------
+                $totalComisionBiopago = 0;
+                foreach ($request->conciliacion_otros ?? [] as $item) {
+                    if ((int) ($item['tipo'] ?? 0) === 1) { // Biopago
+                        $totalComisionBiopago += (float) ($item['monto_comision'] ?? 0);
+                    }
+                }
+
+                if ($totalComisionBiopago > 0 && $catComisionBiopago) {
+                    $tasaValor = $tasa ? $tasa->Valor : 0;
+                    $montoDivisa = $tasaValor > 0 
+                        ? round($totalComisionBiopago / $tasaValor, 2) 
+                        : 0;
+
+                    DB::connection('sqlsrv')->table('Transacciones')->insert([
+                        'Descripcion'        => 'Comision por Biopago',
+                        'MontoAbonado'       => round($totalComisionBiopago, 2),
+                        'MontoDivisaAbonado' => $montoDivisa,   // ← CAMBIO
+                        'NumeroOperacion'    => 'COMPBP-' . $bovedaId,
+                        'DivisaId'           => 0,
+                        'TasaDeCambio'       => $tasaValor,
+                        'Tipo'               => 2,
+                        'FormaDePago'        => 3,
+                        'Estatus'            => 2,
+                        'Fecha'              => Carbon::parse($fechaCierre),
+                        'UrlComprobante'     => null,
+                        'SucursalOrigenId'   => $sucursalId,
+                        'SucursalId'         => $sucursalId,
+                        'Observacion'        => 'Comisión cobrada por Biopago',
+                        'Nombre'             => 'COMISION BIOPAGO',
+                        'Cedula'             => '',
+                        'CategoriaId'        => $catComisionBiopago,
+                    ]);
+                }
 
                 DB::connection('sqlsrv')->commit();
 
@@ -2395,6 +2579,7 @@ class BovedaController extends Controller
                 ->join('BovedaCambioDivisa as c', 'd.CambioId', '=', 'c.CambioId')
                 ->whereDate('c.FechaCambio', '>=', $fechaInicio)
                 ->whereDate('c.FechaCambio', '<=', $fechaFin)
+                ->whereIn('c.TipoMovimiento', ['CAMBIO', 'INGRESO'])
                 ->where('d.Tipo', 'CAMBIADO')
                 ->select('d.Denominacion', DB::raw('SUM(d.Cantidad) as Total'))
                 ->groupBy('d.Denominacion')
@@ -4128,6 +4313,243 @@ class BovedaController extends Controller
         } catch (\Exception $e) {
             Log::error('Error en BovedaController::guardarRetiroBolivares: ' . $e->getMessage());
             return back()->withInput()->with('error', 'Error al guardar el retiro: ' . $e->getMessage());
+        }
+    }
+
+    private function calcularDisponibleParaConversion(): array
+    {
+        $fechaMinima = '2026-09-01';
+        $fechaFin    = Carbon::now()->format('Y-m-d');
+
+        // 1. PDV depositado
+        $totalPdv = (float) DB::connection('sqlsrv')
+            ->table('BovedaConciliacionPDV as bcp')
+            ->join('Boveda as bo', 'bcp.BovedaId', '=', 'bo.BovedaId')
+            ->whereDate('bo.Fecha', '>=', $fechaMinima)
+            ->whereDate('bo.Fecha', '<=', $fechaFin)
+            ->sum('bcp.MontoDepositado');
+
+        // 2. Biopago depositado
+        $totalBiopago = (float) DB::connection('sqlsrv')
+            ->table('BovedaConciliacionOtros as bco')
+            ->join('Boveda as bo', 'bco.BovedaId', '=', 'bo.BovedaId')
+            ->whereDate('bo.Fecha', '>=', $fechaMinima)
+            ->whereDate('bo.Fecha', '<=', $fechaFin)
+            ->where('bco.Tipo', 1)
+            ->sum('bco.MontoDepositado');
+
+        // 3. Cashea depositado
+        $totalCashea = (float) DB::connection('sqlsrv')
+            ->table('BovedaConciliacionOtros as bco')
+            ->join('Boveda as bo', 'bco.BovedaId', '=', 'bo.BovedaId')
+            ->whereDate('bo.Fecha', '>=', $fechaMinima)
+            ->whereDate('bo.Fecha', '<=', $fechaFin)
+            ->where('bco.Tipo', 3)
+            ->sum('bco.MontoDepositado');
+
+        // 4. IDs de categorías de comisión (a excluir)
+        $categoriasComision = DB::connection('sqlsrv')
+            ->table('CategoriaGastos')
+            ->whereIn('Nombre', ['COMISION PDV', 'COMISION BIOPAGO'])
+            ->pluck('CategoriaId')
+            ->toArray();
+
+        // 5. Gastos: tipos 2,3,5 con FormaDePago != 0, EXCLUYENDO comisiones
+        $tiposSalidas = [2, 3, 5];
+        $totalGastos = (float) DB::connection('sqlsrv')
+            ->table('Transacciones')
+            ->whereIn('Tipo', $tiposSalidas)
+            ->where(function ($q) {
+                $q->where('FormaDePago', '!=', 0)
+                ->orWhereNull('FormaDePago');
+            })
+            ->when(!empty($categoriasComision), function ($q) use ($categoriasComision) {
+                $q->whereNotIn('CategoriaId', $categoriasComision);
+            })
+            ->whereDate('Fecha', '>=', $fechaMinima)
+            ->whereDate('Fecha', '<=', $fechaFin)
+            ->sum('MontoAbonado');
+
+        $totalIngresos = $totalPdv + $totalBiopago + $totalCashea;
+        $disponible    = $totalIngresos - $totalGastos;
+
+        return [
+            'pdv'        => $totalPdv,
+            'biopago'    => $totalBiopago,
+            'cashea'     => $totalCashea,
+            'ingresos'   => $totalIngresos,
+            'gastos'     => $totalGastos,
+            'disponible' => max(0, $disponible),
+        ];
+    }
+
+    public function conversionDivisa(Request $request)
+    {
+        session([
+            'menu_active'    => 'Billetera',
+            'submenu_active' => 'Conversión Divisa'
+        ]);
+
+        try {
+            $disponible = $this->calcularDisponibleParaConversion();
+            $tasa = $this->obtenerTasaCambioActual();
+
+            // Denominaciones USD oficiales
+            $denominaciones = [100.00, 50.00, 20.00, 10.00, 5.00, 2.00, 1.00];
+
+            // Historial de conversiones recientes
+            $historial = DB::connection('sqlsrv')
+                ->table('BovedaCambioDivisa as c')
+                ->where('c.TipoMovimiento', 'INGRESO')
+                ->orderByDesc('c.CambioId')
+                ->limit(20)
+                ->get()
+                ->map(function ($c) {
+                    $c->Detalles = DB::connection('sqlsrv')
+                        ->table('BovedaCambioDivisaDetalle')
+                        ->where('CambioId', $c->CambioId)
+                        ->orderByDesc('Denominacion')
+                        ->get();
+                    $c->FechaFormateada = Carbon::parse($c->FechaCambio)->format('d/m/Y H:i');
+                    $c->TotalUSD = $c->Detalles->sum(fn($d) => $d->Denominacion * $d->Cantidad);
+                    return $c;
+                });
+
+            return view('cpanel.boveda.conversion_divisa', [
+                'disponible'     => $disponible,
+                'tasaActual'     => $tasa ? $tasa->Valor : 0,
+                'denominaciones' => $denominaciones,
+                'historial'      => $historial,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en BovedaController::conversionDivisa: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar el módulo: ' . $e->getMessage());
+        }
+    }
+
+    public function guardarConversionDivisa(Request $request)
+    {
+        $request->validate([
+            'tasa'                       => 'required|numeric|min:0.01',
+            'observacion'                => 'nullable|string|max:500',
+            'denominaciones'             => 'required|array|min:1',
+            'denominaciones.*.cantidad'  => 'required|integer|min:0',
+        ]);
+
+        try {
+            $tasa = (float) $request->tasa;
+
+            // 1. Calcular total USD y recolectar denominaciones con cantidad > 0
+            $totalUSD = 0;
+            $detallesDenominaciones = [];
+            foreach ($request->denominaciones as $den) {
+                $cantidad = (int) ($den['cantidad'] ?? 0);
+                if ($cantidad > 0) {
+                    $denominacion = (float) $den['denominacion'];
+                    $totalUSD += $denominacion * $cantidad;
+                    $detallesDenominaciones[] = [
+                        'denominacion' => $denominacion,
+                        'cantidad'     => $cantidad,
+                    ];
+                }
+            }
+
+            if ($totalUSD <= 0) {
+                return back()->withInput()->with('error', 'Debe ingresar al menos una denominación con cantidad mayor a 0.');
+            }
+
+            $totalBs = round($totalUSD * $tasa, 2);
+
+            // 2. Validar disponible
+            $disponible = $this->calcularDisponibleParaConversion();
+            if ($totalBs > $disponible['disponible']) {
+                return back()->withInput()->with('error',
+                    'El monto a entregar (Bs. ' . number_format($totalBs, 2) . ') ' .
+                    'excede el disponible (Bs. ' . number_format($disponible['disponible'], 2) . ').'
+                );
+            }
+
+            // 3. Transacción
+            DB::connection('sqlsrv')->beginTransaction();
+
+            try {
+                $usuarioId      = auth()->user()->id ?? null;
+                $sucursalId     = $this->obtenerOficinaPrincipal();
+                // $sucursalOrigen = session('sucursal_id', $sucursalId);
+                $sucursalOrigen = $sucursalId; // 8
+                $fechaHoy       = Carbon::now();
+
+                // 3.1 Generar NumeroOperacion único
+                $numeroOperacion = $fechaHoy->format('YmdHi') . '-' . $sucursalId;
+                $existe = DB::connection('sqlsrv')
+                    ->table('Transacciones')
+                    ->where('NumeroOperacion', $numeroOperacion)
+                    ->exists();
+                if ($existe) {
+                    $numeroOperacion = $fechaHoy->format('YmdHi') . '-' . $sucursalId . '-' . rand(1, 99);
+                }
+
+                // 3.2 INSERT en Transacciones (gasto tipo 2)
+                DB::connection('sqlsrv')->table('Transacciones')->insert([
+                    'Descripcion'        => 'COMPRA DE DIVISA',
+                    'MontoAbonado'       => $totalBs,
+                    'MontoDivisaAbonado' => $totalUSD,
+                    'NumeroOperacion'    => $numeroOperacion,
+                    'DivisaId'           => 0,
+                    'TasaDeCambio'       => $tasa,
+                    'Tipo'               => 2,
+                    'FormaDePago'        => 3, // Transferencia
+                    'Estatus'            => 2,
+                    'Fecha'              => $fechaHoy,
+                    'UrlComprobante'     => null,
+                    'SucursalOrigenId'   => $sucursalOrigen,
+                    'SucursalId'         => $sucursalId,
+                    'Observacion'        => $request->observacion ?? '',
+                    'Nombre'             => 'COMPRA DIVISAS',
+                    'Cedula'             => '',
+                    'CategoriaId'        => 73,
+                ]);
+
+                // 3.3 INSERT cabecera BovedaCambioDivisa
+                $cambioId = DB::connection('sqlsrv')->table('BovedaCambioDivisa')->insertGetId([
+                    'FechaCambio'    => $fechaHoy,
+                    'UsuarioId'      => $usuarioId,
+                    'Observacion'    => $request->observacion,
+                    'TipoMovimiento' => 'INGRESO',
+                ]);
+
+                // 3.4 INSERT detalle por cada denominación
+                foreach ($detallesDenominaciones as $det) {
+                    DB::connection('sqlsrv')->table('BovedaCambioDivisaDetalle')->insert([
+                        'CambioId'     => $cambioId,
+                        'Denominacion' => $det['denominacion'],
+                        'Cantidad'     => $det['cantidad'],
+                        'Tipo'         => 'CAMBIADO',
+                    ]);
+                }
+
+                DB::connection('sqlsrv')->commit();
+
+                return redirect()->route('cpanel.billetera.conversion.divisa')
+                    ->with('success',
+                        'Conversión registrada: Bs. ' . number_format($totalBs, 2) . 
+                        ' → $ ' . number_format($totalUSD, 2) . 
+                        ' (Op: ' . $numeroOperacion . ')'
+                    );
+
+            } catch (\Exception $e) {
+                DB::connection('sqlsrv')->rollBack();
+                throw $e;
+            }
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withInput()->withErrors($e->errors());
+        } catch (\Exception $e) {
+            Log::error('Error en BovedaController::guardarConversionDivisa: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return back()->withInput()->with('error', 'Error al guardar: ' . $e->getMessage());
         }
     }
 }
