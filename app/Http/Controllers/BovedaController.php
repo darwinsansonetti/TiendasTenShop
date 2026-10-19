@@ -1477,7 +1477,6 @@ class BovedaController extends Controller
                 // REGISTRAR COMISIONES COMO GASTOS
                 // ================================================
 
-                // Obtener IDs de categorías por nombre
                 $catComisionPdv = DB::connection('sqlsrv')
                     ->table('CategoriaGastos')
                     ->where('Nombre', 'COMISION PDV')
@@ -1497,7 +1496,6 @@ class BovedaController extends Controller
                 }
 
                 if ($totalComisionPdv > 0 && $catComisionPdv) {
-                    $tasaValor = $tasa ? $tasa->Valor : 0;
                     $montoDivisa = $tasaValor > 0 
                         ? round($totalComisionPdv / $tasaValor, 2) 
                         : 0;
@@ -1505,14 +1503,14 @@ class BovedaController extends Controller
                     DB::connection('sqlsrv')->table('Transacciones')->insert([
                         'Descripcion'        => 'Comision por PDV',
                         'MontoAbonado'       => round($totalComisionPdv, 2),
-                        'MontoDivisaAbonado' => $montoDivisa,   // ← CAMBIO
-                        'NumeroOperacion'    => 'COMPDV-' . $bovedaId,
+                        'MontoDivisaAbonado' => $montoDivisa,
+                        'NumeroOperacion'    => 'COMPDV-' . $id,               // ← $id
                         'DivisaId'           => 0,
                         'TasaDeCambio'       => $tasaValor,
                         'Tipo'               => 2,
                         'FormaDePago'        => 3,
                         'Estatus'            => 2,
-                        'Fecha'              => Carbon::parse($fechaCierre),
+                        'Fecha'              => Carbon::parse($fechaDeposito),  // ← $fechaDeposito
                         'UrlComprobante'     => null,
                         'SucursalOrigenId'   => $sucursalId,
                         'SucursalId'         => $sucursalId,
@@ -1526,13 +1524,12 @@ class BovedaController extends Controller
                 // -------- Comisión Biopago --------
                 $totalComisionBiopago = 0;
                 foreach ($request->conciliacion_otros ?? [] as $item) {
-                    if ((int) ($item['tipo'] ?? 0) === 1) { // Biopago
+                    if ((int) ($item['tipo'] ?? 0) === 1) {
                         $totalComisionBiopago += (float) ($item['monto_comision'] ?? 0);
                     }
                 }
 
                 if ($totalComisionBiopago > 0 && $catComisionBiopago) {
-                    $tasaValor = $tasa ? $tasa->Valor : 0;
                     $montoDivisa = $tasaValor > 0 
                         ? round($totalComisionBiopago / $tasaValor, 2) 
                         : 0;
@@ -1540,14 +1537,14 @@ class BovedaController extends Controller
                     DB::connection('sqlsrv')->table('Transacciones')->insert([
                         'Descripcion'        => 'Comision por Biopago',
                         'MontoAbonado'       => round($totalComisionBiopago, 2),
-                        'MontoDivisaAbonado' => $montoDivisa,   // ← CAMBIO
-                        'NumeroOperacion'    => 'COMPBP-' . $bovedaId,
+                        'MontoDivisaAbonado' => $montoDivisa,
+                        'NumeroOperacion'    => 'COMPBP-' . $id,               // ← $id
                         'DivisaId'           => 0,
                         'TasaDeCambio'       => $tasaValor,
                         'Tipo'               => 2,
                         'FormaDePago'        => 3,
                         'Estatus'            => 2,
-                        'Fecha'              => Carbon::parse($fechaCierre),
+                        'Fecha'              => Carbon::parse($fechaDeposito),  // ← $fechaDeposito
                         'UrlComprobante'     => null,
                         'SucursalOrigenId'   => $sucursalId,
                         'SucursalId'         => $sucursalId,
