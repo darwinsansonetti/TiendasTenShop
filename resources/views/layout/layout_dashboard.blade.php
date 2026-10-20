@@ -733,6 +733,12 @@
                       <i class="nav-icon bi bi-calendar-x"></i><p>Gastos por Categoría</p>
                     </a>
                   </li>
+                  <li class="nav-item">
+                    <a href="{{ route('cpanel.contabilidad.gastos_categoria_listado') }}"
+                       class="nav-link {{ session('submenu_active') == 'Categorias de Gastos' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-calendar-x"></i><p>Categorias de Gastos</p>
+                    </a>
+                  </li>
                 </ul>
               </li>
 

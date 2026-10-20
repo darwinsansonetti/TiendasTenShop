@@ -192,6 +192,26 @@ Route::middleware('auth')->group(function() {
     
     // Listado de gastos por categoria
     Route::get('/cpanel/contabilidad/listado/gastos/categoria', [ContabilidadController::class, 'listadoGastosCategoria'])->name('cpanel.contabilidad.gastos_categoria');
+    
+    // Listado de gastos (categorias))
+    Route::get('/cpanel/contabilidad/listado/gastos/categoria/unicas', [ContabilidadController::class, 'listadoGastosCategoriaUnicas'])->name('cpanel.contabilidad.gastos_categoria_listado');
+
+    // Crear
+    Route::get('/cpanel/contabilidad/categoria/crear', [ContabilidadController::class, 'crearCategoriaGasto'])
+        ->name('cpanel.contabilidad.categoria.crear');
+
+    Route::post('/cpanel/contabilidad/categoria/guardar', [ContabilidadController::class, 'guardarCategoriaGasto'])
+        ->name('cpanel.contabilidad.categoria.guardar');
+
+    // Editar
+    Route::get('/cpanel/contabilidad/categoria/editar/{id}', [ContabilidadController::class, 'editarCategoriaGasto'])
+        ->name('cpanel.contabilidad.categoria.editar');
+
+    Route::post('/cpanel/contabilidad/categoria/actualizar/{id}', [ContabilidadController::class, 'actualizarCategoriaGasto'])
+        ->name('cpanel.contabilidad.categoria.actualizar');
+
+    Route::post('/cpanel/contabilidad/categoria/toggle/{id}', [ContabilidadController::class, 'toggleCategoriaGasto'])
+    ->name('cpanel.contabilidad.categoria.toggle');
 
     // Ventas Diarias - Empleados
     Route::get('/cpanel/empleados/ventas', [EmpleadosController::class, 'listado_empleados'])->name('cpanel.empleados.ventas_diarias');

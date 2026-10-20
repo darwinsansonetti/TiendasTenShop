@@ -3333,4 +3333,211 @@ class ContabilidadController extends Controller
             return collect();
         }
     }
+
+    /**
+     * Listado de categorías de gastos (solo activas)
+     */
+    public function listadoGastosCategoriaUnicas(Request $request)
+    {
+        try {
+            session([
+                'menu_active'    => 'Contabilidad',
+                'submenu_active' => 'Categorias de Gastos'
+            ]);
+
+            $categorias = DB::connection('sqlsrv')
+                ->table('CategoriaGastos')
+                ->where('EsActivo', 1)
+                ->select('CategoriaId', 'Nombre', 'EsActivo')
+                ->orderBy('Nombre')
+                ->get();
+
+            return view('cpanel.contabilidad.listado_gastos_categoria_unica', [
+                'categorias' => $categorias,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en listadoGastosCategoriaUnicas: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar el listado: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Crear nueva categoría
+     */
+    public function guardarCategoriaGasto(Request $request)
+    {
+        $request->validate([
+            'nombre' => 'required|string|max:150',
+        ]);
+
+        try {
+            $nombre = trim($request->nombre);
+
+            $existe = DB::connection('sqlsrv')
+                ->table('CategoriaGastos')
+                ->where('Nombre', $nombre)
+                ->exists();
+
+            if ($existe) {
+                return redirect()->back()
+                    ->withInput()
+                    ->with('error', 'Ya existe una categoría con ese nombre.');
+            }
+
+            DB::connection('sqlsrv')->table('CategoriaGastos')->insert([
+                'Nombre'   => $nombre,
+                'EsActivo' => 1,
+            ]);
+
+            return redirect()->route('cpanel.contabilidad.gastos_categoria_listado')
+                ->with('success', 'Categoría creada correctamente.');
+
+        } catch (\Exception $e) {
+            Log::error('Error en guardarCategoriaGasto: ' . $e->getMessage());
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Error al crear la categoría: ' . $e->getMessage());
+        }
+    }
+
+    public function actualizarCategoriaGasto(Request $request, $id)
+    {
+        $request->validate([
+            'nombre' => 'required|string|max:150',
+        ]);
+
+        try {
+            $categoria = DB::connection('sqlsrv')
+                ->table('CategoriaGastos')
+                ->where('CategoriaId', $id)
+                ->first();
+
+            if (!$categoria) {
+                return redirect()->route('cpanel.contabilidad.gastos_categoria_listado')
+                    ->with('error', 'Categoría no encontrada.');
+            }
+
+            $nombre = trim($request->nombre);
+
+            $existe = DB::connection('sqlsrv')
+                ->table('CategoriaGastos')
+                ->where('Nombre', $nombre)
+                ->where('CategoriaId', '!=', $id)
+                ->exists();
+
+            if ($existe) {
+                return redirect()->back()
+                    ->withInput()
+                    ->with('error', 'Ya existe otra categoría con ese nombre.');
+            }
+
+            DB::connection('sqlsrv')
+                ->table('CategoriaGastos')
+                ->where('CategoriaId', $id)
+                ->update(['Nombre' => $nombre]);
+
+            return redirect()->route('cpanel.contabilidad.gastos_categoria_listado')
+                ->with('success', 'Categoría actualizada correctamente.');
+
+        } catch (\Exception $e) {
+            Log::error('Error en actualizarCategoriaGasto: ' . $e->getMessage());
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Error al actualizar: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Formulario para crear nueva categoría
+     */
+    public function crearCategoriaGasto(Request $request)
+    {
+        try {
+            session([
+                'menu_active'    => 'Contabilidad',
+                'submenu_active' => 'Listado de Gastos'
+            ]);
+
+            return view('cpanel.contabilidad.crear_categoria_gasto');
+
+        } catch (\Exception $e) {
+            Log::error('Error en crearCategoriaGasto: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar el formulario: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Formulario para editar categoría
+     */
+    public function editarCategoriaGasto($id)
+    {
+        try {
+            session([
+                'menu_active'    => 'Contabilidad',
+                'submenu_active' => 'Listado de Gastos'
+            ]);
+
+            $categoria = DB::connection('sqlsrv')
+                ->table('CategoriaGastos')
+                ->where('CategoriaId', $id)
+                ->first();
+
+            if (!$categoria) {
+                return redirect()->route('cpanel.contabilidad.gastos_categoria_listado')
+                    ->with('error', 'Categoría no encontrada.');
+            }
+
+            return view('cpanel.contabilidad.editar_categoria_gasto', [
+                'categoria' => $categoria,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en editarCategoriaGasto: ' . $e->getMessage());
+            return back()->with('error', 'Error al cargar el formulario: ' . $e->getMessage());
+        }
+    }
+
+    /**
+ * Activar / Desactivar categoría (desde el form de edición)
+ */
+public function toggleCategoriaGasto($id)
+{
+    try {
+        $categoria = DB::connection('sqlsrv')
+            ->table('CategoriaGastos')
+            ->where('CategoriaId', $id)
+            ->first();
+
+        if (!$categoria) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Categoría no encontrada.',
+            ], 404);
+        }
+
+        $nuevoEstado = $categoria->EsActivo == 1 ? 0 : 1;
+
+        DB::connection('sqlsrv')
+            ->table('CategoriaGastos')
+            ->where('CategoriaId', $id)
+            ->update(['EsActivo' => $nuevoEstado]);
+
+        return response()->json([
+            'success' => true,
+            'message' => $nuevoEstado == 1 
+                ? 'Categoría activada correctamente.' 
+                : 'Categoría desactivada correctamente.',
+            'nuevo_estado' => $nuevoEstado,
+            'redirigir'    => $nuevoEstado == 0, // si se desactiva, no está más en el listado
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error en toggleCategoriaGasto: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al cambiar estado: ' . $e->getMessage(),
+        ], 500);
+    }
+}
 }

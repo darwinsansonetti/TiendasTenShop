@@ -150,7 +150,10 @@
                                                 </option>
                                             @endforeach
                                         </select>
-                                        <a href="#" class="btn btn-light border fw-semibold" title="Crear nueva categoría" data-bs-toggle="tooltip">
+                                        <a href="{{ route('cpanel.contabilidad.categoria.crear') }}" 
+                                        class="btn btn-light border fw-semibold" 
+                                        title="Crear nueva categoría" 
+                                        data-bs-toggle="tooltip">
                                             <i class="bi bi-plus-circle"></i>
                                         </a>
                                     </div>
