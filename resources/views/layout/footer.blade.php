@@ -5,12 +5,10 @@
                 <h3 data-bs-target="#collapse_1">Enlaces de interes</h3>
                 <div class="collapse dont-collapse-sm links" id="collapse_1">
                     <ul>
-                        <li><a href="#">Nosotros</a></li>
-                        <li><a href="#">Preguntas</a></li>
-                        <li><a href="#">Ayuda</a></li>
-                        <li><a href="#">Sucursales</a></li>
-                        <li><a href="#">Contactanos</a></li>
-                        <li><a href="#">Trabaja con nosotros</a></li>
+                        <li><a href="{{ route('landingpage.nosotros') }}">Nosotros</a></li>
+                        <li><a href="{{ route('landingpage.nosotros') }}">Sucursales</a></li>
+                        <li><a href="{{ route('landingpage.contactanos') }}">Contactanos</a></li>
+                        <li><a href="mailto:rrhh.curriculum@tiendastenshop.com?subject=Envio%20de%20Curriculum%20-%20Trabaja%20con%20nosotros">Trabaja con nosotros</a></li>
                     </ul>
                 </div>
             </div>
@@ -18,9 +16,9 @@
                 <h3 data-bs-target="#collapse_2">Categorías</h3>
                 <div class="collapse dont-collapse-sm links" id="collapse_2">
                     <ul>
-                        <li><a href="#">Caballeros</a></li>
-                        <li><a href="#">Damas</a></li>
-                        <li><a href="#">Niños</a></li>
+                        <li><a href="{{ route('landingpage.productos', ['categoria' => 'Caballeros']) }}">Caballeros</a></li>
+                        <li><a href="{{ route('landingpage.productos', ['categoria' => 'Damas']) }}">Damas</a></li>
+                        <li><a href="{{ route('landingpage.productos', ['categoria' => 'Niños']) }}">Niños</a></li>
                     </ul>
                 </div>
             </div>

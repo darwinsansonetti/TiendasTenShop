@@ -2456,7 +2456,8 @@ class RecepcionesController extends Controller
             DB::connection('sqlsrv')
                 ->table('Recepciones')
                 ->where('RecepcionId', $auditoria->RecepcionId)
-                ->update(['Estatus' => 5]);
+                ->update(['Estatus' => 2]);
+                // ->update(['Estatus' => 5]);
             
             // 3. Actualizar todos los detalles con Accion = 1 (Aprobado)
             DB::connection('sqlsrv')
@@ -2504,26 +2505,6 @@ class RecepcionesController extends Controller
                 ->table('Recepciones')
                 ->where('RecepcionId', $auditoria->RecepcionId)
                 ->first();
-            
-            // // 3. Obtener los detalles de auditoría
-            // $detallesAuditoria = DB::connection('sqlsrv')
-            //     ->table('AuditoriaDetalles as ad')
-            //     ->leftJoin('RecepcionesDetalles as rd', 'ad.RecepcionDetalleId', '=', 'rd.RecepcionesDetallesId')
-            //     ->leftJoin('FacturaDetalles as fd', function($join) use ($auditoria) {
-            //         $join->on('fd.ProductoId', '=', 'rd.ProductoId')
-            //             ->where('fd.FacturaId', '=', $auditoria->FacturaId);
-            //     })
-            //     ->where('ad.AuditoriaId', $id)
-            //     ->select([
-            //         'ad.*',
-            //         'rd.ProductoId',
-            //         'rd.CantidadRecibida as recepcion_cantidad_recibida',
-            //         'rd.CantidadPedida as recepcion_cantidad_pedida',
-            //         'rd.RecepcionesDetallesId',
-            //         'fd.CantidadEmitida as factura_cantidad_empaques',
-            //         'fd.UxE as factura_uxe'
-            //     ])
-            //     ->get();
 
             // 3. Obtener el FacturaId desde RecepcionesFacturas
             $recepcionFactura = DB::connection('sqlsrv')
@@ -2605,6 +2586,17 @@ class RecepcionesController extends Controller
                             ]);
                     }
                 }
+
+                // 🔥 ACTUALIZAR TRANSFERENCIADETALLES MASIVAMENTE
+                if ($recepcionTransferencia) {
+                    DB::connection('sqlsrv')->table('TransferenciaDetalles')
+                        ->where('TransferenciaId', $recepcionTransferencia->TransferenciaId)
+                        ->where('ProductoId', $detalle->ProductoId)
+                        ->update([
+                            'CantidadRecibida' => $cantidadFacturaReal,
+                            'CantidadEmitida' => $cantidadFacturaReal
+                        ]);
+                }
                 
                 // Actualizar Acción = 2 (Rechazado) con el detalle en texto
                 DB::connection('sqlsrv')
@@ -2662,17 +2654,6 @@ class RecepcionesController extends Controller
             if (!$detalle) {
                 return response()->json(['success' => false, 'message' => 'Detalle no encontrado']);
             }
-
-            // // Buscar el producto por código
-            // $producto = DB::connection('sqlsrv')
-            //     ->table('Productos')
-            //     ->where('Codigo', $codigoProducto)
-            //     ->where('Estatus', 1)
-            //     ->first();
-            
-            // if (!$producto) {
-            //     return response()->json(['success' => false, 'message' => 'Producto no encontrado']);
-            // }
             
             // 2. Actualizar Acción = 1 (Aprobado)
             DB::connection('sqlsrv')
@@ -2704,34 +2685,12 @@ class RecepcionesController extends Controller
                     ->table('Auditorias')
                     ->where('AuditoriaId', $detalle->AuditoriaId)
                     ->first();
-
-                // // Obtener la recepción y sus datos
-                // $recepcion = DB::connection('sqlsrv')
-                //     ->table('Recepciones')
-                //     ->where('RecepcionId', $auditoria->RecepcionId)
-                //     ->first();
-
-                // // Buscar ProductoSucursal
-                // $productoSucursal = DB::connection('sqlsrv')
-                //     ->table('ProductoSucursal')
-                //     ->where('ProductoId', $producto->ID)
-                //     ->where('SucursalId', $recepcion->SucursalDestinoId)
-                //     ->first();
-
-                // if ($productoSucursal) {
-                //     // // ✅ Existe el registro, actualizar stock
-                //     // DB::connection('sqlsrv')
-                //     //     ->table('ProductoSucursal')
-                //     //     ->where('ProductoSucursalId', $productoSucursal->ProductoSucursalId)
-                //     //     ->update([
-                //     //         'Existencia' => ($productoSucursal->Stock ?? 0) + $cantidadRecibida
-                //     //     ]);
-                // }
                 
                 DB::connection('sqlsrv')
                     ->table('Recepciones')
                     ->where('RecepcionId', $auditoria->RecepcionId)
-                    ->update(['Estatus' => 5]);
+                    // ->update(['Estatus' => 5]);
+                    ->update(['Estatus' => 2]);
             }
             
             DB::connection('sqlsrv')->commit();
@@ -2819,23 +2778,6 @@ class RecepcionesController extends Controller
                 ])
                 ->first();
             
-            // 4. Obtener información del producto con el FacturaId
-            $infoProducto = DB::connection('sqlsrv')
-                ->table('RecepcionesDetalles as rd')
-                ->leftJoin('FacturaDetalles as fd', function($join) use ($facturaId) {
-                    $join->on('fd.ProductoId', '=', 'rd.ProductoId')
-                        ->where('fd.FacturaId', '=', $facturaId);
-                })
-                ->where('rd.RecepcionesDetallesId', $detalle->RecepcionDetalleId)
-                ->select([
-                    'rd.RecepcionesDetallesId',
-                    'rd.CantidadRecibida',
-                    'rd.CantidadPedida',
-                    'fd.CantidadEmitida as factura_cantidad_empaques',
-                    'fd.UxE as factura_uxe'
-                ])
-                ->first();
-            
             if ($infoProducto) {
                 $uxe = $infoProducto->factura_uxe ?? 1;
                 $cantidadFacturaReal = ($infoProducto->factura_cantidad_empaques ?? 0) * $uxe;
@@ -2882,6 +2824,25 @@ class RecepcionesController extends Controller
                             'Existencia' => $nuevoStock
                         ]);
                 }
+
+                // 🔥 ACTUALIZAR TRANSFERENCIADETALLES
+                // Buscamos la transferencia vinculada a esta recepción
+                $recepcionTransferencia = DB::connection('sqlsrv')
+                    ->table('RecepcionesTransferencias')
+                    ->where('RecepcionId', $auditoria->RecepcionId)
+                    ->first();
+
+                if ($recepcionTransferencia) {
+                    // Actualizar la cantidad recibida (y emitida) en la transferencia
+                    DB::connection('sqlsrv')
+                        ->table('TransferenciaDetalles')
+                        ->where('TransferenciaId', $recepcionTransferencia->TransferenciaId)
+                        ->where('ProductoId', $detalle->ProductoId)
+                        ->update([
+                            'CantidadRecibida' => $cantidadFacturaReal,
+                            'CantidadEmitida' => $cantidadFacturaReal
+                        ]);
+                }
             }
             
             // 5. Actualizar Acción = 2 (Rechazado)
@@ -2910,7 +2871,7 @@ class RecepcionesController extends Controller
                 DB::connection('sqlsrv')
                     ->table('Recepciones')
                     ->where('RecepcionId', $auditoria->RecepcionId)
-                    ->update(['Estatus' => 5]);
+                    ->update(['Estatus' => 2]);
             }
             
             DB::connection('sqlsrv')->commit();
@@ -3243,7 +3204,8 @@ class RecepcionesController extends Controller
             // ✅ Construir consulta base
             $query = DB::connection('sqlsrv')
                 ->table('TransferenciaTotalizadaView')
-                ->whereIn('Estatus', [3, 4, 5]); // Registrada, Recibiendo, Disponible
+                ->whereIn('Estatus', [3, 4]); // Registrada, Recibiendo, Disponible
+                // ->whereIn('Estatus', [3, 4, 5]); // Registrada, Recibiendo, Disponible
 
             // ✅ Si NO es Super Admin, filtrar por sucursal destino
             if (!$esSuperAdmin) {

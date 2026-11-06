@@ -1174,6 +1174,40 @@
               </li>
 
               <!-- ========================================== -->
+              <!-- SECCIÓN: DISENO -->
+              <!-- ========================================== -->
+              <li class="nav-header">DISEÑO</li>
+              <li class="nav-item {{ session('menu_active') == 'Diseno' ? 'menu-open' : '' }}">
+                  <a href="#" class="nav-link {{ session('menu_active') == 'Diseno' ? 'active' : '' }}">
+                      <i class="nav-icon bi bi-brush"></i>
+                      <p>Diseño <i class="nav-arrow bi bi-chevron-right"></i></p>
+                  </a>
+                  <ul class="nav nav-treeview">
+                      <li class="nav-item">
+                          <a href="{{ route('cpanel.publicidad.index') }}"
+                            class="nav-link {{ session('submenu_active') == 'Publicidad' ? 'active' : '' }}">
+                              <i class="nav-icon bi bi-image"></i>
+                              <p>Publicidad (Modal)</p>
+                          </a>
+                      </li>
+                      <li class="nav-item">
+                          <a href="{{ route('cpanel.banner.index') }}"
+                            class="nav-link {{ session('submenu_active') == 'Banners' ? 'active' : '' }}">
+                              <i class="nav-icon bi bi-images"></i>
+                              <p>Banners (Carrusel)</p>
+                          </a>
+                      </li>
+                      <li class="nav-item">
+                        <a href="{{ route('cpanel.galeria.index') }}"
+                          class="nav-link {{ session('submenu_active') == 'Galeria' ? 'active' : '' }}">
+                            <i class="nav-icon bi bi-grid-3x3-gap"></i>
+                            <p>Galería de Imágenes</p>
+                        </a>
+                    </li>
+                  </ul>
+              </li>
+
+              <!-- ========================================== -->
               <!-- SECCIÓN: PROCESOS AUTOMATIZADOS -->
               <!-- ========================================== -->
               <li class="nav-header">AUTOMATIZACIONES</li>

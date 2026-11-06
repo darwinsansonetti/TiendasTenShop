@@ -26,7 +26,6 @@ class BancosController extends Controller
     public function mostrarBancos(Request $request)
     {
         try {
-            Log::info('INICIO - BancosController::mostrarBancos');
 
             // ================================================
             // 1. ASIGNAR MENU ACTIVO
@@ -41,16 +40,11 @@ class BancosController extends Controller
             // ================================================
             $bancos = $this->buscarBancos();
 
-            Log::info('Bancos cargados exitosamente', [
-                'cantidad' => $bancos->count()
-            ]);
-
             return view('cpanel.entidades_bancarias.bancos', [
                 'bancos' => $bancos
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Error en BancosController::mostrarBancos: ' . $e->getMessage());
             return back()->with('error', 'Error al cargar el listado de bancos');
         }
     }

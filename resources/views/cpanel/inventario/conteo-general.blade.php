@@ -578,8 +578,11 @@
                                                         $diferencia = ($detalle->CantidadContada ?? 0) - ($detalle->Existencia ?? 0);
                                                         $color = $diferencia < 0 ? '#ef4444' : ($diferencia > 0 ? '#22c55e' : '#000');
                                                         $texto = $diferencia < 0 ? 'Falta ' . abs($diferencia) : ($diferencia > 0 ? 'Sobra ' . $diferencia : 'Exacto');
+                                                        
+                                                        $totalUnidades = ($detalle->CantidadContada ?? 0) - ($detalle->CantidadPieSolo ?? 0) - ($detalle->CantidadPieInvertido ?? 0) - ($detalle->CantidadPiezaDanada ?? 0);
+                                                        $totalCosto = $totalUnidades * ($detalle->CostoDivisa ?? 0);
                                                     @endphp
-                                                    <tr data-codigo="{{ strtoupper($detalle->Codigo ?? '') }}">
+                                                    <tr id="fila-{{ $detalle->ProductoId }}" data-codigo="{{ strtoupper($detalle->Codigo ?? '') }}">
                                                         <td class="text-center">
                                                             <img src="{{ $imgSrc }}" 
                                                                 loading="lazy" 
@@ -596,28 +599,32 @@
                                                         <td class="text-end">{{ number_format($detalle->CostoDivisa ?? 0, 2) }}</td>
                                                         <td class="text-center">{{ $detalle->Existencia }}</td>
                                                         <td>
-                                                            <input type="number" class="form-control form-control-sm" 
+                                                            <input type="number" class="form-control form-control-sm input-conteo" 
                                                                 id="_inputCantContada{{ $detalle->ProductoId }}"
                                                                 style="width:75px;display:inline-block;font-size:0.8rem;text-align:center;"
-                                                                value="{{ $detalle->CantidadContada ?? 0 }}" min="0">
+                                                                value="{{ $detalle->CantidadContada ?? 0 }}" min="0"
+                                                                onchange="calcularTotalesFila({{ $detalle->ProductoId }})">
                                                         </td>
                                                         <td>
-                                                            <input type="number" class="form-control form-control-sm" 
+                                                            <input type="number" class="form-control form-control-sm input-conteo" 
                                                                 id="_inputCantPieSolo{{ $detalle->ProductoId }}"
                                                                 style="width:65px;display:inline-block;font-size:0.8rem;text-align:center;"
-                                                                value="{{ $detalle->CantidadPieSolo ?? 0 }}" min="0">
+                                                                value="{{ $detalle->CantidadPieSolo ?? 0 }}" min="0"
+                                                                onchange="calcularTotalesFila({{ $detalle->ProductoId }})">
                                                         </td>
                                                         <td>
-                                                            <input type="number" class="form-control form-control-sm" 
+                                                            <input type="number" class="form-control form-control-sm input-conteo" 
                                                                 id="_inputCantPieInvertido{{ $detalle->ProductoId }}"
                                                                 style="width:65px;display:inline-block;font-size:0.8rem;text-align:center;"
-                                                                value="{{ $detalle->CantidadPieInvertido ?? 0 }}" min="0">
+                                                                value="{{ $detalle->CantidadPieInvertido ?? 0 }}" min="0"
+                                                                onchange="calcularTotalesFila({{ $detalle->ProductoId }})">
                                                         </td>
                                                         <td>
-                                                            <input type="number" class="form-control form-control-sm" 
+                                                            <input type="number" class="form-control form-control-sm input-conteo" 
                                                                 id="_inputCantDanado{{ $detalle->ProductoId }}"
                                                                 style="width:65px;display:inline-block;font-size:0.8rem;text-align:center;"
-                                                                value="{{ $detalle->CantidadPiezaDanada ?? 0 }}" min="0">
+                                                                value="{{ $detalle->CantidadPiezaDanada ?? 0 }}" min="0"
+                                                                onchange="calcularTotalesFila({{ $detalle->ProductoId }})">
                                                         </td>
                                                         <td class="text-center" id="_lblDiferencia{{ $detalle->ProductoId }}">
                                                             <span style="color: {{ $color }}; font-weight:bold;">
@@ -626,7 +633,7 @@
                                                         </td>
                                                         <td class="text-center" id="_lblTotalDetalle{{ $detalle->ProductoId }}">
                                                             <span class="badge bg-info text-dark">
-                                                                {{ number_format(($detalle->CantidadContada ?? 0) - ($detalle->CantidadPieSolo ?? 0) - ($detalle->CantidadPieInvertido ?? 0) - ($detalle->CantidadPiezaDanada ?? 0), 2) }}
+                                                                {{ number_format($totalCosto, 2) }}
                                                             </span>
                                                         </td>
                                                         <td class="text-center">
@@ -1420,9 +1427,9 @@ window.ContarProductoSeleccionado = function(productoId, detalleId) {
                 showConfirmButton: false
             });
 
-            setTimeout(() => {
-                location.reload();
-            }, 500);
+            // setTimeout(() => {
+            //     location.reload();
+            // }, 500);
 
         } else {
             Swal.fire({
@@ -1841,6 +1848,73 @@ document.addEventListener('DOMContentLoaded', function() {
             if (badgeId) {
                 var badge = document.getElementById(badgeId);
                 if (badge) badge.textContent = visibles;
+            }
+        });
+    });
+});
+
+// ============================================
+// ACTUALIZAR TOTALES EN TIEMPO REAL (SIN CONTAR)
+// ============================================
+window.calcularTotalesFila = function(productoId) {
+    var cantContada = parseFloat(document.getElementById('_inputCantContada' + productoId).value) || 0;
+    var cantPieSolo = parseFloat(document.getElementById('_inputCantPieSolo' + productoId).value) || 0;
+    var cantPieInvertido = parseFloat(document.getElementById('_inputCantPieInvertido' + productoId).value) || 0;
+    var cantDanado = parseFloat(document.getElementById('_inputCantDanado' + productoId).value) || 0;
+    
+    // Obtener existencia y costo de la fila
+    var row = document.getElementById('fila-' + productoId);
+    if (!row) return;
+
+    var existenciaText = row.querySelector('td:nth-child(5)').textContent;
+    var existencia = parseInt(existenciaText) || 0;
+    
+    var costoText = row.querySelector('td:nth-child(4)').textContent;
+    var costo = parseFloat(costoText.replace('$', '').replace(',', '')) || 0;
+    
+    // Calcular total
+    var totalUnidades = cantContada - cantPieSolo - cantPieInvertido - cantDanado;
+    var totalCosto = totalUnidades * costo;
+    
+    var lblTotal = document.getElementById('_lblTotalDetalle' + productoId);
+    if (lblTotal) {
+        lblTotal.innerHTML = '<span class="badge bg-info text-dark">' + totalCosto.toFixed(2) + '</span>';
+    }
+    
+    // Calcular diferencia
+    var diferencia = cantContada - existencia;
+    var lblDiferencia = document.getElementById('_lblDiferencia' + productoId);
+    
+    if (lblDiferencia) {
+        if (diferencia < 0) {
+            lblDiferencia.innerHTML = '<span style="color:#ef4444;font-weight:bold;">Falta ' + Math.abs(diferencia) + '</span>';
+        } else if (diferencia > 0) {
+            lblDiferencia.innerHTML = '<span style="color:#22c55e;font-weight:bold;">Sobra ' + diferencia + '</span>';
+        } else {
+            lblDiferencia.innerHTML = '<span style="color:#000;font-weight:bold;">Exacto</span>';
+        }
+    }
+};
+
+// ============================================
+// ENTER PARA GUARDAR EN "SIN CONTAR"
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+    // Buscamos todos los inputs de la tabla "Sin Contar"
+    document.querySelectorAll('.input-conteo').forEach(function(input) {
+        input.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault(); // Evitar que el formulario se envíe
+                var row = this.closest('tr');
+                var productoId = row.id.replace('fila-', '');
+                
+                // Buscar el botón de guardar de esa fila
+                var btnGuardar = row.querySelector('.btn-success'); 
+                
+                // Si lo encuentra, hacer clic programático
+                if (btnGuardar) {
+                    btnGuardar.click();
+                }
             }
         });
     });

@@ -20,6 +20,9 @@ use App\Http\Controllers\DistribucionController;
 use App\Http\Controllers\InventarioController;
 use App\Http\Controllers\BancosController;
 use App\Http\Controllers\BovedaController;
+use App\Http\Controllers\PublicidadController;
+use App\Http\Controllers\BannerController;
+use App\Http\Controllers\GaleriaController;
 
 /*
 |--------------------------------------------------------------------------
@@ -34,6 +37,18 @@ use App\Http\Controllers\BovedaController;
 
 // Llamada al Index del LandinPage
 Route::get('/', [LandingpageController::class, 'index'])->name('landingpage.index');
+
+Route::get('/producto/{id}', [LandingpageController::class, 'showProducto'])->name('landingpage.producto');
+
+Route::get('/productos', [LandingpageController::class, 'listadoProductos'])->name('landingpage.productos');
+
+Route::get('/nosotros', [LandingpageController::class, 'nosotros'])->name('landingpage.nosotros');
+
+Route::get('/contactanos', [LandingpageController::class, 'contactanos'])->name('landingpage.contactanos');
+
+Route::post('/contactanos', [LandingpageController::class, 'enviarContacto'])->name('landingpage.contacto.enviar');
+
+Route::get('/galeria', [LandingpageController::class, 'galeria'])->name('landingpage.galeria');
 
 // Login
 Route::post('/login', [AuthController::class, 'login'])->name('login');
@@ -1015,6 +1030,27 @@ Route::middleware('auth')->group(function() {
 
     Route::post('/cpanel/billetera/conversion/divisa/guardar', [BovedaController::class, 'guardarConversionDivisa'])
         ->name('cpanel.billetera.conversion.divisa.guardar');
+
+    // Rutas de Publicidad (Diseño)
+    Route::get('/cpanel/publicidad', [PublicidadController::class, 'index'])->name('cpanel.publicidad.index');
+    Route::post('/cpanel/publicidad', [PublicidadController::class, 'store'])->name('cpanel.publicidad.store');
+    Route::put('/cpanel/publicidad/{id}', [PublicidadController::class, 'update'])->name('cpanel.publicidad.update');
+    Route::delete('/cpanel/publicidad/{id}', [PublicidadController::class, 'destroy'])->name('cpanel.publicidad.destroy');
+    Route::post('/cpanel/publicidad/{id}/toggle', [PublicidadController::class, 'toggle'])->name('cpanel.publicidad.toggle');
+
+    // Rutas de Banners (Diseño)
+    Route::get('/cpanel/banner', [BannerController::class, 'index'])->name('cpanel.banner.index');
+    Route::post('/cpanel/banner', [BannerController::class, 'store'])->name('cpanel.banner.store');
+    Route::put('/cpanel/banner/{id}', [BannerController::class, 'update'])->name('cpanel.banner.update');
+    Route::delete('/cpanel/banner/{id}', [BannerController::class, 'destroy'])->name('cpanel.banner.destroy');
+    Route::post('/cpanel/banner/{id}/toggle', [BannerController::class, 'toggle'])->name('cpanel.banner.toggle');
+
+    // Rutas de Galería (Diseño)
+    Route::get('/cpanel/galeria', [GaleriaController::class, 'index'])->name('cpanel.galeria.index');
+    Route::post('/cpanel/galeria', [GaleriaController::class, 'store'])->name('cpanel.galeria.store');
+    Route::put('/cpanel/galeria/{id}', [GaleriaController::class, 'update'])->name('cpanel.galeria.update');
+    Route::delete('/cpanel/galeria/{id}', [GaleriaController::class, 'destroy'])->name('cpanel.galeria.destroy');
+    Route::post('/cpanel/galeria/{id}/toggle', [GaleriaController::class, 'toggle'])->name('cpanel.galeria.toggle');
 });
 
 

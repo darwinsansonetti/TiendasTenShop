@@ -3450,7 +3450,7 @@ class InventarioController extends Controller
             $this->crearHojaCompleto($spreadsheet, $inventario, $sucursal, $detallesConExistencia);
 
             // HOJA 2: AJUSTES
-            $this->crearHojaAjustes($spreadsheet, $inventario, $sucursal, $detallesConExistencia);
+            $this->crearHojaAjustes($spreadsheet, $inventario, $sucursal, $todosLosDetalles);
 
             // HOJA 3: SIN CONTAR
             $this->crearHojaSinContar($spreadsheet, $inventario, $sucursal, $detallesConExistencia);
@@ -3541,6 +3541,72 @@ class InventarioController extends Controller
         }
     }
 
+    // private function crearHojaAjustes($spreadsheet, $inventario, $sucursal, $detalles)
+    // {
+    //     $sheet = new Worksheet($spreadsheet, 'AJUSTES');
+    //     $spreadsheet->addSheet($sheet);
+
+    //     $this->agregarEncabezadoInventario($sheet, $inventario, $sucursal);
+
+    //     $headers = ['CODIGO', 'CONTADO', 'INVERTIDO', 'SOLO', 'DAÑADO', 'VACIO', 'AJUSTE', 'CANTIDAD'];
+    //     $this->agregarHeaders($sheet, $headers, 7);
+
+    //     // 1. Calcular ajustes y quedarnos solo con los que aplican
+    //     $ajustes = [];
+    //     foreach ($detalles as $detalle) {
+    //         $contado = $detalle->CantidadContada ?? 0;
+    //         $existencia = $detalle->Existencia ?? 0;
+    //         $pieSolo = $detalle->CantidadPieSolo ?? 0;
+    //         $pieInvertido = $detalle->CantidadPieInvertido ?? 0;
+    //         $danado = $detalle->CantidadPiezaDanada ?? 0;
+    //         $cajaVacia = $detalle->CantidadCajaVacia ?? 0;
+
+    //         $diferencia = $contado - $existencia;
+    //         $piezasNoVendibles = $pieSolo + $pieInvertido + $danado + $cajaVacia;
+
+    //         $ajuste = ($diferencia != 0) ? $diferencia : -$piezasNoVendibles;
+
+    //         if ($ajuste != 0) {
+    //             $ajustes[] = [
+    //                 'detalle' => $detalle,
+    //                 'contado' => $contado,
+    //                 'pieSolo' => $pieSolo,
+    //                 'pieInvertido' => $pieInvertido,
+    //                 'danado' => $danado,
+    //                 'cajaVacia' => $cajaVacia,
+    //                 'ajuste' => $ajuste,
+    //             ];
+    //         }
+    //     }
+
+    //     // 2. Ordenar: primero Restar (negativos), luego Sumar (positivos)
+    //     usort($ajustes, function ($a, $b) {
+    //         // Los negativos van primero: -1 < 0 < 1
+    //         if ($a['ajuste'] == $b['ajuste']) {
+    //             return strcmp($a['detalle']->Codigo, $b['detalle']->Codigo); // desempate por código
+    //         }
+    //         return $a['ajuste'] <=> $b['ajuste'];
+    //     });
+
+    //     // 3. Pintar
+    //     $row = 8;
+    //     foreach ($ajustes as $item) {
+    //         $sheet->setCellValue('A' . $row, $item['detalle']->Codigo ?? '');
+    //         $sheet->setCellValue('B' . $row, $item['contado']);
+    //         $sheet->setCellValue('C' . $row, $item['pieInvertido']);
+    //         $sheet->setCellValue('D' . $row, $item['pieSolo']);
+    //         $sheet->setCellValue('E' . $row, $item['danado']);
+    //         $sheet->setCellValue('F' . $row, $item['cajaVacia']);
+    //         $sheet->setCellValue('G' . $row, $item['ajuste'] < 0 ? 'Restar' : 'Sumar');
+    //         $sheet->setCellValue('H' . $row, $item['ajuste']);
+
+    //         $sheet->getStyle('A' . $row . ':H' . $row)->getBorders()->getAllBorders()
+    //             ->setBorderStyle(Border::BORDER_THIN);
+
+    //         $row++;
+    //     }
+    // }
+
     private function crearHojaAjustes($spreadsheet, $inventario, $sucursal, $detalles)
     {
         $sheet = new Worksheet($spreadsheet, 'AJUSTES');
@@ -3551,22 +3617,29 @@ class InventarioController extends Controller
         $headers = ['CODIGO', 'CONTADO', 'INVERTIDO', 'SOLO', 'DAÑADO', 'VACIO', 'AJUSTE', 'CANTIDAD'];
         $this->agregarHeaders($sheet, $headers, 7);
 
-        // 1. Calcular ajustes y quedarnos solo con los que aplican
         $ajustes = [];
         foreach ($detalles as $detalle) {
             $contado = $detalle->CantidadContada ?? 0;
             $existencia = $detalle->Existencia ?? 0;
+            
+            // Si la existencia viene negativa, la tratamos como 0 (para evitar el EC120)
+            if ($existencia < 0) {
+                $existencia = 0;
+            }
+
             $pieSolo = $detalle->CantidadPieSolo ?? 0;
             $pieInvertido = $detalle->CantidadPieInvertido ?? 0;
             $danado = $detalle->CantidadPiezaDanada ?? 0;
             $cajaVacia = $detalle->CantidadCajaVacia ?? 0;
 
+            $cantidadNoVendible = $pieInvertido + $pieSolo + $danado + $cajaVacia;
+            $cantidadNetaContada = $contado - $cantidadNoVendible;
+            $cantidadAjuste = $cantidadNetaContada - $existencia;
+            
+            // .NET usa "Diferencia" (Contado - Existencia) para el texto, no el ajuste
             $diferencia = $contado - $existencia;
-            $piezasNoVendibles = $pieSolo + $pieInvertido + $danado + $cajaVacia;
 
-            $ajuste = ($diferencia != 0) ? $diferencia : -$piezasNoVendibles;
-
-            if ($ajuste != 0) {
+            if ($cantidadNetaContada != $existencia && ($contado != 0 || $existencia != 0)) {
                 $ajustes[] = [
                     'detalle' => $detalle,
                     'contado' => $contado,
@@ -3574,21 +3647,17 @@ class InventarioController extends Controller
                     'pieInvertido' => $pieInvertido,
                     'danado' => $danado,
                     'cajaVacia' => $cajaVacia,
-                    'ajuste' => $ajuste,
+                    'ajuste' => $cantidadAjuste,
+                    'diferencia' => $diferencia // <-- Guardamos la diferencia
                 ];
             }
         }
 
-        // 2. Ordenar: primero Restar (negativos), luego Sumar (positivos)
+        // .NET ordena alfabéticamente por código (OrderBy(o => o.Producto.Codigo))
         usort($ajustes, function ($a, $b) {
-            // Los negativos van primero: -1 < 0 < 1
-            if ($a['ajuste'] == $b['ajuste']) {
-                return strcmp($a['detalle']->Codigo, $b['detalle']->Codigo); // desempate por código
-            }
-            return $a['ajuste'] <=> $b['ajuste'];
+            return strcmp($a['detalle']->Codigo, $b['detalle']->Codigo);
         });
 
-        // 3. Pintar
         $row = 8;
         foreach ($ajustes as $item) {
             $sheet->setCellValue('A' . $row, $item['detalle']->Codigo ?? '');
@@ -3597,7 +3666,11 @@ class InventarioController extends Controller
             $sheet->setCellValue('D' . $row, $item['pieSolo']);
             $sheet->setCellValue('E' . $row, $item['danado']);
             $sheet->setCellValue('F' . $row, $item['cajaVacia']);
-            $sheet->setCellValue('G' . $row, $item['ajuste'] < 0 ? 'Restar' : 'Sumar');
+            
+            // Lógica exacta de .NET: Usa la Diferencia para el texto
+            $textoAjuste = ($item['diferencia'] > 0) ? 'Sumar' : 'Restar';
+            
+            $sheet->setCellValue('G' . $row, $textoAjuste);
             $sheet->setCellValue('H' . $row, $item['ajuste']);
 
             $sheet->getStyle('A' . $row . ':H' . $row)->getBorders()->getAllBorders()

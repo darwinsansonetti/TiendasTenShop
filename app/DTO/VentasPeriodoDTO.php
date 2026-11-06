@@ -387,4 +387,13 @@ class VentasPeriodoDTO
             'PorcentajeMontoVentas' => $this->getPorcentajeMontoVentas(),
         ];
     }
+
+    public function getListaItemsTop12Periodo(): ?array
+    {
+        $items = $this->getListaItemsPeriodo();
+        if (empty($items)) return null;
+
+        usort($items, fn($a, $b) => $b['Cantidad'] <=> $a['Cantidad']);
+        return array_slice($items, 0, 100);
+    }
 }
