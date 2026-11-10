@@ -963,6 +963,9 @@ Route::middleware('auth')->group(function() {
     Route::post('/cpanel/pago/movil/consultar', [BancosController::class, 'consultarPagoMovil'])
     ->name('cpanel.pago.movil.consultar');
 
+    Route::post('/pago-movil/buscar-pagos', [BancosController::class, 'buscarPagosCliente'])
+    ->name('pago.movil.buscar.pagos');
+
     // Configuración Pago Móvil (CRUD)
     Route::get('/cpanel/pago/movil/config', [BancosController::class, 'configuracionPagoMovil'])
         ->name('cpanel.configuracion.pago.movil');

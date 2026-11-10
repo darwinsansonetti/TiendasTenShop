@@ -1606,4 +1606,57 @@ class BancosController extends Controller
             ], 500);
         }
     }
+
+    public function buscarPagosCliente(Request $request)
+    {
+        try {
+            $request->validate([
+                'SucursalPagoMovilId' => 'required|integer',
+                'bancoOrigen'         => 'required|string',
+                'telefonoCliente'     => 'required|string',
+                'fechaPago'           => 'required|date',
+            ]);
+
+            $config = DB::connection('sqlsrv')
+                ->table('SucursalPagoMovil')
+                ->where('SucursalPagoMovilId', $request->SucursalPagoMovilId)
+                ->first();
+
+            if (!$config) {
+                return response()->json(['success' => false, 'mensaje_amigable' => 'Sucursal no encontrada.']);
+            }
+
+            $response = Http::timeout(30)
+                ->withHeaders([
+                    'X-Token'      => '1f4bad73131cfbc94c9d6ec301e396667cf98a9d883fdca6db6f8af6f4f440df',
+                    'Content-Type' => 'application/json',
+                    'Accept'       => 'application/json',
+                ])->post('https://puente.mrrecetura.com/api/consultar-pagos-recibidos', [
+                    'apiKey'          => trim($config->ApiKey),
+                    'telefonoCliente' => $request->telefonoCliente,
+                    'fechaPago'       => $request->fechaPago,
+                    'bancoOrigen'     => $request->bancoOrigen,
+                ]);
+
+            if ($response->failed()) {
+                return response()->json([
+                    'success' => false,
+                    'mensaje_amigable' => 'Error HTTP del Puente: ' . $response->status(),
+                ]);
+            }
+
+            return response()->json($response->json());
+
+        } catch (\Exception $e) {
+            \Log::error('Buscar Pagos Cliente - Excepción: ' . $e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'mensaje_amigable' => 'Error interno: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
 }

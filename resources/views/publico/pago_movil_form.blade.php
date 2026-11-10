@@ -259,50 +259,6 @@
 
                             <div class="col-md-6">
                                 <label class="form-label fw-semibold" style="font-size:0.82rem;">
-                                    Cédula del Pagador <span class="text-danger">*</span>
-                                </label>
-                                <div class="input-group">
-                                    <select id="tipoCedula" class="form-select" style="max-width:80px;">
-                                        <option value="V">V</option>
-                                        <option value="E">E</option>
-                                        <option value="P">P</option>
-                                    </select>
-                                    <input type="text" id="numeroCedula" class="form-control"
-                                           placeholder="Ej: 27037606" inputmode="numeric" pattern="[0-9]+" required>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold" style="font-size:0.82rem;">
-                                    Teléfono del Pagador <span class="text-danger">*</span>
-                                </label>
-                                <input type="text" name="telefonoPagador" class="form-control"
-                                       placeholder="Ej: 04127141363" required>
-                            </div>
-
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold" style="font-size:0.82rem;">
-                                    Referencia <span class="text-danger">*</span>
-                                </label>
-                                <input type="text" name="referencia" class="form-control"
-                                       placeholder="Ej: 123112313" required>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold" style="font-size:0.82rem;">
-                                    Fecha del Pago <span class="text-danger">*</span>
-                                </label>
-                                <input type="date" name="fechaPago" class="form-control"
-                                       value="{{ date('Y-m-d') }}" required>
-                            </div>
-
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold" style="font-size:0.82rem;">
-                                    Monto (Bs.) <span class="text-danger">*</span>
-                                </label>
-                                <input type="text" inputmode="numeric" name="importe" id="importe" class="form-control"
-                                    placeholder="0.00" value="0.00" required>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold" style="font-size:0.82rem;">
                                     Banco Origen <span class="text-danger">*</span>
                                 </label>
                                 <select name="bancoOrigen" class="form-select" required>
@@ -333,6 +289,59 @@
                                     <option value="0191">0191 - BNC</option>
                                 </select>
                             </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold" style="font-size:0.82rem;">
+                                    Teléfono del Pagador <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <input type="text" name="telefonoPagador" id="telefonoPagador" class="form-control"
+                                        placeholder="Ej: 04127141363" required>
+                                    {{-- Botón de buscar pagos --}}
+                                    <button class="btn btn-outline-primary" type="button" id="btnBuscarPagos" disabled title="Buscar todos los pagos de este cliente">
+                                        <i class="bi bi-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold" style="font-size:0.82rem;">
+                                    Cédula del Pagador <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <select id="tipoCedula" class="form-select" style="max-width:80px;">
+                                        <option value="V">V</option>
+                                        <option value="E">E</option>
+                                        <option value="P">P</option>
+                                    </select>
+                                    <input type="text" id="numeroCedula" class="form-control"
+                                           placeholder="Ej: 27037606" inputmode="numeric" pattern="[0-9]+" required>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold" style="font-size:0.82rem;">
+                                    Referencia <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" name="referencia" class="form-control"
+                                       placeholder="Ej: 123112313" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold" style="font-size:0.82rem;">
+                                    Fecha del Pago <span class="text-danger">*</span>
+                                </label>
+                                <input type="date" name="fechaPago" class="form-control"
+                                       value="{{ date('Y-m-d') }}" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold" style="font-size:0.82rem;">
+                                    Monto (Bs.) <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" inputmode="numeric" name="importe" id="importe" class="form-control"
+                                    placeholder="0.00" value="0.00" required>
+                            </div>
+                            
                         </div>
 
                         <hr class="my-4">
@@ -430,6 +439,27 @@
     </div>
 </div>
 
+{{-- MODAL PARA MOSTRAR LOS PAGOS DEL CLIENTE --}}
+<div class="modal fade" id="modalPagosCliente" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header text-white" style="background:linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%);">
+                <h5 class="modal-title"><i class="bi bi-list-check me-2"></i>Pagos Recibidos del Cliente</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div id="modalPagosContent" class="p-4">
+                    <!-- Aquí se inyectará la tabla -->
+                </div>
+            </div>
+            <div class="modal-footer border-0 bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 // ============================================
@@ -437,6 +467,217 @@
 // ============================================
 const inputImporte = document.getElementById('importe');
 let centavos = 0;
+
+// ============================================
+// LÓGICA PARA BUSCAR PAGOS DEL CLIENTE
+// ============================================
+
+// Referencias a los elementos
+const selectSucursal = document.getElementById('SucursalPagoMovilId');
+const selectBanco = document.querySelector('select[name="bancoOrigen"]');
+const inputTelefono = document.getElementById('telefonoPagador');
+const btnBuscarPagos = document.getElementById('btnBuscarPagos');
+
+// Función para validar si el botón debe activarse
+function validarBotonBuscar() {
+    const sucursalOk = selectSucursal.value !== '';
+    const bancoOk = selectBanco.value !== '';
+    const telefonoOk = inputTelefono.value.trim().length >= 10; // Mínimo 10 dígitos
+
+    btnBuscarPagos.disabled = !(sucursalOk && bancoOk && telefonoOk);
+}
+
+// Escuchar cambios en los inputs
+selectSucursal.addEventListener('change', validarBotonBuscar);
+selectBanco.addEventListener('change', validarBotonBuscar);
+inputTelefono.addEventListener('input', validarBotonBuscar);
+
+// Evento clic del botón
+btnBuscarPagos.addEventListener('click', async function() {
+    const bancoOrigen = selectBanco.value;
+    const telefonoCliente = inputTelefono.value.trim();
+    const sucursalId = selectSucursal.value;
+    const fechaPago = new Date().toISOString().slice(0, 10); 
+
+    const btnOriginal = btnBuscarPagos.innerHTML;
+    btnBuscarPagos.disabled = true;
+    btnBuscarPagos.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+    try {
+        const res = await fetch('{{ route("pago.movil.buscar.pagos") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: JSON.stringify({
+                SucursalPagoMovilId: sucursalId,
+                bancoOrigen: bancoOrigen,
+                telefonoCliente: telefonoCliente,
+                fechaPago: fechaPago
+            })
+        });
+
+        // ⚠️ Diagnóstico: leer como texto primero para ver errores HTML
+        const rawText = await res.text();
+
+        if (res.status === 419) {
+            Swal.fire('Error CSRF', 'El token de seguridad expiró. Recarga la página.', 'error');
+            return;
+        }
+        if (res.status === 404) {
+            Swal.fire('Error 404', 'La ruta no existe. Revisa routes/web.php.', 'error');
+            return;
+        }
+        if (res.status === 500) {
+            Swal.fire('Error 500', 'Error en el servidor. Revisa storage/logs/laravel.log.', 'error');
+            return;
+        }
+
+        const data = JSON.parse(rawText);
+        mostrarPagosEnModal(data);
+
+    } catch (err) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Error de conexión',
+            text: err.message || 'Revisa la consola (F12).',
+            confirmButtonColor: '#dc2626'
+        });
+    } finally {
+        btnBuscarPagos.disabled = false;
+        btnBuscarPagos.innerHTML = btnOriginal;
+        validarBotonBuscar();
+    }
+});
+
+// Función para pintar la tabla en el modal
+function mostrarPagosEnModal(data) {
+    const modalEl = document.getElementById('modalPagosCliente');
+    const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    const content = document.getElementById('modalPagosContent');
+
+    if (!data.success || !data.resultados || data.resultados.length === 0) {
+        content.innerHTML = `
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-inbox fs-1 d-block mb-3 opacity-50"></i>
+                <h5>No se encontraron pagos</h5>
+                <p class="mb-0">${data.mensaje_amigable || 'No hay registros para este cliente.'}</p>
+            </div>
+        `;
+        modal.show();
+        return;
+    }
+
+    // Ordenar por fecha (más reciente primero)
+    const pagosOrdenados = [...data.resultados].sort((a, b) => {
+        const fechaA = new Date(a.fechaPago + 'T00:00:00');
+        const fechaB = new Date(b.fechaPago + 'T00:00:00');
+        return fechaB - fechaA; 
+    });
+
+    // Construir las filas de la tabla
+    let filas = '';
+    pagosOrdenados.forEach((pago) => {
+        const pagoJson = JSON.stringify(pago).replace(/"/g, '&quot;'); 
+        
+        // 🚀 DEFINIR EL COLOR DEL BADGE SEGÚN CONCILIACIÓN
+        const conciliado = pago.conciliado === 'SI';
+        const badgeClass = conciliado ? 'bg-success' : 'bg-warning text-dark';
+
+        filas += `
+            <tr>
+                <td><code>${pago.referencia}</code></td>
+                <td>${formatearFecha(pago.fechaPago)}</td>
+                <td class="text-end fw-bold">Bs. ${parseFloat(pago.monto).toFixed(2)}</td>
+                <td class="text-center">
+                    <span class="badge ${badgeClass}">${pago.conciliado}</span>
+                </td>
+                <td class="text-center">
+                    <button class="btn btn-sm btn-primary" onclick="seleccionarPago(${pagoJson})" title="Llenar formulario">
+                        <i class="bi bi-arrow-down-circle"></i> Seleccionar
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+
+    // Renderizar la tabla con la nueva columna
+    content.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="mb-0 fw-bold">Pagos Recibidos</h6>
+            <span class="badge bg-primary rounded-pill">${data.total} pago${data.total !== 1 ? 's' : ''}</span>
+        </div>
+        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+            <table class="table table-sm table-hover align-middle">
+                <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
+                    <tr>
+                        <th>Referencia</th>
+                        <th>Fecha</th>
+                        <th class="text-end">Monto</th>
+                        <th class="text-center">Conciliado</th>
+                        <th class="text-center">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${filas}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    modal.show();
+}
+
+// Función auxiliar para formatear la fecha a DD/MM/YYYY
+function formatearFecha(fechaStr) {
+    if (!fechaStr) return '—';
+    const partes = fechaStr.split('-');
+    if (partes.length === 3) {
+        return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    }
+    return fechaStr;
+}
+
+// Función para llenar el formulario al presionar "Seleccionar"
+function seleccionarPago(pago) {
+    // 1. Llenar la Referencia
+    const inputReferencia = document.querySelector('input[name="referencia"]');
+    if (inputReferencia) {
+        inputReferencia.value = pago.referencia;
+    }
+
+    // 2. Llenar la Fecha del Pago (viene en formato Y-m-d)
+    const inputFecha = document.querySelector('input[name="fechaPago"]');
+    if (inputFecha) {
+        inputFecha.value = pago.fechaPago;
+    }
+
+    // 3. Llenar el Monto (formateado como caja registradora)
+    const inputMonto = document.getElementById('importe');
+    if (inputMonto) {
+        // Convertir el monto a centavos (ej. 1 -> 100 centavos)
+        const montoNumerico = parseFloat(pago.monto);
+        centavos = Math.round(montoNumerico * 100);
+        
+        // Aplicar el formato (ej. "1.00")
+        inputMonto.value = formatearMonto(centavos);
+    }
+
+    // 4. Cerrar el modal
+    const modalEl = document.getElementById('modalPagosCliente');
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    if (modal) {
+        modal.hide();
+    }
+
+    // 5. (Opcional) Mover el foco al campo de la cédula para que la cajera solo escriba eso
+    const inputCedula = document.getElementById('numeroCedula');
+    if (inputCedula) {
+        inputCedula.focus();
+    }
+}
 
 inputImporte.addEventListener('input', function(e) {
     // 1. Quitar cualquier caracter que no sea dígito
